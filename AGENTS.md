@@ -17,7 +17,8 @@ a CONSUMER of branchling, never a part of it.
   markdown here would bypass validation, attribution, required reasons and the
   history log.
 - **A missing capability is an upstream task, not a workaround here.** File it
-  in the branchling repository and track the dependency in this backlog.
+  in the [branchling repository](https://github.com/limackk/branchling) and
+  track the dependency in this backlog. The `TL-` ids above are tasks there.
 - `SUPPORTED_SCHEMA_VERSIONS` and `SUPPORTED_RANGE` in the adapter are the
   compatibility promise. Moving either is a deliberate change with tests.
 

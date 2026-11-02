@@ -9,10 +9,16 @@ read, this interface can show, and every change it makes is validated,
 attributed and recorded by branchling itself.
 
 Requirements: Node.js 18 or later and `branchling` 0.2.x on PATH (or
-`BRANCHLING_BIN` pointing at it).
+`BRANCHLING_BIN` pointing at it). For development, `npm ci` installs the
+pinned release:
 
 ```bash
+npm ci
 npm test
 ```
+
+The repository works the same with Claude Code, Codex or no agent at all.
+How to set up, pick a task from `backlog/` and send a change is described in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 License: MIT.

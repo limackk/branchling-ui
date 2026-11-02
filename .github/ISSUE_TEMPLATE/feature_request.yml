@@ -1,0 +1,28 @@
+name: Feature request
+description: Something the interface should show or let you do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and how you do it today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+    validations:
+      required: false
+  - type: dropdown
+    id: contract
+    attributes:
+      label: Does the branchling CLI already expose the data or action?
+      description: If it does not, the capability has to land upstream first.
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A problem in branchling itself, or a capability the CLI lacks
+    url: https://github.com/limackk/branchling/issues
+    about: This interface uses only the branchling CLI contract. Gaps in that contract are fixed upstream.
+  - name: Report a security vulnerability
+    url: https://github.com/limackk/branchling-ui/security/advisories/new
+    about: Send an undisclosed vulnerability privately to the maintainers.

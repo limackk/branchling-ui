@@ -1,0 +1,41 @@
+name: Bug report
+description: The interface shows or does something wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If `branchling … --json` already reports the wrong thing, the bug is
+        upstream: https://github.com/limackk/branchling/issues
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did and what you saw. Paste output or a screenshot rather than describing it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: input
+    id: branchling-version
+    attributes:
+      label: branchling --version
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: node --version
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.1 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
