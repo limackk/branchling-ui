@@ -1,1 +1,4 @@
 {"id":"01M6E5M64778DKAKG42YF9HEXZ","ts":"2026-11-02T13:01:52.647Z","task":"UI-2","field":"__created__","from":"","to":"Repeated reads of an unchanged backlog spawn nothing","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6EANMVYJCWV5JPSATGVKSD9","ts":"2026-11-02T14:30:03.390Z","task":"UI-2","field":"status","from":"pending","to":"in_progress","actor":"agent:loop-c","source":"next","reason":"unknown"}
+{"id":"01M6EANMVY28NXGPYXTMCQCSTN","ts":"2026-11-02T14:30:03.390Z","task":"UI-2","field":"owner","from":"unassigned","to":"agent:loop-c","actor":"agent:loop-c","source":"next","reason":"unknown"}
+{"id":"01M6EBC15DHWCKZ3BVKFE4BKTS","ts":"2026-11-02T14:42:16.877Z","task":"UI-2","field":"status","from":"in_progress","to":"done","actor":"agent:loop-c","source":"done","reason":"proven","contractCapability":{"verdict":"capable","statement":"the run executed a file this task changed","changedFilesExecuted":["src/cache.mjs","test/cache.test.mjs"]}}
