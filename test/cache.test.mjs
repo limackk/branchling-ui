@@ -37,6 +37,12 @@ async function branchling(args, opts) {
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 
+// A body `branchling body` accepts for the fixture task: its criterion links
+// the fixture's `noop` verification entry.
+function fixtureBody(goal) {
+  return `\n## Goal\n\n${goal}\n\n## Acceptance criteria\n\n- [ ] ${goal} [proof: noop]\n`;
+}
+
 function gitIn(cwd, args) {
   return execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd, encoding: "utf8" });
 }
@@ -99,15 +105,16 @@ test("two identical reads spawn once; an edit through branchling makes the next 
   assert.equal(first.fromCache, false);
   assert.equal(second.fromCache, true);
   assert.equal(second.envelope, first.envelope);
-  assert.equal(first.envelope.tasks[0].priority, "P1");
+  assert.equal(first.envelope.tasks[0].status, "pending");
 
-  await branchling(["set", "TASK-1", "priority", "P2", "--reason", "cache test", "--actor", "local:test", "--dir", dir]);
+  // `take`, not `set`: the pinned branchling has no `set` yet (UI-6).
+  await branchling(["take", "TASK-1", "--actor", "local:test", "--dir", dir]);
   // Past the racy window, so the miss below comes from the fingerprint.
   await settle(RACY_MS);
   const third = await cache.query({ text: "Fixture" });
   assert.equal(spawns(), n + 2);
   assert.equal(third.fromCache, false);
-  assert.equal(third.envelope.tasks[0].priority, "P2");
+  assert.equal(third.envelope.tasks[0].status, "in_progress");
 });
 
 test("a same-size hand edit with its mtime restored still invalidates", async () => {
@@ -148,7 +155,7 @@ test("a read right after a write is not served or stored from a racy fingerprint
   // The source's clock is injected and frozen at the moment the write
   // finished: branchling may write its file early and run on for longer than
   // any window under load, so racing the real clock would be a flaky test.
-  await branchling(["set", "TASK-1", "estimate", "3h", "--reason", "racy test", "--actor", "local:test", "--dir", dir]);
+  await branchling(["body", "TASK-1", "--reason", "racy test", "--actor", "local:test", "--dir", dir], { input: fixtureBody("Racy test.") });
   let clock = Date.now();
   const cache = createCache(adapter(), { changes: createFileChanges({ dir, cwd: root, now: () => clock }) });
   const n = spawns();
@@ -189,7 +196,7 @@ test("an uncommitted edit in a sibling worktree invalidates", async () => {
     const n = spawns();
     await cache.show("TASK-1");
     assert.equal((await cache.show("TASK-1")).fromCache, true);
-    await run(BIN, ["set", "TASK-1", "estimate", "5h", "--reason", "sibling", "--actor", "local:test", "--dir", join(sibling, "backlog")], { cwd: sibling });
+    await run(BIN, ["body", "TASK-1", "--reason", "sibling", "--actor", "local:test", "--dir", join(sibling, "backlog")], { cwd: sibling, input: fixtureBody("Sibling edit.") });
     assert.match(gitIn(sibling, ["status", "--porcelain"]), /backlog\/tasks\//);
     await settle();
     assert.equal((await cache.show("TASK-1")).fromCache, false);
@@ -203,13 +210,14 @@ test("different arguments are different keys", async () => {
   const cache = cacheFor(adapter());
   await settle();
   const n = spawns();
-  const pending = await cache.query({ status: "pending" });
+  // TASK-1 was taken by the first edit test, so it is the one in_progress task.
+  const taken = await cache.query({ status: "in_progress" });
   const done = await cache.query({ status: "done" });
   assert.equal(spawns(), n + 2);
-  assert.equal(pending.envelope.tasks.length, 1);
+  assert.equal(taken.envelope.tasks.length, 1);
   assert.deepEqual(done.envelope.tasks, []);
   // Positive control: each key, asked again, is a hit with its own answer.
-  assert.equal((await cache.query({ status: "pending" })).envelope, pending.envelope);
+  assert.equal((await cache.query({ status: "in_progress" })).envelope, taken.envelope);
   assert.equal((await cache.query({ status: "done" })).envelope, done.envelope);
   assert.equal(spawns(), n + 2);
 });
