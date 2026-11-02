@@ -5,7 +5,7 @@
  * through textContent only: the model is data, never markup.
  */
 
-import { statsModel } from "/view-model/stats.mjs";
+import { STATS_TEXT, statsModel } from "/view-model/stats.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 import "/release.mjs";
 
@@ -25,7 +25,7 @@ function el(tag, props = {}, children = []) {
 function renderState(model, retry) {
   const box = el("div", { class: `state state-${model.state}`, role: model.state === "loading" ? "status" : "alert" });
   if (model.state === "loading") {
-    box.append(el("p", { text: "Loading stats…" }));
+    box.append(el("p", { text: STATS_TEXT.loading }));
     return box;
   }
   box.append(el("h3", { text: model.title }), el("p", { text: model.detail }));
@@ -43,7 +43,7 @@ function countTable(caption, rows) {
   ]));
   return el("table", {}, [
     el("caption", { class: "visually-hidden", text: caption }),
-    el("thead", {}, [el("tr", {}, [el("th", { scope: "col", text: "Value" }), el("th", { scope: "col", text: "Tasks" })])]),
+    el("thead", {}, [el("tr", {}, [el("th", { scope: "col", text: "Value" }), el("th", { scope: "col", text: STATS_TEXT.countHeading })])]),
     el("tbody", {}, body),
   ]);
 }
@@ -51,16 +51,16 @@ function countTable(caption, rows) {
 function renderStats(model) {
   const parts = [];
   if (model.freshness.stale) {
-    parts.push(el("p", { class: "state state-stale", role: "status", text: "Showing the last known stats; a fresh read is on its way." }));
+    parts.push(el("p", { class: "state state-stale", role: "status", text: STATS_TEXT.stale }));
   }
   parts.push(el("dl", { class: "totals" }, model.totals.map(t =>
     el("div", {}, [el("dt", { text: t.label }), el("dd", { text: String(t.value) })]))));
   if (model.state === "empty") {
-    parts.push(el("p", { class: "state state-empty", text: "This backlog has no tasks yet." }));
+    parts.push(el("p", { class: "state state-empty", text: STATS_TEXT.empty }));
     return parts;
   }
-  parts.push(el("h3", { text: "By status" }), countTable("Tasks by status", model.byStatus));
-  if (model.byPriority.length) parts.push(el("h3", { text: "By priority" }), countTable("Tasks by priority", model.byPriority));
+  parts.push(el("h3", { text: STATS_TEXT.byStatus }), countTable("Tasks by status", model.byStatus));
+  if (model.byPriority.length) parts.push(el("h3", { text: STATS_TEXT.byPriority }), countTable("Tasks by priority", model.byPriority));
   return parts;
 }
 

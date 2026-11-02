@@ -180,3 +180,29 @@ test("the stats sentences are plain text shared by both surfaces", () => {
     assert.doesNotMatch(s, /\x1b/);
   }
 });
+
+test("the web page takes its stats sentences from STATS_TEXT, not its own copies", () => {
+  const app = readFileSync(new URL("../src/web/app.mjs", import.meta.url), "utf8");
+  // Positive controls: this is the page module, and it imports the shared text.
+  assert.match(app, /function renderStats\(/);
+  assert.match(app, /import \{[^}]*\bSTATS_TEXT\b[^}]*\} from "\/view-model\/stats\.mjs"/);
+  for (const key of ["loading", "empty", "stale", "byStatus", "byPriority", "countHeading"]) {
+    assert.ok(app.includes(`STATS_TEXT.${key}`), `app.mjs renders STATS_TEXT.${key}`);
+  }
+  // No sentence may appear as a string literal of its own. Quoted, so the
+  // caption "Tasks by status" does not count as a copy of "Tasks".
+  for (const [key, sentence] of Object.entries(STATS_TEXT)) {
+    for (const q of ['"', "'", "`"]) {
+      assert.ok(!app.includes(`${q}${sentence}${q}`), `app.mjs carries its own copy of STATS_TEXT.${key}`);
+    }
+  }
+});
+
+test("the static page's pre-script placeholders match STATS_TEXT", () => {
+  // index.html cannot import the module; app.mjs replaces the placeholder on
+  // load, but what shows before the script runs must not drift either.
+  const html = readFileSync(new URL("../src/web/index.html", import.meta.url), "utf8");
+  assert.match(html, /<h2 id="stats-title">([^<]*)<\/h2>/);
+  assert.equal(html.match(/<h2 id="stats-title">([^<]*)<\/h2>/)[1], STATS_TEXT.title);
+  assert.equal(html.match(/<div id="stats"[^>]*>\s*<p class="state state-loading">([^<]*)<\/p>/)[1], STATS_TEXT.loading);
+});
