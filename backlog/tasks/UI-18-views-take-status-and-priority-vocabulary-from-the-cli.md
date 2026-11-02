@@ -33,6 +33,8 @@ Views colour and order statuses and priorities from the backlog's own vocabulary
 
 Found while analysing UI-1 on 2026-11-02. UI-1 and UI-16 both ask for status and priority colours derived from config.yaml, but the UI may not read config.yaml (AGENTS.md: the adapter is the only door), and no branchling command returns the vocabulary as JSON: `stats --json` gives only the keys of byStatus and byPriority, with no order, no archived set and no colour role; `doctor --json` names a `vocabulary` check, not the values. This is a missing CLI capability, so per AGENTS.md it is an upstream task in the branchling repository, tracked here. Until it ships, views use a neutral palette for every status and derive only what the envelopes already say. The upstream task is not filed yet: file it in limackk/branchling and add its TL id to this task's context.
 
+Upstream: TL-532 in the branchling repository (filed 2026-11-02), a `vocabulary` envelope with statuses in order, roles, the archived set and the declared releases.
+
 ## Steps
 
 1. File the upstream task in limackk/branchling: a `--json` envelope with the configured statuses in order, the archived set, priorities in order and any colour roles, with its kind and schemaVersion
