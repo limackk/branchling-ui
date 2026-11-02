@@ -15,12 +15,12 @@ waves:
   # and release views need the cache because they refresh several panels;
   # decisions uses `decide`, the one write the pinned CLI already has.
   - name: "First views"
-    tasks: [UI-16, UI-3, UI-4, UI-5, UI-19, UI-20, UI-21, UI-22]
+    tasks: [UI-16, UI-3, UI-4, UI-5, UI-19, UI-20, UI-21]
   # Blocked on branchling: a release with show and deploy (UI-14, then UI-9),
   # `set` and `declare` on GitHub (UI-6, UI-8), a vocabulary envelope (UI-18),
   # the watch stream (UI-7).
   - name: "After upstream"
-    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7]
+    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22]
   # The maintainer's decision.
   - name: "Before publish"
     tasks: [UI-10]
