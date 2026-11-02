@@ -13,8 +13,10 @@
  * The `/` key focuses the search box unless focus is already in a text field.
  *
  * A row's id and title link to `?view=tasks&…&task=<ID>`, the task panel's
- * address; until the panel exists (the next task of this wave) the row is
- * marked selected and its id is named above the list.
+ * address. The links carry `data-task`, so the shared panel (src/web/task.mjs,
+ * UI-27) opens them over the list; the open task's row is marked selected.
+ * Opening or closing the panel changes only `task`, so the list is redrawn
+ * from the last answer then, not read again.
  *
  * Below 640 px the table folds into a list (CSS only: the `.hide-sm` table and
  * the `.show-sm` list carry the same rows).
@@ -184,16 +186,10 @@ function renderState(model) {
   return box;
 }
 
-/** A link that opens a task over the list: same document, so pushState. */
+/** A link that opens a task over the list: the shared panel handles it (data-task). */
 function taskLink(row, className, text) {
-  const link = el("a", { class: className, href: row.href, text });
+  const link = el("a", { class: className, href: row.href, "data-task": row.id, text });
   if (row.selected) link.setAttribute("aria-current", "true");
-  link.addEventListener("click", event => {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    history.pushState(null, "", row.href);
-    render();
-  });
   return link;
 }
 
@@ -237,18 +233,6 @@ function list(model) {
 function renderModel(model) {
   const parts = [];
   if (model.freshness.stale) parts.push(el("p", { class: "state state-stale", role: "status", text: TASKS_TEXT.stale }));
-  if (model.selection) {
-    const close = el("a", { class: "panel-close", href: model.selection.closeHref, text: "Close" });
-    close.addEventListener("click", event => {
-      event.preventDefault();
-      history.pushState(null, "", model.selection.closeHref);
-      render();
-    });
-    parts.push(el("div", { class: "tasks-selection", role: "status" }, [
-      el("p", {}, [el("span", { class: "task-id", text: model.selection.id }), " ", model.selection.text]),
-      close,
-    ]));
-  }
   if (model.state === "empty") {
     const box = el("div", { class: "state state-empty" }, [el("p", { text: model.emptyText })]);
     if (model.emptyHint) box.append(el("p", { text: model.emptyHint }));
@@ -352,9 +336,14 @@ export function start(section) {
   });
   window.addEventListener("popstate", () => {
     clearTimeout(searchTimer);
-    syncForm(filtersFromUrl());
-    load();
+    const filters = filtersFromUrl();
+    syncForm(filters);
+    // Only the open task changed (the panel opened or closed): redraw, no read.
+    if (lastAnswer && writeTaskFilters(filters) === writeTaskFilters(lastAnswer.filters)) render();
+    else load();
   });
+  // The panel opened, closed or moved to another task without a popstate.
+  document.addEventListener("branchling-ui:task-panel", () => render());
 
   load();
   loadStats();

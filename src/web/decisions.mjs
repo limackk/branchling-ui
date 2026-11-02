@@ -7,11 +7,13 @@
  * branchling's text unchanged. Text goes in through textContent only.
  *
  * app.mjs imports this module and calls `start()` only when `?view=decisions`
- * is on screen.
+ * is on screen. A question's task id links to `&task=<ID>`, which the shared
+ * task panel (src/web/task.mjs, UI-27) opens over the questions.
  */
 
 import { decisionRecorded, decisionsFailure, decisionsModel, DECISIONS_TEXT, validateDecision } from "/view-model/decisions.mjs";
 import { unreachableState } from "/view-model/states.mjs";
+import { taskPanelHref } from "/view-model/task.mjs";
 // app.mjs imports this module dynamically, after it has run, so the cycle is
 // harmless; `capability` is read only when an answer is sent.
 import { capability } from "/app.mjs";
@@ -124,7 +126,7 @@ function questionNode(q) {
   const meta = [q.statusLabel, q.priority, `asked by ${q.askedBy}`].filter(Boolean).join(" · ");
   const when = q.askedAt ? el("time", { datetime: q.askedAt, title: q.askedAt, text: q.ageLabel }) : document.createTextNode(q.ageLabel);
   return el("li", { class: "card decision" }, [
-    el("h3", {}, [el("span", { class: "task-id", text: q.taskId }), ` ${q.title}`]),
+    el("h3", {}, [el("a", { class: "task-id", href: taskPanelHref(location.search, q.taskId), "data-task": q.taskId, text: q.taskId }), ` ${q.title}`]),
     el("p", { class: "task-meta asked" }, [`${meta} · `, when]),
     el("p", { class: "question decision-question" }, [el("span", { class: "visually-hidden", text: "Question: " }), q.text]),
     el("p", { class: "bucket-note", text: q.needs }),

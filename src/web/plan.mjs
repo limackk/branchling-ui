@@ -1,9 +1,9 @@
 /**
- * The plan view on the page (`?view=plan`, `&task=<ID>` for the open detail
+ * The plan view on the page (`?view=plan`, `&task=<ID>` for the open task
  * panel). It fetches `/api/plan` and `/api/plan/tasks` once, builds the shared
  * model (src/view-model/plan.mjs) and renders it with DOM APIs; text goes in
- * through textContent only. The task detail panel fetches `/api/task?id=` for
- * the one task the user opened.
+ * through textContent only. A task id is a link carrying `data-task`; the
+ * shared task panel (src/web/task.mjs, UI-27) opens it over the plan.
  *
  * Order on screen follows the questions the plan answers, in the order they
  * are asked: where are we (the summary), what is happening (in flight), what
@@ -11,7 +11,7 @@
  * what the plan has been overtaken by, and how much is outside it.
  */
 
-import { planModel, taskDetailModel } from "/view-model/plan.mjs";
+import { planModel } from "/view-model/plan.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 
 function el(tag, props = {}, children = []) {
@@ -41,12 +41,6 @@ function taskHref(id) {
   const params = new URLSearchParams(location.search);
   params.set("view", "plan");
   params.set("task", id);
-  return "?" + params.toString();
-}
-
-function closedHref() {
-  const params = new URLSearchParams(location.search);
-  params.delete("task");
   return "?" + params.toString();
 }
 
@@ -215,102 +209,11 @@ function renderPlan(model) {
   return parts;
 }
 
-/* ---------- the detail panel ---------- */
-
-function renderDetail(model, retry) {
-  const close = el("a", { class: "panel-close", href: closedHref(), "data-close": "", text: "Close" });
-  if (model.state !== "ready") {
-    return [el("h3", { id: "task-panel-title", tabindex: "-1", text: "Task" }), renderState(model, retry, "the task"), close];
-  }
-  const rows = [
-    ["Status", el("span", { class: `role role-${model.statusRole}`, text: model.statusLabel || "unknown" })],
-    // A priority is a square tag, never confused with a status pill (docs/design).
-    ["Priority", el("span", { class: `prio role-${model.priorityRole}`, text: model.priority || "none" })],
-    ["Blocked", document.createTextNode(model.blocked ? "yes" : "no")],
-  ];
-  if (model.file) rows.push(["File", el("code", { text: model.file })]);
-  if (model.elsewhere) rows.push(["Other branches", document.createTextNode(String(model.elsewhere))]);
-  const parts = [
-    el("h3", { id: "task-panel-title", tabindex: "-1" }, [el("span", { class: "task-id", text: model.id }), document.createTextNode(model.title ? ` ${model.title}` : "")]),
-    el("dl", { class: "facts" }, rows.map(([k, v]) => el("div", {}, [el("dt", { text: k }), el("dd", {}, [v])]))),
-  ];
-  if (model.blockers.length) {
-    parts.push(el("h4", { text: "Blocked by" }), el("ul", { class: "tasks" }, model.blockers.map(b => el("li", { class: "task" }, [
-      el("a", { class: "task-id", href: taskHref(b.id), "data-task": b.id, text: b.id }),
-      b.title ? el("span", { class: "task-title", text: b.title }) : null,
-      b.statusLabel ? el("span", { class: `role role-${b.role}`, text: b.statusLabel }) : null,
-      el("span", { class: "task-notes", text: [b.resolved ? "resolved" : "unresolved", b.found ? null : "not found"].filter(Boolean).join(" · ") }),
-    ]))));
-  }
-  parts.push(close);
-  return parts;
-}
-
 /* ---------- wiring ---------- */
 
 export function start(section) {
   document.title = "Backlog plan";
   const target = section.querySelector("#plan");
-  const panel = el("aside", { id: "task-panel", class: "panel", "aria-labelledby": "task-panel-title", "aria-live": "polite", hidden: true });
-  section.insertBefore(panel, target);
-  let returnFocusTo = null;
-  let detailRequest = 0;
-
-  async function openTask(id, { focus = true } = {}) {
-    const request = ++detailRequest;
-    panel.hidden = false;
-    panel.setAttribute("aria-busy", "true");
-    panel.replaceChildren(...renderDetail(loadingState("task"), null));
-    const answer = await getJson(`/api/task?id=${encodeURIComponent(id)}`);
-    if (request !== detailRequest) return;
-    let model;
-    if (!answer.ok) model = failureModel("task", answer);
-    else {
-      try { model = taskDetailModel(answer.body, { stale: answer.stale, fetchedAt: answer.fetchedAt }); }
-      catch (err) { model = shapeError("task", err); }
-    }
-    panel.replaceChildren(...renderDetail(model, () => openTask(id)));
-    panel.setAttribute("aria-busy", "false");
-    if (focus) panel.querySelector("#task-panel-title")?.focus();
-  }
-
-  function closeTask() {
-    detailRequest++;
-    panel.hidden = true;
-    panel.replaceChildren();
-    if (returnFocusTo && document.contains(returnFocusTo)) returnFocusTo.focus();
-    returnFocusTo = null;
-  }
-
-  function syncFromUrl({ focus }) {
-    const id = new URLSearchParams(location.search).get("task");
-    if (id) openTask(id, { focus });
-    else closeTask();
-  }
-
-  // Real links: they work with a reload, a new tab or no script at all; with
-  // the script they open the panel in place and Back undoes it.
-  section.addEventListener("click", event => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const link = event.target.closest("a[data-task], a[data-close]");
-    if (!link) return;
-    event.preventDefault();
-    if (link.hasAttribute("data-task")) {
-      returnFocusTo = target.querySelector(`a[data-task="${CSS.escape(link.dataset.task)}"]`) || link;
-      history.pushState(null, "", link.getAttribute("href"));
-    } else {
-      history.pushState(null, "", link.getAttribute("href"));
-    }
-    syncFromUrl({ focus: true });
-  });
-  panel.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      history.pushState(null, "", closedHref());
-      syncFromUrl({ focus: true });
-    }
-  });
-  window.addEventListener("popstate", () => syncFromUrl({ focus: false }));
-
   async function load() {
     target.setAttribute("aria-busy", "true");
     target.replaceChildren(renderState(loadingState("plan"), null, "the plan"));
@@ -331,5 +234,4 @@ export function start(section) {
   }
 
   load();
-  syncFromUrl({ focus: false });
 }

@@ -70,7 +70,7 @@ export const TASKS_TEXT = {
   emptyNoMatch: "No task matches these filters.",
   emptyNoMatchHint: "Change or clear a filter to see more tasks.",
   filtersSummary: n => (n > 0 ? `Filters · ${n} active` : "Filters"),
-  selectionPending: "The task panel is not built yet; this page shows the selected task's id only.",
+  selectionPending: "Open in the task panel.",
   selectionMissing: id => `${id} is not in this list. It may be archived or outside the filters.`,
   none: "—",
 };
@@ -138,9 +138,8 @@ export function writeTaskFilters(filters = {}) {
 
 /**
  * The page address of a filtered list, and of one task opened over it:
- * `?view=tasks&status=pending&task=TASK-3`. The task panel (the next task in
- * this wave) reads `task`; the filters stay, so closing it returns to the list
- * it came from.
+ * `?view=tasks&status=pending&task=TASK-3`. The task panel (UI-27) reads
+ * `task`; the filters stay, so closing it returns to the list it came from.
  */
 export function tasksHref(filters = {}, task = null) {
   const query = writeTaskFilters(filters);

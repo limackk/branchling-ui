@@ -1,7 +1,7 @@
 /**
  * The plan view model: plain data computed from a `plan` envelope (and,
- * optionally, a `task-list` envelope for titles and dependencies), plus the
- * task detail model computed from a `task-show` envelope.
+ * optionally, a `task-list` envelope for titles and dependencies). The task
+ * panel opened over the plan is the shared one, src/view-model/task.mjs (UI-27).
  *
  * Pure and portable like stats.mjs: no `node:` import, no DOM, no HTML, no
  * ANSI, no I/O. Both surfaces render THIS.
@@ -35,7 +35,7 @@
  * elapsed time against estimate, the actor and the worktree of a running task.
  */
 
-import { priorityRole, statusRole } from "./roles.mjs";
+import { statusRole } from "./roles.mjs";
 
 const label = key => String(key).replace(/_/g, " ");
 
@@ -273,37 +273,5 @@ export function planModel(envelope, freshness = {}, taskList = null) {
         : `${unplannedRows.length} open tasks are outside every wave.`,
       tasks: unplannedRows,
     },
-  };
-}
-
-/** The detail panel for one task, from a `task-show` envelope. */
-export function taskDetailModel(envelope, freshness = {}) {
-  if (!envelope || envelope.kind !== "task-show" || typeof envelope.id !== "string") {
-    throw new TypeError("taskDetailModel needs a task-show envelope");
-  }
-  return {
-    view: "task",
-    state: "ready",
-    freshness: freshnessOf(freshness),
-    id: envelope.id,
-    title: typeof envelope.title === "string" ? envelope.title : null,
-    status: envelope.status ?? null,
-    statusLabel: envelope.status ? label(envelope.status) : null,
-    statusRole: statusRole(envelope.status),
-    priority: envelope.priority ?? null,
-    priorityRole: priorityRole(envelope.priority),
-    file: typeof envelope.file === "string" ? envelope.file : null,
-    // `blocked` and each blocker's `resolved` are branchling's verdicts.
-    blocked: envelope.blocked === true,
-    blockers: (envelope.blockers || []).map(b => ({
-      id: b.id,
-      title: typeof b.title === "string" ? b.title : null,
-      status: b.status ?? null,
-      statusLabel: b.status ? label(b.status) : null,
-      role: statusRole(b.status),
-      resolved: b.resolved === true,
-      found: b.found !== false,
-    })),
-    elsewhere: (envelope.elsewhere || []).length,
   };
 }

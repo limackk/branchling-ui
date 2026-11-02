@@ -31,7 +31,8 @@ dir=$(node test/fixtures/plan-backlog.mjs)        # two waves, in flight, unplan
 node bin/branchling-ui.mjs --dir "$dir" --port 0   # prints the address
 ```
 
-Open `<address>?view=plan`, then `?view=plan&task=TASK-3` (the detail panel).
+Open `<address>?view=plan`, then `?view=plan&task=TASK-3` (the task panel, shared by every view since UI-27;
+`node test/fixtures/task-backlog.mjs` builds a task with a history).
 A reload and a pasted link must show the same screen. `--no-plan` builds a
 backlog without a plan (the empty state). The other views have theirs:
 `node test/fixtures/decisions-backlog.mjs [--no-questions]` and
@@ -55,7 +56,7 @@ first viewport.
 | loading | `--bin` a shim that runs `sleep 3` and then `exec branchling "$@"` |
 | empty | the `--no-plan` fixture |
 | error | `--dir` a directory with no backlog (usage error); `--bin` a script that prints `{"schemaVersion":99,"kind":"plan"}` (contract mismatch); stop the server, then press Try again (unreachable) |
-| refusal | `?view=plan&task=TASK-99` (the detail panel: `no-such-task`) |
+| not found | `?view=plan&task=TASK-99` (the task panel: branchling's `no-such-task` refusal is the not-found state) |
 | bad request | `/api/task?id=--help` answers 400 and spawns nothing |
 | stale | nothing serves a remembered answer yet (UI-2's cache hit is fresh, not stale); the model test covers `freshness.stale` until something does |
 

@@ -14,8 +14,9 @@ import { join } from "node:path";
 
 import { createAdapter, BranchlingRefusal } from "../src/adapter.mjs";
 import { createServer } from "../src/server.mjs";
-import { planModel, taskDetailModel } from "../src/view-model/plan.mjs";
-import { TASK_ID } from "../src/views/plan.mjs";
+import { planModel } from "../src/view-model/plan.mjs";
+import { taskDetailModel } from "../src/view-model/task.mjs";
+import { TASK_ID } from "../src/views/task.mjs";
 import { BIN, PLAN_RATIONALE, TITLES, WAVES, buildEmptyBacklog, buildPlanBacklog } from "./fixtures/plan-backlog.mjs";
 
 let tmp;

@@ -22,6 +22,7 @@ import health from "./health.mjs";
 import plan from "./plan.mjs";
 import release from "./release.mjs";
 import stats from "./stats.mjs";
+import task from "./task.mjs";
 import tasks from "./tasks.mjs";
 
 export const views = [
@@ -30,5 +31,6 @@ export const views = [
   plan,
   release,
   stats,
+  task,
   tasks,
 ];

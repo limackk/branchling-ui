@@ -228,6 +228,52 @@ export async function listDecisions(adapter) {
 }
 
 /**
+ * Everything the task panel (UI-27) shows about one task, as ONE answer.
+ *
+ * branchling 0.2 spreads it over three reads, and this composes them the way
+ * listDecisions composes its own, from an adapter-shaped object, so each read
+ * goes through the server's per-request scope and UI-2's cache:
+ *
+ *   show <ID>                         status, priority, title, file, blockers
+ *                                     and branchling's `blocked` verdict. First,
+ *                                     because its `no-such-task` refusal is the
+ *                                     panel's not-found state, and it names the
+ *                                     status the row is looked up by
+ *   log <ID>                          the history, one exchange per write
+ *   query --text <ID> --status <s>    the task's row: the fields `show` does not
+ *                                     carry (owner, epic, labels, estimate…).
+ *                                     `--text` is a substring of "<id> <title>",
+ *                                     so the row is picked by its exact id. The
+ *                                     status `show` gave lets a closed task's row
+ *                                     be found too
+ *   query --blocked-by <ID>           the tasks this one blocks (active ones,
+ *                                     branchling's default scope)
+ *
+ * No read prints the body (`show` leaves it out on purpose), so there is no
+ * `body` key; see src/view-model/task.mjs. Any failure rejects the whole
+ * answer, never a smaller one.
+ *
+ *   { kind: "task-panel", composed: true, id, show, log, task: <row>|null, blocks: [<row>] }
+ *
+ * @param {{ show: Function, log: Function, query: Function }} adapter
+ * @param {string} id a task id, already checked by the caller
+ */
+export async function readTask(adapter, id) {
+  if (typeof id !== "string" || !id || id.startsWith("-")) throw new BranchlingUsageError(["show", String(id)], 2, "a task id is required");
+  const show = await adapter.show(id);
+  const status = typeof show.status === "string" && /^[A-Za-z0-9_][A-Za-z0-9_ -]*$/.test(show.status) ? show.status : null;
+  const [log, list, blocking] = await Promise.all([
+    adapter.log(id),
+    adapter.query(status ? { text: id, status } : { text: id }),
+    adapter.query({ "blocked-by": id }),
+  ]);
+  const rows = Array.isArray(list.tasks) ? list.tasks : [];
+  const task = rows.find(t => t && t.id === id) || null;
+  const blocks = (Array.isArray(blocking.tasks) ? blocking.tasks : []).filter(t => t && typeof t.id === "string" && t.id);
+  return { kind: "task-panel", composed: true, id, show, log, task, blocks };
+}
+
+/**
  * Reads what `branchling decide --json` prints.
  *
  * WHY NOT parseEnvelope. In the supported range (0.2.x) `decide --json` does

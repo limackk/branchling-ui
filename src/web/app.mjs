@@ -115,3 +115,7 @@ for (const link of document.querySelectorAll("[data-view-link]")) {
 }
 if (current === "stats") load();
 else import(VIEW_MODULES[current]).then(m => m.start?.(document.querySelector(`[data-view="${current}"]`)));
+
+// The task panel (UI-27) opens over every view: `?task=<ID>`, or any link
+// carrying `data-task`. Its own module, so no view repeats it.
+import("/task.mjs").then(m => m.start());

@@ -768,18 +768,6 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 .wave[data-state="later"] > .card { border-style: dashed; border-color: var(--color-border-strong); }
 .wave[data-state="closed"] .wave-name { font-weight: var(--font-weight-medium); }
 
-/* the task detail panel (`&task=`): a card with the accent border */
-.panel { margin-bottom: var(--space-6); padding: var(--space-4); background: var(--color-bg-surface); border: 2px solid var(--color-action-primary); border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
-.page .panel h3 { margin: 0 0 var(--space-3); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
-.page .panel h4 { margin: var(--space-4) 0 var(--space-1); }
-.panel .state { margin-bottom: var(--space-2); }
-.panel-close { display: inline-flex; align-items: center; min-height: var(--control-height-sm); margin-top: var(--space-3); font-size: var(--font-size-300); font-weight: var(--font-weight-medium); }
-.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--space-4); margin: 0; font-size: var(--font-size-300); }
-.facts div { display: contents; }
-.facts dt, .facts dd { padding: var(--space-2) 0; border-bottom: var(--border-width) solid var(--color-border-default); }
-.facts dt { color: var(--color-text-muted); }
-.facts dd { margin: 0; overflow-wrap: anywhere; }
-
 /* ---------- the decisions view (UI-5), after mockups/decisions.html ----------
    The recommended option is marked in its label's text, never by colour
    alone, and never preselected. */
@@ -868,9 +856,6 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 .tasks-results .tlist li.selected { background: var(--color-bg-selected); }
 .tasks-results .tlist .task-link { min-width: 0; }
 .tasks-results .state-empty .btn { justify-self: center; }
-.tasks-selection { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-bg-surface); border: 2px solid var(--color-action-primary); border-radius: var(--radius-lg); }
-.tasks-selection p { margin: 0; }
-.tasks-selection .panel-close { margin-top: 0; }
 
 /* ---------- the health view (UI-28), after mockups/health.html ----------
    A result is its word in a role pill (fails, warning, note, passes, not
@@ -897,4 +882,63 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 @media (max-width: 40rem) {
   .health-list li { grid-template-columns: minmax(0, 1fr); }
   .health-detail, .health-elsewhere { grid-column: 1 / -1; }
+}
+
+/* ---------- the task panel (UI-27), after mockups/task.html ----------
+   One panel for every view, opened at `?task=<ID>` (src/web/task.mjs): a
+   modal <dialog> that slides in from the right as the mockup's drawer, full
+   width below 40rem. Sections follow the mockup (fields, blockers, what
+   branchling computed, body, history); the mockup's tabs and its footer of
+   write actions are left out until the write task of this wave. Tokens only:
+   text-default, text-muted and text-link on bg-surface and bg-subtle, the
+   role pills and the focus ring, all pairs contrast.mjs already checks. */
+.task-panel { position: fixed; inset: 0 0 0 auto; width: min(var(--drawer-width), 100vw); max-width: 100vw; height: 100%; max-height: 100%; margin: 0; padding: 0; border: 0; border-left: var(--border-width) solid var(--color-border-default); background: var(--color-bg-surface); color: var(--color-text-default); box-shadow: var(--shadow-3); overflow-y: auto; overscroll-behavior: contain; }
+/* a focused link scrolled into view stays clear of the sticky head (WCAG 2.4.11) */
+.task-panel { scroll-padding-top: 10rem; }
+.task-panel::backdrop { background: var(--color-bg-overlay); }
+.task-panel-frame { display: flex; flex-direction: column; min-height: 100%; }
+.task-panel-head { position: sticky; top: 0; z-index: 1; display: grid; gap: var(--space-2); padding: var(--space-4) var(--space-5); background: var(--color-bg-surface); border-bottom: var(--border-width) solid var(--color-border-default); }
+.task-panel-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.task-panel-bar .task-id { font-size: var(--font-size-300); }
+.task-panel-close { min-width: 24px; min-height: 24px; }
+.task-panel-title { margin: 0; font-size: var(--font-size-500); font-weight: var(--font-weight-semibold); line-height: var(--line-height-tight); overflow-wrap: anywhere; }
+.task-panel-title:focus { outline: none; }
+.task-panel-title:focus-visible { outline: var(--focus-width) solid var(--color-border-focus); outline-offset: var(--focus-offset); }
+.task-panel-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.task-panel-tags:empty { display: none; }
+.task-panel-body { display: grid; gap: var(--space-6); padding: var(--space-5); align-content: start; }
+.task-panel-body > p { margin: 0; }
+.task-panel-section { display: grid; gap: var(--space-2); min-width: 0; }
+.task-panel-section .section-head { margin-bottom: 0; }
+.task-panel-section h3 { margin: 0; }
+.task-panel-section h4 { margin: var(--space-2) 0 0; font-size: var(--font-size-300); color: var(--color-text-muted); font-weight: var(--font-weight-medium); }
+.task-panel-section p { margin: 0; overflow-wrap: anywhere; }
+.task-panel .kv dd { overflow-wrap: anywhere; min-width: 0; }
+.task-panel-items { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.task-panel-none, .task-panel-note { color: var(--color-text-muted); }
+.task-panel-note { font-size: var(--font-size-300); }
+.task-panel-file code { overflow-wrap: anywhere; color: var(--color-text-muted); }
+.task-panel .tasks .task-notes { flex-basis: auto; }
+.task-panel-not-found { color: var(--color-text-default); }
+.task-panel-not-found code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-panel .timeline .what { margin: 0; overflow-wrap: anywhere; }
+.task-panel .timeline .t-meta { margin: 0; }
+.task-panel .timeline .reason { overflow-wrap: anywhere; white-space: pre-wrap; }
+.task-panel-changes { margin: var(--space-1) 0 0; padding-left: var(--space-4); font-size: var(--font-size-300); color: var(--color-text-muted); overflow-wrap: anywhere; }
+/* .timeline li draws a rail item; the change lines inside one are plain list items */
+.task-panel .timeline .task-panel-changes li { display: list-item; padding: 0; }
+.task-panel .timeline .task-panel-changes li::before { content: none; }
+/* the body: markdown built as DOM nodes from the view model's blocks */
+.task-panel-md { display: grid; gap: var(--space-3); max-width: var(--prose-max); overflow-wrap: anywhere; }
+.task-panel-md h4, .task-panel-md h5, .task-panel-md h6 { margin: var(--space-2) 0 0; font-size: var(--font-size-400); color: var(--color-text-default); }
+.task-panel-md h5, .task-panel-md h6 { font-size: var(--font-size-300); }
+.task-panel-md ul, .task-panel-md ol { margin: 0; padding-left: var(--space-5); }
+.task-panel-md .md-depth-1 { margin-left: var(--space-4); }
+.task-panel-md .md-depth-2 { margin-left: var(--space-8); }
+.task-panel-md .md-depth-3 { margin-left: var(--space-10); }
+.task-panel-md pre { margin: 0; padding: var(--space-3); overflow-x: auto; background: var(--color-bg-subtle); border-radius: var(--radius-md); font-size: var(--font-size-200); }
+.task-panel-md a { color: var(--color-text-link); }
+@media (max-width: 40rem) {
+  .task-panel { width: 100vw; border-left: 0; }
+  .task-panel-head, .task-panel-body { padding-left: var(--space-4); padding-right: var(--space-4); }
 }
