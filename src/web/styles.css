@@ -6,7 +6,7 @@
   --surface: #f5f6f8;
   --text: #1b1f24;
   --text-muted: #4b5563;
-  --border: #8a94a3;
+  --border: #808a99;
   --focus: #1d4ed8;
   --accent: #1d4ed8;
 
@@ -107,3 +107,44 @@ button { font: inherit; color: var(--text); background: var(--surface); border: 
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* View navigation (shared by every view). */
+.views { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; margin: var(--space-2) 0 0; }
+.views a { display: inline-block; min-height: 24px; padding: var(--space-1) var(--space-3); color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius); }
+.views a[aria-current="page"] { background: var(--surface); color: var(--text); font-weight: 600; }
+
+/* The plan view (UI-3). Wave states differ by more than colour: a label, a
+   border style and whether the wave starts collapsed. */
+.plan-summary { font-size: 1.125rem; font-weight: 600; margin: 0 0 var(--space-1); }
+.plan-measure { font-weight: 600; }
+.quiet { color: var(--text-muted); margin: var(--space-1) 0; }
+.plan-rationale { margin: var(--space-3) 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--border); }
+.plan-rationale figcaption { color: var(--text-muted); font-size: 0.875rem; }
+.plan-rationale blockquote { margin: 0; }
+.plan-rationale p { margin: 0; }
+.plan-region { margin-top: var(--space-4); }
+.tasks { list-style: none; padding: 0; margin: var(--space-1) 0; }
+.task { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); padding: var(--space-1) 0; border-bottom: 1px solid var(--border); }
+.task-id { font-weight: 600; font-variant-numeric: tabular-nums; }
+a.task-id { color: var(--accent); display: inline-block; min-height: 24px; min-width: 24px; }
+.task-notes { color: var(--text-muted); font-size: 0.875rem; }
+.group { border: 1px dashed var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-2); margin: var(--space-1) 0; }
+.waves { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-2); }
+.wave { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.wave-head { cursor: pointer; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; min-height: 24px; }
+.wave-name { font-weight: 600; }
+.wave-state { padding: 0 var(--space-2); border-radius: var(--radius); background: var(--role-neutral-bg); color: var(--role-neutral-fg); }
+.wave-progress { color: var(--text-muted); font-size: 0.875rem; }
+.wave-active { border: 3px solid var(--accent); background: var(--surface); }
+.wave-next { border-style: solid; }
+.wave-later { border-style: dashed; }
+.wave-closed { border-style: dotted; }
+.wave-closed .wave-name, .wave-later .wave-name { font-weight: 400; }
+
+.panel { border: 3px solid var(--accent); border-radius: var(--radius); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3); background: var(--surface); }
+.panel h3 { margin-top: 0; }
+.panel-close { display: inline-block; margin-top: var(--space-2); min-height: 24px; color: var(--accent); }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); margin: 0; }
+.facts div { display: contents; }
+.facts dt { color: var(--text-muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }

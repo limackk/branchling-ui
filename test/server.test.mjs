@@ -7,14 +7,18 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { createAdapter, run, BranchlingRefusal } from "../src/adapter.mjs";
+import { createCache, createFileChanges, servedFromCache } from "../src/cache.mjs";
+import { RequestError } from "../src/request-error.mjs";
 import { createServer, CAPABILITY_HEADER } from "../src/server.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
@@ -196,5 +200,137 @@ test("a refusal keeps its kind and envelope on the way to the page", async () =>
     assert.deepEqual(res.json.error.envelope, envelope);
   } finally {
     await refusing.close();
+  }
+});
+
+test("a handler can answer 400 for a bad request without reaching the adapter", async () => {
+  let reached = false;
+  const views = [{ id: "probe", routes: [{ method: "GET", path: "/api/probe", handler: ({ adapter, params }) => {
+    if (!params.get("q")) throw new RequestError("q is required");
+    reached = true;
+    return adapter.stats();
+  } }] }];
+  const probing = await createServer({ adapter: createAdapter({ bin: BIN, dir, cwd: root }), port: 0, views });
+  try {
+    const bad = await call(probing, { path: "/api/probe" });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(bad.json, { error: { type: "bad-request", message: "q is required" } });
+    assert.equal(reached, false);
+    // Positive control: with the parameter the same route answers.
+    const good = await call(probing, { path: "/api/probe?q=1" });
+    assert.equal(good.status, 200);
+    assert.equal(good.json.kind, "stats");
+  } finally {
+    await probing.close();
+  }
+  assert.throws(() => new RequestError("x", { status: 500 }), RangeError);
+});
+
+/* ---------- UI-2's cache, joined to the server (UI-3) ---------- */
+
+function countingShim() {
+  const shimDir = mkdtempSync(join(tmpdir(), "branchling-ui-server-shim-"));
+  const counter = join(shimDir, "spawns");
+  writeFileSync(counter, "");
+  let bin;
+  if (process.platform === "win32") {
+    bin = join(shimDir, "counting-branchling.cmd");
+    writeFileSync(bin, `@echo spawn>>"${counter}"\r\n@call "${BIN}" %*\r\n`);
+  } else {
+    bin = join(shimDir, "counting-branchling");
+    writeFileSync(bin, `#!/bin/sh\necho spawn >> '${counter}'\nexec '${BIN}' "$@"\n`);
+    chmodSync(bin, 0o755);
+  }
+  return { bin, spawns: () => readFileSync(counter, "utf8").split("\n").filter(Boolean).length, cleanup: () => rmSync(shimDir, { recursive: true, force: true }) };
+}
+
+test("through the cache, a second identical GET spawns nothing and keeps its fetched-at", async () => {
+  const shim = countingShim();
+  const racyMs = 300;
+  const cache = createCache(createAdapter({ bin: shim.bin, dir, cwd: root }), { changes: createFileChanges({ dir, cwd: root, racyMs }) });
+  const cached = await createServer({ adapter: servedFromCache(cache), port: 0 });
+  try {
+    await sleep(racyMs + 150); // the fixture was just written; let it settle
+    const first = await call(cached, { path: "/api/stats" });
+    assert.equal(first.status, 200);
+    assert.equal(first.json.kind, "stats");
+    assert.equal(first.json.stats.total, 1);
+    const at = first.headers["x-branchling-ui-fetched-at"];
+    assert.match(at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+    // A hit is not stale: nothing changed since the answer was computed.
+    assert.equal(first.headers["x-branchling-ui-stale"], undefined);
+    const afterFirst = shim.spawns();
+    assert.equal(afterFirst, 1, "positive control: the first read spawned");
+
+    const second = await call(cached, { path: "/api/stats" });
+    assert.equal(second.status, 200);
+    assert.deepEqual(second.json, first.json);
+    assert.equal(second.headers["x-branchling-ui-fetched-at"], at);
+    assert.equal(second.headers["x-branchling-ui-stale"], undefined);
+    assert.equal(shim.spawns(), afterFirst, "the second read spawned nothing");
+
+    // The plan view's route goes through the same cache.
+    const plan = await call(cached, { path: "/api/plan" });
+    assert.equal(plan.status, 200);
+    assert.equal(plan.json.kind, "plan");
+    assert.equal(shim.spawns(), afterFirst + 1);
+  } finally {
+    await cached.close();
+    shim.cleanup();
+  }
+});
+
+test("each request's scope reports only its own reads, so concurrent requests cannot mix times", async () => {
+  let clock = 1000;
+  const fake = {
+    stats: async () => ({ schemaVersion: 1, kind: "stats" }),
+    plan: async () => ({ schemaVersion: 1, kind: "plan" }),
+  };
+  const served = servedFromCache(createCache(fake, { changes: { token: async () => "same" }, now: () => clock++ }));
+  const a = served.forRequest();
+  const b = served.forRequest();
+  const c = served.forRequest();
+  const [envA] = await Promise.all([a.adapter.stats(), b.adapter.plan()]);
+  assert.equal(envA.kind, "stats", "a scope hands out the bare envelope");
+  assert.equal(a.answeredAt(), 1000);
+  assert.equal(b.answeredAt(), 1001);
+  assert.equal(c.answeredAt(), null, "a scope that read nothing knows no time");
+  // A later hit in a new scope carries the time of the spawn, not of the hit.
+  const d = served.forRequest();
+  await d.adapter.stats();
+  assert.equal(d.answeredAt(), 1000);
+  // Several reads in one request: the oldest answer is what the response is as of.
+  const e = served.forRequest();
+  await e.adapter.plan();
+  await e.adapter.stats();
+  assert.equal(e.answeredAt(), 1000);
+});
+
+test("the started interface finds the backlog from its working directory and serves it cached", async () => {
+  const binPath = fileURLToPath(new URL("../bin/branchling-ui.mjs", import.meta.url));
+  const child = spawn(process.execPath, [binPath, "--port", "0", "--bin", BIN], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+  let stderr = "";
+  child.stderr.on("data", d => { stderr += d; });
+  try {
+    const port = await new Promise((resolve, reject) => {
+      let out = "";
+      child.stdout.on("data", d => {
+        out += d;
+        const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
+        if (m) resolve(Number(m[1]));
+      });
+      child.on("exit", code => reject(new Error(`exited ${code}: ${stderr}`)));
+    });
+    const srv = { port };
+    await sleep(2200); // RACY_MS: the bin uses the cache's defaults
+    const first = await call(srv, { path: "/api/stats" });
+    assert.equal(first.status, 200);
+    assert.equal(realpathSync(first.json.root), realpathSync(dir));
+    const second = await call(srv, { path: "/api/stats" });
+    assert.ok(first.headers["x-branchling-ui-fetched-at"], "the cache reports when it answered");
+    assert.equal(second.headers["x-branchling-ui-fetched-at"], first.headers["x-branchling-ui-fetched-at"]);
+    assert.doesNotMatch(stderr, /serving uncached/);
+  } finally {
+    child.kill();
   }
 });

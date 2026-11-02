@@ -4,8 +4,10 @@
  *
  * It never spawns branchling and never touches a backlog file: every answer
  * comes from the adapter it is handed. That handed-in object is also the seam
- * for UI-2's cache, which will wrap the adapter with the same interface, so
- * nothing here changes when the cache arrives.
+ * for UI-2's cache: an object with `forRequest()` (what `servedFromCache` in
+ * src/cache.mjs returns) is asked for a fresh adapter-shaped scope per
+ * request, and the time of the answers that request read is sent as
+ * `X-Branchling-UI-Fetched-At`. Handlers see envelopes either way.
  *
  * THE LOOPBACK GUARD. Binding to 127.0.0.1 is not enough on its own: any page
  * open in the same browser can reach a loopback port, and DNS rebinding makes
@@ -25,11 +27,13 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "./adapter.mjs";
+import { RequestError } from "./request-error.mjs";
 import { views as defaultViews } from "./views/index.mjs";
 
 /** One above `branchling serve`'s 4321, so both can run side by side. */
 export const DEFAULT_PORT = 4322;
 export const CAPABILITY_HEADER = "x-branchling-ui-capability";
+export const FETCHED_AT_HEADER = "X-Branchling-UI-Fetched-At";
 
 const LOOPBACK_BIND = new Set(["127.0.0.1", "::1"]);
 const SRC = fileURLToPath(new URL(".", import.meta.url));
@@ -68,6 +72,9 @@ export function isAllowedWrite(headers, port, token) {
 
 /** The JSON error body for anything a handler throws. Never an empty result. */
 export function errorBody(err) {
+  if (err instanceof RequestError) {
+    return { status: err.status, body: { error: { type: err.type, message: err.message } } };
+  }
   if (err instanceof BranchlingRefusal) {
     return { status: 409, body: { error: { type: "refusal", refusalKind: err.envelope.refusalKind ?? null, message: err.message, envelope: err.envelope } } };
   }
@@ -80,8 +87,8 @@ export function errorBody(err) {
   return { status: 500, body: { error: { type: "internal", message: String(err && err.message || err) } } };
 }
 
-function sendJson(res, status, body) {
-  res.writeHead(status, { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" });
+function sendJson(res, status, body, extra = {}) {
+  res.writeHead(status, { ...SECURITY_HEADERS, ...extra, "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
@@ -159,16 +166,24 @@ export async function createServer({ adapter, port = DEFAULT_PORT, host = "127.0
 
       const handler = routes.get(`${req.method} ${url.pathname}`);
       if (handler) {
+        // One scope per request, so two requests in flight can never mix up
+        // whose answer was how old.
+        const scope = typeof adapter.forRequest === "function" ? adapter.forRequest() : { adapter, answeredAt: () => null };
         let body;
         try {
-          body = await handler({ adapter, req, url, params: url.searchParams });
+          body = await handler({ adapter: scope.adapter, req, url, params: url.searchParams });
         } catch (err) {
           const { status, body: errBody } = errorBody(err);
           if (status >= 500) log(`branchling-ui: ${req.method} ${url.pathname}: ${err.message}`);
           sendJson(res, status, errBody);
           return;
         }
-        sendJson(res, 200, body);
+        // A cache hit is NOT stale: UI-2's cache answers from memory only when
+        // nothing changed since the answer was computed, so it never sets
+        // X-Branchling-UI-Stale. That header is for a remembered answer served
+        // while a fresh read is on its way, which nothing does yet.
+        const at = scope.answeredAt();
+        sendJson(res, 200, body, at === null ? {} : { [FETCHED_AT_HEADER]: new Date(at).toISOString() });
         return;
       }
 

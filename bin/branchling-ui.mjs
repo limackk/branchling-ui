@@ -6,12 +6,21 @@
  *
  * `--dir` is passed to branchling as is; without it branchling finds the
  * backlog from the current directory, the way it does on the command line.
+ *
+ * Reads go through UI-2's cache (src/cache.mjs), which fingerprints the backlog
+ * directory and so needs to know where it is. With `--dir` that is the
+ * directory given. Without it, the directory branchling itself found is taken
+ * from the `root` key of one `stats --json` envelope at startup (`where
+ * --json` would say it more directly, but it prints no schemaVersion/kind
+ * envelope, so the adapter cannot take it as a contract). If that first read
+ * fails, the server runs uncached and every view reports the failure itself.
  */
 
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 
 import { createAdapter } from "../src/adapter.mjs";
+import { createCache, servedFromCache } from "../src/cache.mjs";
 import { createServer, DEFAULT_PORT } from "../src/server.mjs";
 
 const { values } = parseArgs({
@@ -34,11 +43,23 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
   process.exit(2);
 }
 
-const adapter = createAdapter({ dir: values.dir && resolve(values.dir), bin: values.bin, cwd: process.cwd() });
+const dir = values.dir && resolve(values.dir);
+const adapter = createAdapter({ dir, bin: values.bin, cwd: process.cwd() });
 const { version, supported } = await adapter.version();
 if (!supported) console.warn(`branchling-ui: branchling ${version} is outside the supported range; views may refuse to render`);
 
-const server = await createServer({ adapter, port });
+let backlogDir = dir;
+if (!backlogDir) {
+  try {
+    const { root } = await adapter.stats();
+    if (typeof root === "string" && root) backlogDir = root;
+  } catch (err) {
+    console.warn(`branchling-ui: no backlog found from ${process.cwd()} (${err.message.split("\n")[0]}); serving uncached`);
+  }
+}
+const served = backlogDir ? servedFromCache(createCache(adapter, { dir: backlogDir, cwd: process.cwd() })) : adapter;
+
+const server = await createServer({ adapter: served, port });
 if (server.port !== port && port !== 0) console.warn(`branchling-ui: port ${port} is taken, using ${server.port}`);
 console.log(`branchling-ui: ${server.url}`);
 

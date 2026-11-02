@@ -29,6 +29,7 @@ export function fromApiError(view, body, status) {
     "usage-error": "The interface called branchling incorrectly",
     "forbidden": "The request was refused by the local server",
     "not-found": "There is nothing at this address",
+    "bad-request": "The request was not understood",
   };
   return {
     view,

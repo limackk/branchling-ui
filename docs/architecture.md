@@ -61,6 +61,8 @@ take again with evidence, not a default.
 bin/branchling-ui.mjs        starts the server for one backlog, prints the URL
 src/adapter.mjs              the only door into branchling (unchanged by UI-1)
 src/server.mjs               HTTP, the loopback guard, static files, the route table
+src/cache.mjs                UI-2's read cache, and servedFromCache, its join to the server
+src/request-error.mjs        RequestError: a handler's 4xx before any spawn
 src/views/index.mjs          the view registry: one import and one entry per view
 src/views/<view>.mjs         a view's API routes
 src/view-model/<view>.mjs    the shared view model, pure functions
@@ -110,8 +112,10 @@ label, an empty state or a refusal is decided once, here.
   onto the adapter, and the model has one implementation, not a server copy
   and a client copy.
 - Each builder takes the envelope plus a `freshness` argument,
-  `{ stale, fetchedAt }`. Until UI-2 every answer is fresh; the field exists
-  now so no surface changes when the cache arrives.
+  `{ stale, fetchedAt }`. `fetchedAt` is when branchling answered (the
+  cache's `answeredAt`, see the cache seam below); `stale` marks a remembered
+  answer shown while a fresh read is on its way, such as the TUI's last
+  stats during a refresh. A cache hit is never stale.
 - Every model has a `state`: `loading`, `empty`, `ready`, `error` or
   `refusal`, plus `freshness.stale`. A refusal is never turned into an empty
   result.
@@ -136,19 +140,44 @@ JSON, `{ "error": { "type", "message", ... } }`, with distinct statuses:
 | `BranchlingUsageError` | 500 | `usage-error` |
 | anything else | 500 | `internal` |
 
+A handler that refuses a request before calling the adapter (a missing or
+malformed parameter) throws `RequestError` from `src/request-error.mjs`:
+`400 bad-request` by default, any 4xx allowed, and no spawn.
+
 The guard answers `403 forbidden`; an unknown path `404 not-found`; a method
 with no route `405 method-not-allowed`.
 
-## The cache seam (UI-2)
+## The cache seam (UI-2, joined in UI-3)
 
-`createServer({ adapter })` takes any object with the adapter's methods.
-UI-2's cache wraps `createAdapter(...)` with the same interface and is passed
-in its place; no view and no handler changes. When it serves a remembered
-answer, it reports that through the response headers
-`X-Branchling-UI-Stale: 1` and `X-Branchling-UI-Fetched-At: <ISO time>`, which
-the page already reads into the model's `freshness`. How the cache passes that
-to the server (for example a `freshness` property next to the envelope) is
-UI-2's to design.
+`createServer({ adapter })` takes any object with the adapter's methods, so a
+handler stays `({ adapter }) => adapter.plan()` whatever sits behind it.
+
+What UI-2 shipped (`src/cache.mjs`): `createCache(adapter, { dir, cwd })`
+answers the reading calls (query, stats, plan, show, log, deployStatus) from
+memory while a fingerprint of the backlog directory and git's refs is
+unchanged, and resolves each to `{ envelope, answeredAt, fromCache }`, not a
+bare envelope. `answeredAt` is when the answer was computed; a hit returns
+the time of the spawn that produced it.
+
+The join (UI-3): `servedFromCache(cache)` returns `{ forRequest() }`. The
+server calls it once per request and hands the handler that scope's
+`adapter`, whose reads return the bare envelope, then sends the oldest
+`answeredAt` of that request's reads as `X-Branchling-UI-Fetched-At: <ISO>`.
+Each request gets its own scope, so concurrent requests cannot mix up times.
+A plain adapter (no `forRequest`) is served as before, with no header.
+
+**A cache hit is not stale.** UI-2 serves from memory only when nothing
+observable changed since the answer was computed, so a hit is as current as
+a spawn and `X-Branchling-UI-Stale` is never set for it. Stale, in this
+document, means a remembered answer served while a fresh read is on its way;
+nothing produces that yet, and the page and model keep the field for when
+something does.
+
+`bin/branchling-ui.mjs` always serves through the cache. The cache needs the
+backlog directory: with `--dir` that is it; without, it is the `root` of one
+`stats --json` at startup (`where --json` names it more directly but prints
+no `schemaVersion`/`kind` envelope, so the adapter cannot take it). If that
+read fails, the server runs uncached and the views report the failure.
 
 ## The loopback guard
 
@@ -277,4 +306,6 @@ in the key map.
 The TUI calls the adapter directly, so it maps the adapter's errors with
 `fromAdapterError` in `src/view-model/states.mjs`, which gives the same state
 and title the server's JSON error gives the page. It does not use UI-2's cache
-yet; wrapping the adapter it is given is enough when it should.
+yet. When it should, it takes the cache through the same join as the server
+(`servedFromCache(cache).forRequest().adapter`, one scope per refresh), since a
+bare cache resolves to `{ envelope, answeredAt, fromCache }`, not to envelopes.

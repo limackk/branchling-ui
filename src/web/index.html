@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Backlog stats</title>
+<title>Backlog</title>
 <link rel="stylesheet" href="/styles.css">
 <script type="module" src="/app.mjs"></script>
 </head>
@@ -13,15 +13,28 @@
 <header class="bar">
   <h1>Backlog</h1>
   <p class="root" id="root"></p>
+  <nav aria-label="Views">
+    <ul class="views">
+      <li><a href="?view=plan" data-view-link="plan">Plan</a></li>
+      <li><a href="?view=release" data-view-link="release">Release</a></li>
+      <li><a href="?view=stats" data-view-link="stats">Stats</a></li>
+    </ul>
+  </nav>
 </header>
 <main id="main" tabindex="-1">
-  <section aria-labelledby="stats-title">
+  <section aria-labelledby="plan-title" data-view="plan" hidden>
+    <h2 id="plan-title">Plan</h2>
+    <div id="plan" aria-live="polite" aria-busy="true">
+      <p class="state state-loading">Loading the plan…</p>
+    </div>
+  </section>
+  <section aria-labelledby="stats-title" data-view="stats">
     <h2 id="stats-title">Stats</h2>
     <div id="stats" aria-live="polite" aria-busy="true">
       <p class="state state-loading">Loading stats…</p>
     </div>
   </section>
-  <section aria-labelledby="release-title">
+  <section aria-labelledby="release-title" data-view="release" hidden>
     <h2 id="release-title">Release pipeline</h2>
     <div id="release">
       <p class="state state-loading">Loading the release pipeline…</p>

@@ -80,6 +80,7 @@ test("the view model modules import nothing a browser cannot load", () => {
   const dir = new URL("../src/view-model/", import.meta.url);
   const files = readdirSync(dir).filter(f => f.endsWith(".mjs"));
   assert.ok(files.includes("stats.mjs"));
+  assert.ok(files.includes("plan.mjs"));
   for (const file of files) {
     const source = readFileSync(new URL(file, dir), "utf8");
     for (const [, spec] of source.matchAll(/\bfrom\s+["']([^"']+)["']/g)) {

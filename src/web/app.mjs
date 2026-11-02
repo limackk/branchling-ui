@@ -7,7 +7,6 @@
 
 import { STATS_TEXT, statsModel } from "/view-model/stats.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
-import "/release.mjs";
 
 /** The capability every write sends (UI-5, UI-6). Reads do not need it. */
 export const capability = document.querySelector('meta[name="branchling-ui-capability"]')?.content || "";
@@ -75,7 +74,8 @@ async function load() {
     if (!res.ok) {
       model = fromApiError("stats", body, res.status);
     } else {
-      // UI-2's cache will mark an answer it served from memory as stale.
+      // A cache hit is fresh (see docs/architecture.md); stale is for a
+      // remembered answer served while a fresh read is on its way.
       model = statsModel(body, {
         stale: res.headers.get("x-branchling-ui-stale") === "1",
         fetchedAt: res.headers.get("x-branchling-ui-fetched-at"),
@@ -89,4 +89,23 @@ async function load() {
   target.setAttribute("aria-busy", "false");
 }
 
-load();
+/*
+ * Which view is on screen is `?view=` in the URL. Stats is rendered here; any
+ * other view is its own module in src/web/, listed below with ONE line, and is
+ * imported only when it is on screen. It exports `start(section)`, or starts
+ * itself on import as release.mjs does. A view not listed falls back to stats.
+ */
+const VIEW_MODULES = {
+  plan: "/plan.mjs",
+  release: "/release.mjs",
+};
+
+const requested = new URLSearchParams(location.search).get("view");
+const current = Object.hasOwn(VIEW_MODULES, requested) ? requested : "stats";
+for (const section of document.querySelectorAll("[data-view]")) section.hidden = section.dataset.view !== current;
+for (const link of document.querySelectorAll("[data-view-link]")) {
+  if (link.dataset.viewLink === current) link.setAttribute("aria-current", "page");
+  else link.removeAttribute("aria-current");
+}
+if (current === "stats") load();
+else import(VIEW_MODULES[current]).then(m => m.start?.(document.querySelector(`[data-view="${current}"]`)));

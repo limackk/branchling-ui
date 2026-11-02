@@ -330,7 +330,9 @@ test("the page serves the release script and the release view model", async () =
   const page = await call(server, "/");
   assert.match(page.text, /id="release"/);
   const app = await call(server, "/app.mjs");
-  assert.match(app.text, /import "\/release\.mjs"/);
+  // The page's view switcher maps ?view=release to the release module.
+  assert.match(app.text, /release: "\/release\.mjs"/);
+  assert.match(page.text, /data-view="release"/);
 });
 
 // --- plain data -----------------------------------------------------------------

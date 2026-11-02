@@ -116,11 +116,14 @@ function spawnTarget(command, args) {
 /**
  * Starts the executable and collects its output. Exported for the test
  * fixtures, which have to start branchling exactly the way the adapter does.
+ * `env` is merged over this process's environment; the fixtures use it to give
+ * branchling a private data and config home, so a fixture's reservations and
+ * telemetry never land in the user's own directories.
  */
-export function run(bin, args, { cwd, input } = {}) {
+export function run(bin, args, { cwd, input, env } = {}) {
   const target = spawnTarget(resolveBin(bin), args);
   return new Promise((resolve, reject) => {
-    const options = { cwd, maxBuffer: 64 * 1024 * 1024, ...target.options };
+    const options = { cwd, maxBuffer: 64 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}), ...target.options };
     const child = execFile(target.file, target.args, options, (err, stdout, stderr) => {
       if (err && typeof err.code !== "number") { reject(err); return; }
       resolve({ code: err ? err.code : 0, stdout, stderr });

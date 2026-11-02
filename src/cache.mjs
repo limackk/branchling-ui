@@ -287,3 +287,46 @@ export function createCache(adapter, { dir, cwd, changes, now = Date.now } = {})
   cache.clear = () => { generation++; entries.clear(); };
   return Object.freeze(cache);
 }
+
+/**
+ * Joins a cache to the server (UI-3). `createCache` resolves its reads to
+ * `{ envelope, answeredAt, fromCache }`, while view handlers and createServer
+ * work with adapter-shaped methods that return envelopes. This returns
+ *
+ *   { forRequest() -> { adapter, answeredAt() } }
+ *
+ * which the server calls once PER REQUEST. That scope's `adapter` has the
+ * cache's methods, its cached reads unwrapped to the bare (frozen) envelope,
+ * and `answeredAt()` gives the OLDEST `answeredAt` among the reads this one
+ * request made (epoch ms), or null if it made none. The response is at least
+ * as fresh as that, and the server sends it as X-Branchling-UI-Fetched-At.
+ * Nothing is shared between scopes, so concurrent requests cannot read each
+ * other's times.
+ *
+ * Not stale: a hit means nothing observable changed since the answer was
+ * computed (see the header of this file), so a cached answer is as current as
+ * a spawned one. The architecture's "stale" (a remembered answer served while
+ * a fresh read is on its way) is never produced here.
+ */
+export function servedFromCache(cache) {
+  return Object.freeze({
+    forRequest() {
+      const times = [];
+      const adapter = {};
+      for (const [name, fn] of Object.entries(cache)) {
+        if (typeof fn !== "function") continue;
+        adapter[name] = CACHED_READS.includes(name)
+          ? async (...args) => {
+            const answer = await fn(...args);
+            times.push(answer.answeredAt);
+            return answer.envelope;
+          }
+          : fn;
+      }
+      return Object.freeze({
+        adapter: Object.freeze(adapter),
+        answeredAt: () => (times.length ? Math.min(...times) : null),
+      });
+    },
+  });
+}

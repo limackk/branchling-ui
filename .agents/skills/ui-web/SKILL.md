@@ -69,7 +69,7 @@ Colour is never the only signal: the label is always shown.
 | `empty` | the answer is valid and has no rows | a plain sentence saying so, not an error |
 | `error` | contract mismatch, usage error, unreachable server | title and detail from `states.mjs`, a Try again button |
 | `refusal` | branchling declined (`BranchlingRefusal`) | the refusal text and its `refusalKind`; it is an answer the user may act on |
-| stale | `freshness.stale` (UI-2's cache served a remembered answer) | the data, plus a notice that a fresh read is on its way |
+| stale | `freshness.stale`: a remembered answer served while a fresh read is on its way (a cache hit is NOT stale; see docs/architecture.md) | the data, plus a notice that a fresh read is on its way |
 
 Build them with `src/view-model/states.mjs` so the terminal says the same
 thing. A refusal must never look like an empty list.
