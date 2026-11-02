@@ -29,6 +29,16 @@
 
 import { priorityRole, statusRole } from "./roles.mjs";
 
+/** The headings and sentences of the release view, decided once for every surface. */
+export const RELEASE_TEXT = {
+  title: "Release pipeline",
+  loading: "Loading the release pipeline…",
+  stale: "Showing the last known release pipeline; a fresh read is on its way.",
+  refs: "Computed from these refs",
+  trunk: "trunk",
+  release: "Release",
+};
+
 const TRUNK_SOURCE_TEXT = {
   "remote-default": "the remote's default branch",
   head: "HEAD, because this clone has no origin/HEAD",
@@ -60,19 +70,23 @@ function waitedLabel(days) {
 function pipelineTask(task, bucketUnknown) {
   const waitedDays = num(task.waitedDays);
   const state = str(task.state);
+  const statusLabel = task.status == null ? "no task file" : String(task.status).replace(/_/g, " ");
+  const unknown = bucketUnknown || state === "unknown";
   return {
     id: String(task.id),
     title: str(task.title) ?? "",
     hasFile: task.status !== null && task.status !== undefined,
     status: str(task.status),
-    statusLabel: task.status == null ? "no task file" : String(task.status).replace(/_/g, " "),
+    statusLabel,
     role: statusRole(task.status),
     closed: str(task.closed),
     since: str(task.since),
     waitedDays,
     waitedLabel: waitedLabel(waitedDays),
     state,
-    unknown: bucketUnknown || state === "unknown",
+    unknown,
+    // What a row says after its id and title, as the web page lists it.
+    notes: [statusLabel + (str(task.closed) ? ` ${str(task.closed)}` : ""), waitedLabel(waitedDays), ...(unknown ? ["unknown"] : [])],
     holding: Array.isArray(task.holding) ? task.holding.map(String) : [],
     refs: (Array.isArray(task.refs) ? task.refs : []).map(r => ({
       spec: String(r.spec),
@@ -164,6 +178,7 @@ function releaseTask(task, { where, showPlanned }) {
   const details = [];
   if (showPlanned && task.release) details.push(`planned for ${task.release}`);
   if (where) details.push(...standingText(task));
+  const statusLabel = task.status == null ? "no task file" : String(task.status).replace(/_/g, " ");
   return {
     id: String(task.id),
     title: str(task.title) ?? "",
@@ -175,6 +190,7 @@ function releaseTask(task, { where, showPlanned }) {
     release: str(task.release),
     commits: num(task.commits),
     details,
+    notes: [statusLabel, str(task.priority), ...details].filter(Boolean),
   };
 }
 
@@ -225,6 +241,7 @@ function releaseComparison(scope) {
     planned: num(scope.planned) ?? 0,
     shipped: shipped ?? 0,
     shippedNote: "counted, not listed",
+    countsText: `${num(scope.planned) ?? 0} planned · ${shipped ?? 0} shipped (counted, not listed) · ${num(scope.dropped?.count) ?? 0} dropped`,
     dropped: num(scope.dropped?.count) ?? 0,
     isCurrent: scope.current === scope.name,
     current: str(scope.current),

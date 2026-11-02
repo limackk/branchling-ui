@@ -15,7 +15,7 @@
  *   - one row per open question (a task can carry two), oldest first, with the
  *     task, the question, who asked, when and how long ago.
  *   - the options, when the answer carries them, numbered from 1 as
- *     `decide --choose <n>` counts them, the recommended one marked in TEXT.
+ *     `decide --choose N` counts them, the recommended one marked in TEXT.
  *     branchling 0.2's `log --decisions --json` does not report a question's
  *     options (an upstream gap), so they are read only if present, under the
  *     names `ask --json` uses (`options`, `recommend`); until then a question
@@ -41,7 +41,33 @@ export const DECISIONS_TEXT = {
   recommended: "recommended",
   submit: "Record the answer",
   submitting: "Recording the answer…",
+  howToAnswer: "Answer it with branchling, from a shell in the repository that holds this backlog:",
+  chooseHint: "with N the number of the option to pick, or",
+  reasonPlaceholder: "YOUR ANSWER",
+  actorNote: "branchling records the actor from $BACKLOG_ACTOR or your user config.",
 };
+
+/** A word as a POSIX shell reads it: bare when it is safe, else single-quoted. */
+export function shellWord(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(text) && !text.startsWith("-")) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * The exact `branchling decide` commands that answer one open question, for a
+ * surface that cannot record the answer itself (the terminal interface). The
+ * same two shapes `validateDecision` accepts; never an `--actor`: branchling
+ * resolves who answered from the environment of the person who runs it.
+ * `choose` is null when no options are known.
+ */
+export function answerCommands(taskId, questionId, { optionsKnown = false, options = [] } = {}) {
+  const base = `branchling decide ${shellWord(taskId)} --resolves ${shellWord(questionId)}`;
+  return {
+    choose: optionsKnown && options.length ? `${base} --choose N` : null,
+    reason: `${base} --reason "${DECISIONS_TEXT.reasonPlaceholder}"`,
+  };
+}
 
 /** Limits on an answer, checked before branchling is called. */
 export const LIMITS = { id: 64, resolves: 64, reason: 2000, choose: 1000 };
@@ -121,6 +147,7 @@ function questionsOf(entry, now) {
         options,
         optionsNote: !known ? DECISIONS_TEXT.optionsUnknown : options.length ? null : DECISIONS_TEXT.noOptions,
         needs: DECISIONS_TEXT.needs,
+        commands: answerCommands(String(task.id), String(m.id), { optionsKnown: known, options }),
       });
     }
   }

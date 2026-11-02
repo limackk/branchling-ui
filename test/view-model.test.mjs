@@ -12,6 +12,9 @@ import { STATS_TEXT, statsModel } from "../src/view-model/stats.mjs";
 import { fromAdapterError, fromApiError, loadingState, rejectedInputState, unreachableState } from "../src/view-model/states.mjs";
 import { BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
 import { priorityRole, statusRole } from "../src/view-model/roles.mjs";
+import { DECISIONS_TEXT, answerCommands, shellWord } from "../src/view-model/decisions.mjs";
+import { PLAN_TEXT, taskNotes } from "../src/view-model/plan.mjs";
+import { RELEASE_TEXT, releaseModel } from "../src/view-model/release.mjs";
 
 function envelope(overrides = {}) {
   return {
@@ -262,4 +265,52 @@ test("the static page's pre-script placeholders match STATS_TEXT", () => {
   assert.match(html, /<h2 id="stats-title">([^<]*)<\/h2>/);
   assert.equal(html.match(/<h2 id="stats-title">([^<]*)<\/h2>/)[1], STATS_TEXT.title);
   assert.equal(html.match(/<div id="stats"[^>]*>\s*<p class="state state-loading">([^<]*)<\/p>/)[1], STATS_TEXT.loading);
+});
+
+// --- what the terminal screens need from the models (UI-31) -----------------
+
+
+test("answerCommands gives the exact branchling decide commands, quoted for a shell, never with --actor", () => {
+  const plain = answerCommands("TASK-1", "01M6EZ150NDP3Y6QZPJY4PZW6R");
+  assert.equal(plain.reason, `branchling decide TASK-1 --resolves 01M6EZ150NDP3Y6QZPJY4PZW6R --reason "${DECISIONS_TEXT.reasonPlaceholder}"`);
+  assert.equal(plain.choose, null, "no options known, no --choose");
+  const menu = answerCommands("TASK-1", "Q1", { optionsKnown: true, options: [{ number: 1 }] });
+  assert.equal(menu.choose, "branchling decide TASK-1 --resolves Q1 --choose N");
+  assert.equal(answerCommands("TASK-1", "Q1", { optionsKnown: true, options: [] }).choose, null, "positive control: an empty menu offers no --choose");
+  for (const c of [plain.reason, menu.choose, menu.reason]) assert.doesNotMatch(c, /--actor/);
+  // Data from a backlog cannot break out of its word.
+  assert.equal(shellWord("TASK-1"), "TASK-1");
+  assert.equal(shellWord("a b"), "'a b'");
+  assert.equal(shellWord("it's;rm"), "'it'\\''s;rm'");
+  assert.equal(shellWord("-x"), "'-x'");
+  assert.equal(answerCommands("T 1", "$(x)").reason.startsWith("branchling decide 'T 1' --resolves '$(x)' --reason"), true);
+});
+
+test("plan task notes say what the web page says, in its order", () => {
+  assert.deepEqual(taskNotes({ inFlight: true, overtaken: true, known: false, waitsOn: [{ id: "A-1", open: true }, { id: "A-2", open: false }, { id: "A-3", open: null }], unblocks: ["A-4", "A-5"] }),
+    ["in flight", "overtaken", "not in this backlog", "waits on A-1", "after A-2 (closed)", "after A-3", "unblocks A-4, A-5"]);
+  assert.deepEqual(taskNotes({ inFlight: false, overtaken: false, known: true, waitsOn: [], unblocks: [] }), []);
+  for (const s of strings(PLAN_TEXT)) assert.doesNotMatch(s, /<[a-z/!]|\x1b/i);
+  for (const s of strings(RELEASE_TEXT)) assert.doesNotMatch(s, /<[a-z/!]|\x1b/i);
+  for (const s of strings(DECISIONS_TEXT)) assert.doesNotMatch(s, /<[a-z/!]|\x1b/i);
+});
+
+test("release rows carry the notes the web page lists beside them, and a release its counts sentence", () => {
+  const model = releaseModel({
+    schemaVersion: 1,
+    kind: "release-status",
+    trunk: { spec: "HEAD", sha: "a".repeat(40), source: "head" },
+    scan: { refs: [] },
+    targets: [{ target: "web", buckets: [
+      { kind: "waiting", stage: "staging", label: "on the trunk, waiting for staging", count: 1, tasks: [{ id: "T-1", title: "One", status: "done", closed: "2026-11-01", waitedDays: 2 }] },
+      { kind: "waiting", stage: "production", label: "in staging, waiting for production", count: 1, unknown: true, unknownRefs: ["refs/x"], tasks: [{ id: "T-2", title: "Two", status: null }] },
+    ] }],
+    release: { name: "1.1", planned: 3, shipped: { count: 1 }, dropped: { count: 0 }, current: "1.1",
+      notShipped: { count: 1, tasks: [{ id: "T-3", title: "Three", status: "pending", priority: "P1", standing: [] }] }, open: { count: 0, tasks: [] }, unplanned: { count: 0, tasks: [] } },
+  });
+  const [waiting, unknown] = model.lanes[0].columns;
+  assert.deepEqual(waiting.tasks[0].notes, ["done 2026-11-01", "waiting 2d"]);
+  assert.deepEqual(unknown.tasks[0].notes, ["no task file", "waiting time unknown", "unknown"]);
+  assert.equal(model.release.countsText, "3 planned · 1 shipped (counted, not listed) · 0 dropped");
+  assert.deepEqual(model.release.sections[0].tasks[0].notes, ["pending", "P1"]);
 });

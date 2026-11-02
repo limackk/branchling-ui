@@ -39,6 +39,60 @@ import { priorityRole, statusRole } from "./roles.mjs";
 
 const label = key => String(key).replace(/_/g, " ");
 
+/**
+ * The headings and sentences of the plan view, decided once so every surface
+ * says the same thing (the web page's own copies of these are the same words;
+ * the terminal interface reads them from here).
+ */
+export const PLAN_TEXT = {
+  title: "Plan",
+  loading: "Loading the plan…",
+  stale: "Showing the last known plan; a fresh read is on its way.",
+  emptyNoPlan: "This backlog has no execution plan. That is fine: the order is an optional decision.",
+  emptyNoWaves: "The plan exists but schedules no waves yet.",
+  emptyHint: "A plan is plan.yaml next to the tasks: an ordered list of waves, each a named batch of task ids. Once it has a wave, `branchling plan add ID --wave \"NAME\"` schedules more.",
+  asOf: "As of",
+  rationale: "Why this order",
+  dependenciesUnknown: "Titles and dependencies could not be read; tasks are shown by id.",
+  inFlight: "In flight",
+  noneInFlight: "Nothing in the plan is in flight.",
+  mayStartNow: "May start now",
+  noneStartable: "Nothing in the active wave may start now.",
+  finished: "Every wave is closed; the plan is finished.",
+  together: "Done as one",
+  waitsOnHuman: "waits on a person",
+  waves: "Waves",
+  wave: "Wave",
+  endsOnHuman: "This wave ends on a person: an unattended run cannot close it on its own.",
+  noTasksInWave: "This wave schedules no tasks.",
+  overtaken: "Overtaken",
+  overtakenNote: "Closed in a wave after the active one: the order may want reshuffling.",
+  unplanned: "Unplanned",
+  allPlanned: "Every open task is in the plan.",
+  footnote: "The plan orders; it does not block. Status stays the only truth about what has happened.",
+};
+
+function edgeText(edge) {
+  if (edge.open === true) return `waits on ${edge.id}`;
+  if (edge.open === false) return `after ${edge.id} (closed)`;
+  return `after ${edge.id}`;
+}
+
+/**
+ * What a task row says besides its id, title and status, in the order the web
+ * page shows it: in flight, overtaken, not in this backlog, each edge, what it
+ * unblocks. A surface adds where it is listed (`wave N`) itself.
+ */
+export function taskNotes(task) {
+  const notes = [];
+  if (task.inFlight) notes.push("in flight");
+  if (task.overtaken) notes.push("overtaken");
+  if (task.known === false) notes.push("not in this backlog");
+  for (const edge of task.waitsOn || []) notes.push(edgeText(edge));
+  if (task.unblocks && task.unblocks.length) notes.push(`unblocks ${task.unblocks.join(", ")}`);
+  return notes;
+}
+
 function freshnessOf(freshness = {}) {
   return { stale: freshness.stale === true, fetchedAt: freshness.fetchedAt ?? null };
 }
@@ -105,7 +159,7 @@ export function planModel(envelope, freshness = {}, taskList = null) {
 
   function taskRow(id, status, extra = {}) {
     const task = listed.get(id);
-    return {
+    const row = {
       id,
       title: task && typeof task.title === "string" ? task.title : null,
       status: typeof status === "string" ? status : null,
@@ -118,6 +172,8 @@ export function planModel(envelope, freshness = {}, taskList = null) {
       unblocks: [...(unblocks.get(id) || [])],
       ...extra,
     };
+    row.notes = taskNotes(row);
+    return row;
   }
 
   const waveName = index => {

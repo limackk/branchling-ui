@@ -71,7 +71,9 @@ src/view-model/roles.mjs     status and priority colour roles
 src/web/                     the page: index.html, app.mjs, one module per view, styles.css, icons.svg
 bin/branchling-ui-tui.mjs    starts the terminal interface (TUI) for one backlog
 src/tui/terminal.mjs         colour and screen capabilities, the full-screen lifecycle
-src/tui/render.mjs           a view model as lines of text, a pure function
+src/tui/render.mjs           a view model as lines of text, a pure function; KEYS
+src/tui/text.mjs             segments, fitting, wrapping and painting a line
+src/tui/screens/             one module per screen (stats, plan, release, decisions)
 src/tui/app.mjs              the TUI loop: fetch, redraw, keys, signals
 ```
 
@@ -381,11 +383,13 @@ addressing and a key reader, is a few dozen lines on top of Node's raw mode.
 ### The keyboard model
 
 Single keys, no modifiers, always shown on the last row of the screen as a
-key map (`q quit  r refresh`). `q` quits; Ctrl-C quits too, because raw mode
-delivers it as a key, not as SIGINT; `r` reads again. An escape sequence
-(arrows, function keys) is ignored until a screen needs it. A new key goes
-into `KEYS` in `src/tui/render.mjs`, so it cannot be bound without appearing
-in the key map.
+key map (`1 stats  2 plan  3 release  4 decisions  tab next  j/k scroll
+r refresh  q quit`). `1` to `4` show a screen and Tab the next one (UI-31);
+`j` and `k` scroll a screen taller than the terminal; `q` quits; Ctrl-C quits
+too, because raw mode delivers it as a key, not as SIGINT; `r` reads again.
+An escape sequence (arrows, function keys) is ignored until a screen needs
+it. A new key goes into `KEYS` in `src/tui/render.mjs` with the characters
+that press it, so it cannot be bound without appearing in the key map.
 
 ### The terminal rules
 

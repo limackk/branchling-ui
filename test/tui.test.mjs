@@ -21,7 +21,14 @@ import { fileURLToPath } from "node:url";
 import { BranchlingRefusal, createAdapter, run } from "../src/adapter.mjs";
 import { STATS_TEXT, statsModel } from "../src/view-model/stats.mjs";
 import { fromAdapterError, loadingState } from "../src/view-model/states.mjs";
-import { KEYS, renderScreen } from "../src/tui/render.mjs";
+import { KEYS, actionFor, maxScroll, renderScreen } from "../src/tui/render.mjs";
+import { SCREENS, screenById } from "../src/tui/screens/index.mjs";
+import { PLAN_TEXT } from "../src/view-model/plan.mjs";
+import { RELEASE_TEXT } from "../src/view-model/release.mjs";
+import { DECISIONS_TEXT } from "../src/view-model/decisions.mjs";
+import { buildEmptyBacklog, buildPlanBacklog } from "./fixtures/plan-backlog.mjs";
+import { buildReleaseBacklog } from "./fixtures/release-backlog.mjs";
+import { buildDecisionsBacklog } from "./fixtures/decisions-backlog.mjs";
 import { ESC, canDriveScreen, colourEnabled } from "../src/tui/terminal.mjs";
 import { runTui } from "../src/tui/app.mjs";
 import { prepareAdapter } from "../src/tui/start.mjs";
@@ -70,12 +77,12 @@ function fakeStdin({ isTTY = true } = {}) {
 }
 
 /** A fake terminal session around runTui. */
-function session({ adapter, env = {}, stdinTTY = true, stdoutTTY = true, render, columns = 80, rows = 24 } = {}) {
+function session({ adapter, env = {}, stdinTTY = true, stdoutTTY = true, render, columns = 80, rows = 24, screen } = {}) {
   const stdin = fakeStdin({ isTTY: stdinTTY });
   const stdout = fakeStdout({ isTTY: stdoutTTY, columns, rows });
   const stderr = fakeStdout({ isTTY: false });
   const proc = new EventEmitter();
-  const done = runTui({ adapter, stdin, stdout, stderr, proc, env, ...(render ? { render } : {}) });
+  const done = runTui({ adapter, stdin, stdout, stderr, proc, env, ...(render ? { render } : {}), ...(screen ? { screen } : {}) });
   return { stdin, stdout, stderr, proc, done };
 }
 
@@ -116,7 +123,7 @@ test("the full screen is exactly as high as the terminal and ends with the key m
   for (const rows of [24, 8]) {
     const lines = renderScreen(model, { width: 80, height: rows, keys: KEYS });
     assert.equal(lines.length, rows);
-    assert.equal(lines.at(-1), "q quit  r refresh");
+    assert.equal(lines.at(-1), "1 stats  2 plan  3 release  4 decisions  tab next  j/k scroll  r refresh  q quit");
   }
 });
 
@@ -561,4 +568,284 @@ test("the TUI reads through the cache: an unchanged backlog is answered without 
     rmSync(fixture.top, { recursive: true, force: true });
     rmSync(shim, { recursive: true, force: true });
   }
+});
+
+// --- the plan, release and decisions screens (UI-31) --------------------------
+
+/** The last frame drawn on the full screen, as a terminal would show it. */
+const lastFrame = stdout => visible(stdout.written.slice(stdout.written.lastIndexOf(ESC.home)));
+
+async function until(check, what) {
+  for (let i = 0; i < 200 && !check(); i++) await sleep(25);
+  assert.ok(check(), what);
+}
+
+const VIEWS = ["plan", "release", "decisions"];
+const SCREEN_TEXT = { plan: PLAN_TEXT, release: RELEASE_TEXT, decisions: DECISIONS_TEXT };
+/** What each screen must show from its fixture: proof the model reached the lines. */
+const EXPECTED = {
+  plan: ["Wave 1 of 2: Foundation", "In flight (1)", "TASK-2  Walls stand", "May start now", "TASK-1  Foundation is laid", "Wave 2  Building  [next]", "waits on TASK-2", "Overtaken (1)", "Unplanned (1)", "TASK-5  A garden exists"],
+  release: ["Computed from these refs", "web/staging", "web/production", "on the trunk, waiting for staging  1", "TASK-3", "in staging, waiting for production  1", "TASK-2", "in production  1", "counted, not listed"],
+  decisions: ["2 open questions on 2 tasks", "Which database should the cache use?", DECISIONS_TEXT.needs, "branchling decide TASK-1 --resolves", "\"YOUR ANSWER\"", "Is the beta ready to ship?", "branchling decide TASK-2 --resolves", DECISIONS_TEXT.actorNote],
+};
+
+const fixtures = {};
+
+before(async () => {
+  const make = prefix => mkdtempSync(join(tmpdir(), prefix));
+  fixtures.plan = await buildPlanBacklog(make("branchling-ui-tui-plan-"));
+  fixtures.release = await buildReleaseBacklog(make("branchling-ui-tui-release-"));
+  fixtures.decisions = await buildDecisionsBacklog(make("branchling-ui-tui-decisions-"));
+  fixtures.empty = await buildEmptyBacklog(make("branchling-ui-tui-empty-"));
+});
+
+after(() => {
+  for (const f of Object.values(fixtures)) rmSync(f.root, { recursive: true, force: true });
+});
+
+const realAdapter = name => createAdapter({ bin: BIN, dir: fixtures[name].dir, cwd: fixtures[name].root });
+
+/** A screen's model from a real fixture, read the way the loop reads it. */
+async function realModel(view, fixture = view) {
+  const screen = screenById(view);
+  return screen.model(await screen.read(realAdapter(fixture)), {}, Date.now());
+}
+
+test("every screen has a key on the key map, and the key map fits 80 columns", () => {
+  assert.deepEqual(SCREENS.map(s => s.id), ["stats", ...VIEWS]);
+  for (const screen of SCREENS) assert.equal(actionFor(screen.key), `screen:${screen.id}`, screen.id);
+  assert.equal(actionFor("\t"), "next");
+  assert.equal(actionFor("j"), "down");
+  assert.equal(actionFor("k"), "up");
+  assert.equal(actionFor("r"), "refresh");
+  assert.equal(actionFor("q"), "quit");
+  assert.equal(actionFor("x"), null, "a key not on the map does not exist");
+  // Every input is shown: each entry with inputs is on the map line.
+  const map = renderScreen(loadingState("plan"), { width: 80, height: 24, keys: KEYS }).at(-1);
+  for (const k of KEYS) assert.ok(map.includes(`${k.key} ${k.label}`), k.key);
+  assert.ok(columns(map) <= 80 && !map.includes("…"), "the whole key map fits 80 columns");
+});
+
+for (const view of VIEWS) {
+  test(`the ${view} screen renders from the real view model at 80 columns, with no ANSI code under NO_COLOR`, async () => {
+    const model = await realModel(view);
+    assert.equal(model.view, view);
+    assert.equal(model.state, "ready");
+    for (const colour of [false, true]) {
+      for (const lines of [renderScreen(model, { width: 80, colour }), renderScreen(model, { width: 80, height: 24, colour, keys: KEYS })]) {
+        for (const line of lines) assert.ok(columns(line) <= 80, `${columns(line)} columns: ${JSON.stringify(visible(line))}`);
+      }
+    }
+    const plain = renderScreen(model, { width: 80, colour: false });
+    const text = plain.join("\n");
+    assert.doesNotMatch(text, /\x1b/);
+    // Positive control: the same model with colour on is coloured.
+    assert.match(renderScreen(model, { width: 80, colour: true }).join("\n"), SGR_RE);
+    assert.ok(plain[0].includes(screenById(view).title), "the header names the screen");
+    for (const expected of EXPECTED[view]) assert.ok(text.includes(expected), `${expected} in\n${text}`);
+    let at = -1;
+    for (const expected of EXPECTED[view]) {
+      const next = text.indexOf(expected, at);
+      assert.ok(next >= at, `${expected} comes in the model's order`);
+      at = next;
+    }
+    // Printed once, nothing is cut: no line ends in an ellipsis.
+    assert.ok(plain.every(line => !line.endsWith("…")), text);
+  });
+
+  test(`the ${view} screen runs in the loop under NO_COLOR and leaves the terminal restored on q`, async () => {
+    const s = session({ adapter: realAdapter(view), env: { NO_COLOR: "1" }, screen: view });
+    await until(() => lastFrame(s.stdout).includes(EXPECTED[view][0]), `the ${view} screen is drawn`);
+    assert.ok(s.stdout.written.startsWith(ESC.altScreenOn + ESC.hideCursor));
+    assert.doesNotMatch(s.stdout.written, SGR_RE);
+    for (const line of lastFrame(s.stdout).split("\r\n")) assert.ok(columns(line) <= 80);
+    assert.equal(lastFrame(s.stdout).split("\r\n").length, 24, "exactly as high as the terminal");
+    s.stdin.emit("data", "q");
+    assert.equal(await s.done, 0);
+    assertRestored(s);
+  });
+
+  test(`an exception while the ${view} screen is showing restores the terminal`, async () => {
+    const triggers = [
+      // A fault drawing this screen, reached by its key from the first screen.
+      ["render", s => s.stdin.emit("data", screenById(view).key)],
+      ["uncaught", s => s.proc.emit("uncaughtException", new Error(`${view} fault elsewhere`))],
+      ["resize", s => { s.explode = true; s.stdout.emit("resize"); }],
+    ];
+    for (const [name, trigger] of triggers) {
+      const box = {};
+      const render = (model, ...rest) => {
+        if (model.view === view && model.state === "ready" && (name === "render" || box.s?.explode)) throw new Error(`${view} render failed`);
+        return renderScreen(model, ...rest);
+      };
+      const s = session({ adapter: realAdapter(view), render, screen: name === "render" ? "stats" : view });
+      box.s = s;
+      if (name !== "render") await until(() => lastFrame(s.stdout).includes(EXPECTED[view][0]), `${view} is showing`);
+      else await until(() => lastFrame(s.stdout).includes("Tasks"), "stats is showing");
+      assert.equal(s.stdin.isRaw, true, "positive control: running before the fault");
+      trigger(s);
+      assert.equal(await s.done, 1, name);
+      assertRestored(s);
+      assert.match(s.stderr.written, new RegExp(`${view} (render failed|fault elsewhere)`), name);
+    }
+  });
+
+  test(`a malformed answer on the ${view} screen never leaves the terminal changed`, async () => {
+    const malformed = {
+      stats: async () => envelope(),
+      plan: async () => ({ schemaVersion: 1, kind: "plan" }),
+      query: async () => ({ schemaVersion: 1, kind: "task-list", tasks: [] }),
+      deployStatus: async () => ({ schemaVersion: 1, kind: "release-status" }),
+      log: async () => ({ schemaVersion: 1, kind: "task-log", exchanges: [] }),
+    };
+    if (view === "decisions") {
+      // The composed answer is built by listDecisions; a row it cannot use is refused as a contract mismatch.
+      malformed.query = async () => ({ schemaVersion: 1, kind: "task-list", tasks: [{ id: "-x" }] });
+    }
+    const s = session({ adapter: malformed, screen: view, env: { NO_COLOR: "1" } });
+    if (view === "decisions") {
+      // A contract mismatch from the adapter is an error screen, not a crash.
+      await until(() => lastFrame(s.stdout).includes("The installed branchling is not a supported version"), "error screen");
+      s.stdin.emit("data", "q");
+      assert.equal(await s.done, 0);
+    } else {
+      assert.equal(await s.done, 1);
+      assert.match(s.stderr.written, new RegExp(`TypeError: ${view}Model needs`));
+    }
+    assertRestored(s);
+  });
+
+  test(`the ${view} screen has its loading, empty, error, refusal and stale states, none of them coloured under NO_COLOR`, async () => {
+    const text = SCREEN_TEXT[view];
+    const refusal = fromAdapterError(view, new BranchlingRefusal({ schemaVersion: 1, kind: "x", refusalKind: "held", refusal: "Held for the test" }, 1));
+    const error = fromAdapterError(view, new Error("spawn branchling ENOENT"));
+    const empty = await realModel(view, "empty");
+    assert.equal(empty.state, "empty");
+    const ready = await realModel(view);
+    const stale = screenById(view).model(await screenById(view).read(realAdapter(view)), { stale: true }, Date.now());
+    const show = model => renderScreen(model, { width: 80, height: 24, keys: KEYS }).join("\n");
+
+    assert.ok(show(loadingState(view)).includes(text.loading));
+    assert.ok(show(stale).includes(text.stale));
+    assert.ok(!show(ready).includes(text.stale), "positive control: fresh is not stale");
+    const refused = show(refusal);
+    assert.ok(refused.includes("branchling declined the request") && refused.includes("Held for the test") && refused.includes("Reason code: held"));
+    assert.ok(show(error).includes("spawn branchling ENOENT"));
+    const emptyText = { plan: PLAN_TEXT.emptyNoPlan, release: "No deploy targets", decisions: DECISIONS_TEXT.empty }[view];
+    const flat = text => text.replace(/\s+/g, " ");
+    assert.ok(flat(show(empty)).includes(flat(emptyText)), show(empty));
+    assert.ok(!flat(refused).includes(flat(emptyText)), "a refusal is never the empty screen");
+    for (const model of [loadingState(view), empty, ready, stale, refusal, error]) {
+      const lines = renderScreen(model, { width: 80, height: 24, keys: KEYS, colour: false });
+      assert.doesNotMatch(lines.join("\n"), /\x1b/, model.state);
+      for (const line of lines) assert.ok(columns(line) <= 80, JSON.stringify(line));
+      assert.match(renderScreen(model, { width: 80, height: 24, keys: KEYS, colour: true }).join("\n"), SGR_RE, `${model.state}: colour on`);
+    }
+  });
+
+  test(`the entry point prints the ${view} screen once, without escape codes, when piped`, async () => {
+    const env = { ...process.env };
+    delete env.NO_COLOR;
+    const { stdout, stderr, code } = await new Promise(resolve => {
+      execFile(process.execPath, [ENTRY, "--dir", fixtures[view].dir, "--bin", BIN, "--screen", view], { cwd: fixtures[view].root, env }, (err, out, errOut) => {
+        resolve({ stdout: out, stderr: errOut, code: err ? err.code : 0 });
+      });
+    });
+    assert.equal(code, 0, stderr);
+    assert.doesNotMatch(stdout, /\x1b/);
+    for (const expected of EXPECTED[view]) assert.ok(stdout.includes(expected), `${expected} in\n${stdout}`);
+    for (const line of stdout.split("\n")) assert.ok(columns(line) <= 80, line);
+  });
+}
+
+test("the decisions screen shows how to answer with branchling decide, never with --actor", async () => {
+  const model = await realModel("decisions");
+  const text = renderScreen(model, { width: 80 }).join("\n");
+  for (const q of model.questions) {
+    // The command is broken with a shell continuation, never cut: joined again it is the model's command.
+    const joined = text.replace(/ \\\n +/g, " ");
+    assert.ok(joined.includes(q.commands.reason), `${q.commands.reason} in\n${text}`);
+    assert.match(q.commands.reason, new RegExp(`^branchling decide ${q.taskId} --resolves ${q.questionId} --reason `));
+  }
+  assert.doesNotMatch(text, /--actor/);
+  assert.ok(text.includes(DECISIONS_TEXT.howToAnswer.split(" ").slice(0, 4).join(" ")));
+  // Positive control: at a width the command does not fit, it is continued, not cut.
+  const narrow = renderScreen(model, { width: 60 });
+  assert.ok(narrow.some(line => line.endsWith(" \\")), narrow.join("\n"));
+  assert.ok(narrow.every(line => columns(line) <= 60));
+});
+
+test("keys switch screens, tab cycles through them, and switching back shows the last answer stale while it is read again", async () => {
+  let releasePlan = null;
+  const adapter = {
+    calls: { stats: 0, plan: 0 },
+    stats: async () => { adapter.calls.stats++; return envelope(); },
+    plan: () => { adapter.calls.plan++; return releasePlan ? new Promise(r => { const go = releasePlan; releasePlan = () => r(go()); }) : realAdapter("plan").plan(); },
+    // The plan fixture has no question: its decisions screen is the empty one.
+    query: () => realAdapter("plan").query(),
+    log: (id, o) => realAdapter("plan").log(id, o),
+    deployStatus: () => realAdapter("release").deployStatus(),
+  };
+  const s = session({ adapter, env: { NO_COLOR: "1" } });
+  const title = () => lastFrame(s.stdout).split("\r\n")[0];
+  await until(() => lastFrame(s.stdout).includes("Tasks 3"), "stats first");
+  assert.ok(title().startsWith(`branchling-ui  ${screenById("stats").title}`));
+
+  s.stdin.emit("data", "2");
+  await until(() => lastFrame(s.stdout).includes(EXPECTED.plan[0]), "2 shows the plan");
+  assert.ok(title().startsWith(`branchling-ui  ${PLAN_TEXT.title}`));
+  s.stdin.emit("data", "3");
+  await until(() => lastFrame(s.stdout).includes("web/production"), "3 shows the release pipeline");
+  assert.ok(title().startsWith(`branchling-ui  ${RELEASE_TEXT.title}`));
+  s.stdin.emit("data", "4");
+  await until(() => title().startsWith(`branchling-ui  ${DECISIONS_TEXT.title}`) && lastFrame(s.stdout).includes(DECISIONS_TEXT.empty), "4 shows the decisions");
+  s.stdin.emit("data", "\t");
+  await until(() => title().startsWith(`branchling-ui  ${screenById("stats").title}`), "tab after the last screen comes back to the first");
+  s.stdin.emit("data", "x");
+  assert.ok(title().startsWith(`branchling-ui  ${screenById("stats").title}`), "a key not on the map changes nothing");
+
+  // Back to the plan: its last answer is on screen, stale, until the new read lands.
+  let held;
+  releasePlan = () => held;
+  const realPlan = await realAdapter("plan").plan();
+  held = realPlan;
+  const before = adapter.calls.plan;
+  s.stdin.emit("data", "\t");
+  assert.equal(adapter.calls.plan, before + 1, "switching to a screen reads it again");
+  assert.ok(lastFrame(s.stdout).includes(PLAN_TEXT.stale), "the last plan, marked stale, while the read runs");
+  assert.ok(lastFrame(s.stdout).includes(EXPECTED.plan[0]));
+  releasePlan();
+  await until(() => !lastFrame(s.stdout).includes(PLAN_TEXT.stale), "fresh again once it lands");
+  releasePlan = null;
+
+  s.stdin.emit("data", "q");
+  assert.equal(await s.done, 0);
+  assertRestored(s);
+});
+
+test("a screen taller than the terminal scrolls with j and k and says which lines it shows", async () => {
+  const model = await realModel("plan");
+  const rows = 12;
+  const full = renderScreen(model, { width: 80 }).length - 2;
+  assert.ok(full > rows, "positive control: the plan is taller than the terminal");
+  const top = renderScreen(model, { width: 80, height: rows, keys: KEYS });
+  assert.equal(top.length, rows);
+  assert.match(top.at(-2), /lines 1-8 of \d+ · j down/);
+  const limit = maxScroll(model, { width: 80, height: rows });
+  assert.ok(limit > 0);
+  const bottom = renderScreen(model, { width: 80, height: rows, keys: KEYS, offset: limit + 50 });
+  assert.match(bottom.at(-2), new RegExp(`lines ${limit + 1}-${full} of ${full} · k up`), "clamped at the end");
+  assert.ok(bottom.join("\n").includes(PLAN_TEXT.footnote.split(" ").slice(0, 4).join(" ")), "the end is reachable");
+
+  const s = session({ adapter: realAdapter("plan"), env: { NO_COLOR: "1" }, screen: "plan", rows });
+  await until(() => lastFrame(s.stdout).includes(EXPECTED.plan[0]), "the plan is showing");
+  s.stdin.emit("data", "j");
+  assert.match(lastFrame(s.stdout), /lines 2-9 of/);
+  s.stdin.emit("data", "kkkk");
+  assert.match(lastFrame(s.stdout), /lines 1-8 of/, "k stops at the top");
+  s.stdin.emit("data", "j".repeat(limit + 20));
+  assert.match(lastFrame(s.stdout), new RegExp(`lines ${limit + 1}-${full} of ${full}`), "j stops at the bottom");
+  s.stdin.emit("data", "q");
+  assert.equal(await s.done, 0);
+  assertRestored(s);
 });

@@ -1,155 +1,57 @@
 /**
- * The stats screen as lines of text. A pure function of the shared view model
+ * A screen as lines of text. A pure function of the shared view model
  * (src/view-model/), a width, a height and a colour flag: no I/O, no
  * `process`, so the tests render it without a terminal.
  *
  * It decides layout and nothing else. Counts, labels, sentences and which
  * state applies come from the view model, so the terminal and the web page
- * cannot drift. Colour is never the only signal: every value has its label.
+ * cannot drift. Which screen draws the body is the model's `view`, looked up
+ * in the registry (src/tui/screens/index.mjs); loading, error, refusal,
+ * rejected and stale are drawn here for every screen alike. Colour is never
+ * the only signal: every value has its label.
  *
  * Only the 16 ANSI colours are used (SGR 30-37 and 90-97, plus bold and dim),
  * so the user's terminal theme decides what they look like. Statuses and
  * priorities are styled by ROLE, never by name; every role is neutral until
  * UI-18 brings the vocabulary from the CLI.
+ *
+ * On the full screen the header and the key map stay put and the body
+ * scrolls: when it is taller than the room, the row above the key map says
+ * which lines are shown and how to see the rest, so nothing is cut silently.
  */
 
-import { STATS_TEXT } from "../view-model/stats.mjs";
+import { SCREENS, screenById } from "./screens/index.mjs";
+import { stateLines, staleLines } from "./screens/states.mjs";
+import { ROLE_STYLE, SGR, clean, fit, paint, seg, width } from "./text.mjs";
 
-const SGR = {
-  bold: "1",
-  dim: "2",
-  red: "31",
-  yellow: "33",
-  cyan: "36",
-};
-
-/** Role name -> SGR parameters (16-colour only), or null for no styling. */
-export const ROLE_STYLE = {
-  neutral: null,
-};
-
-/** The keys the screen offers, in the order the key map shows them. */
-export const KEYS = [
-  { key: "q", label: "quit" },
-  { key: "r", label: "refresh" },
-];
-
-/*
- * Text from a backlog (status keys, the root path, an error message) is data.
- * A control character in it could move the cursor or recolour the terminal,
- * so C0 and C1 controls, ESC included, are replaced before anything is shown.
- */
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
-
-export function clean(text) {
-  return String(text ?? "").replace(CONTROL, "?");
-}
-
-function seg(text, style = null) {
-  return { text: clean(text), style };
-}
-
-function width(segs) {
-  return segs.reduce((n, s) => n + [...s.text].length, 0);
-}
-
-/** Cuts a line to `max` columns, ending in an ellipsis when it was longer. */
-function fit(segs, max) {
-  if (width(segs) <= max) return segs;
-  const out = [];
-  let left = max - 1;
-  for (const s of segs) {
-    if (left <= 0) break;
-    const chars = [...s.text];
-    out.push({ text: chars.slice(0, left).join(""), style: s.style });
-    left -= Math.min(chars.length, left);
-  }
-  if (max > 0) out.push({ text: "…", style: null });
-  return out;
-}
-
-function paint(segs, colour) {
-  return segs.map(s => (colour && s.style ? `\x1b[${s.style}m${s.text}\x1b[0m` : s.text)).join("");
-}
-
-/** Words onto lines of at most `max` columns; a single longer word is cut later by fit(). */
-function wrap(text, max) {
-  const lines = [];
-  let line = "";
-  for (const word of clean(text).split(/ +/)) {
-    if (line && [...line].length + 1 + [...word].length > max) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = line ? `${line} ${word}` : word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
-}
-
-function countRows(heading, rows, max) {
-  const labelWidth = Math.min(Math.max(...rows.map(r => [...clean(r.label)].length), heading.length), Math.max(max - 12, 4));
-  const pad = (text, n) => text + " ".repeat(Math.max(n - [...text].length, 0));
-  const lines = [[seg(pad(heading, labelWidth + 2), SGR.bold), seg(STATS_TEXT.countHeading.padStart(8), SGR.dim)]];
-  for (const row of rows) {
-    const label = clean(row.label);
-    const shown = [...label].length > labelWidth ? [...label].slice(0, labelWidth - 1).join("") + "…" : label;
-    lines.push([seg("  "), seg(pad(shown, labelWidth), ROLE_STYLE[row.role] ?? null), seg(String(row.count).padStart(8))]);
-  }
-  return lines;
-}
-
-function body(model, max) {
-  const lines = [];
-  if (model.state === "loading") {
-    lines.push([seg(STATS_TEXT.loading, SGR.dim)]);
-    return lines;
-  }
-  if (model.state === "error" || model.state === "refusal") {
-    // A refusal is an answer the user may act on, never an empty result.
-    lines.push([seg(model.title, `${SGR.bold};${model.state === "refusal" ? SGR.yellow : SGR.red}`)]);
-    for (const line of wrap(model.detail, max)) lines.push([seg(line)]);
-    if (model.refusalKind) lines.push([seg("Reason code: ", SGR.dim), seg(model.refusalKind)]);
-    return lines;
-  }
-  if (model.state === "rejected") {
-    // A name the user typed that branchling rejected (UI-21): not a fault.
-    lines.push([seg(model.title, `${SGR.bold};${SGR.yellow}`)]);
-    for (const line of wrap(model.detail, max)) lines.push([seg(line)]);
-    for (const name of model.names) for (const line of wrap(name.declaredText, max)) lines.push([seg(line)]);
-    if (model.branchlingSaid) for (const line of wrap(`${model.branchlingSaidLabel}: ${model.branchlingSaid}`, max)) lines.push([seg(line, SGR.dim)]);
-    return lines;
-  }
-  if (model.freshness && model.freshness.stale) {
-    for (const line of wrap(STATS_TEXT.stale, max)) lines.push([seg(line, SGR.yellow)]);
-  }
-  const totals = [];
-  model.totals.forEach((t, i) => {
-    if (i) totals.push(seg("   "));
-    totals.push(seg(`${t.label} `, SGR.dim), seg(String(t.value), SGR.bold));
-  });
-  lines.push(totals);
-  if (model.state === "empty") {
-    lines.push([], [seg(STATS_TEXT.empty)]);
-    return lines;
-  }
-  lines.push([], ...countRows(STATS_TEXT.byStatus, model.byStatus, max));
-  if (model.byPriority.length) lines.push([], ...countRows(STATS_TEXT.byPriority, model.byPriority, max));
-  return lines;
-}
+export { ROLE_STYLE, clean };
 
 /**
- * @param {object} model a stats model, or a loading, error or refusal state, from src/view-model/
- * @param {{ width?: number, height?: number, colour?: boolean, keys?: {key: string, label: string}[] }} [options]
- *   `height` and `keys` are for the full screen: the body is cut to fit and
- *   the key map is pinned to the last row. Without them the lines are
- *   returned as they are, for printing once.
- * @returns {string[]} one string per line, none wider than `width` columns
+ * The keys the screen offers, in the order the key map shows them. `inputs`
+ * maps each character that presses the key to the action the loop runs; a
+ * character in no entry does nothing, so a key cannot work without being on
+ * the map.
  */
-export function renderScreen(model, { width: w, height, colour = false, keys } = {}) {
-  const max = Number.isInteger(w) && w > 0 ? w : 80;
-  const header = [seg("branchling-ui", SGR.bold), seg(`  ${STATS_TEXT.title}`)];
+export const KEYS = [
+  ...SCREENS.map(s => ({ key: s.key, label: s.label, inputs: { [s.key]: `screen:${s.id}` } })),
+  { key: "tab", label: "next", inputs: { "\t": "next" } },
+  { key: "j/k", label: "scroll", inputs: { j: "down", k: "up", J: "down", K: "up" } },
+  { key: "r", label: "refresh", inputs: { r: "refresh", R: "refresh" } },
+  { key: "q", label: "quit", inputs: { q: "quit", Q: "quit" } },
+];
+
+/** The action a typed character stands for under `keys`, or null. */
+export function actionFor(ch, keys = KEYS) {
+  for (const k of keys) if (k.inputs && Object.prototype.hasOwnProperty.call(k.inputs, ch)) return k.inputs[ch];
+  return null;
+}
+
+function screenOf(model) {
+  return screenById(model && model.view) || SCREENS[0];
+}
+
+function headerLine(model, screen, max) {
+  const header = [seg("branchling-ui", SGR.bold), seg(`  ${screen.title}`)];
   if (model.root) {
     // The end of a path tells backlogs apart; its start rarely does.
     const room = max - width(header) - 2;
@@ -157,18 +59,76 @@ export function renderScreen(model, { width: w, height, colour = false, keys } =
     const root = chars.length > room && room > 1 ? "…" + chars.slice(chars.length - room + 1).join("") : chars.join("");
     header.push(seg("  "), seg(root, SGR.dim));
   }
-  let lines = [header, [seg("─".repeat(max), SGR.dim)], ...body(model, max)];
+  return header;
+}
+
+function bodyLines(model, screen, max) {
+  const state = stateLines(model, max, screen.text.loading);
+  if (state) return state;
+  return [...staleLines(model, max, screen.text.stale), ...screen.body(model, max)];
+}
+
+function keyMap(keys, current) {
+  const map = [];
+  keys.forEach((k, i) => {
+    if (i) map.push(seg("  "));
+    const here = k.inputs && k.inputs[k.key] === `screen:${current}`;
+    map.push(seg(k.key, `${SGR.bold};${SGR.cyan}`), seg(` ${k.label}`, here ? SGR.bold : null));
+  });
+  return map;
+}
+
+/** Rows the body may use on a full screen of `height` rows: all but header, rule and key map. */
+function room(height) {
+  return Math.max(height - 3, 1);
+}
+
+/**
+ * The furthest the body of `model` can be scrolled on a full screen, so the
+ * loop never counts past the end.
+ */
+export function maxScroll(model, { width: w, height } = {}) {
+  const max = Number.isInteger(w) && w > 0 ? w : 80;
+  const rows = Number.isInteger(height) && height > 0 ? height : 24;
+  const total = bodyLines(model, screenOf(model), max).length;
+  const space = room(rows);
+  return total > space ? total - (space - 1) : 0;
+}
+
+/**
+ * @param {object} model a view model or a state from src/view-model/; its
+ *   `view` picks the screen
+ * @param {{ width?: number, height?: number, colour?: boolean, keys?: object[], offset?: number }} [options]
+ *   `height` and `keys` are for the full screen: the body scrolls by `offset`
+ *   lines between the header and the key map pinned to the last row. Without
+ *   them every line is returned, for printing once.
+ * @returns {string[]} one string per line, none wider than `width` columns
+ */
+export function renderScreen(model, { width: w, height, colour = false, keys, offset = 0 } = {}) {
+  const max = Number.isInteger(w) && w > 0 ? w : 80;
+  const screen = screenOf(model);
+  const head = [headerLine(model, screen, max), [seg("─".repeat(max), SGR.dim)]];
+  let body = bodyLines(model, screen, max);
+  let lines;
 
   if (keys && keys.length) {
-    const map = [];
-    keys.forEach((k, i) => {
-      if (i) map.push(seg("  "));
-      map.push(seg(k.key, `${SGR.bold};${SGR.cyan}`), seg(` ${k.label}`));
-    });
-    const rows = Number.isInteger(height) && height > 0 ? height : lines.length + 1;
-    lines = lines.slice(0, Math.max(rows - 1, 0));
+    const rows = Number.isInteger(height) && height > 0 ? height : head.length + body.length + 1;
+    const space = room(rows);
+    if (body.length > space) {
+      const shown = Math.max(space - 1, 0);
+      const top = Math.min(Math.max(Number(offset) || 0, 0), body.length - shown);
+      const last = top + shown;
+      const where = shown
+        ? `lines ${top + 1}-${last} of ${body.length}`
+        : `${body.length} lines`;
+      const hint = [top > 0 ? "k up" : null, last < body.length ? "j down" : null].filter(Boolean).join(", ");
+      body = [...body.slice(top, last), [seg(`── ${where}${hint ? ` · ${hint}` : ""} ──`, SGR.dim)]];
+    }
+    lines = [...head, ...body].slice(0, Math.max(rows - 1, 0));
     while (lines.length < rows - 1) lines.push([]);
-    lines.push(map);
+    lines.push(keyMap(keys, screen.id));
+  } else {
+    lines = [...head, ...body];
   }
   return lines.map(segs => paint(fit(segs, max), colour));
 }

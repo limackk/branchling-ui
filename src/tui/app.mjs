@@ -1,44 +1,50 @@
 /**
- * The terminal interface: one stats screen, fed by the adapter through the
+ * The terminal interface: a screen per view model (stats, plan, release
+ * pipeline, decisions; src/tui/screens/), fed by the adapter through the
  * shared view model, rendered by src/tui/render.mjs.
  *
- * Data comes only from `adapter.stats()`; nothing here spawns a process or
- * reads a backlog file. The model is built by src/view-model/, the same code
- * the web page runs, and this module only decides when to fetch and redraw.
+ * Data comes only from the adapter, each screen's `read` making the same calls
+ * the web page's routes make; nothing here spawns a process or reads a backlog
+ * file. The models are built by src/view-model/, the same code the web page
+ * runs, and this module only decides when to fetch, which screen is shown and
+ * when to redraw.
  *
  * Every stream and the process-like event source are injectable, so the tests
  * run the whole loop with fake objects and no terminal.
  */
 
 import { fromAdapterError, loadingState } from "../view-model/states.mjs";
-import { statsModel } from "../view-model/stats.mjs";
-import { KEYS, renderScreen } from "./render.mjs";
+import { KEYS, actionFor, maxScroll, renderScreen } from "./render.mjs";
+import { SCREENS, screenById } from "./screens/index.mjs";
 import { canDriveScreen, colourEnabled, createScreen } from "./terminal.mjs";
 
 /** Exit codes, as a shell would report the matching signal. */
 const SIGNAL_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 };
 
 /**
- * One read of the stats. Through the cache the object given is
+ * One read for one screen. Through the cache the object given is
  * `servedFromCache(cache)` (src/cache.mjs), the same join the server uses:
  * each refresh takes ONE scope, whose adapter returns bare envelopes and whose
- * `answeredAt()` is when the answer reflects the backlog (for a cache hit, the
- * time of the spawn that produced it, never the hit). A bare adapter has no
- * answer time.
+ * `answeredAt()` is when the answer reflects the backlog (the oldest of the
+ * reads the screen made; for a cache hit, the time of the spawn that produced
+ * it, never the hit). A bare adapter has no answer time.
+ *
+ * A failure of the adapter is a state to show. A model that throws on what
+ * the adapter accepted is a bug, not a state: it propagates and ends the run
+ * with the terminal restored.
  */
-async function fetchModel(source) {
+async function fetchModel(screen, source, now) {
   const scope = typeof source.forRequest === "function" ? source.forRequest() : null;
   const adapter = scope ? scope.adapter : source;
-  let envelope;
+  let input;
   try {
-    envelope = await adapter.stats();
+    input = await screen.read(adapter);
   } catch (err) {
-    return { model: fromAdapterError("stats", err), envelope: null, fetchedAt: null };
+    return { model: fromAdapterError(screen.id, err), input: null, fetchedAt: null };
   }
   const at = scope ? scope.answeredAt() : null;
   const fetchedAt = at === null || at === undefined ? null : new Date(at).toISOString();
-  // A malformed envelope throws here: that is a bug, not a state to show.
-  return { model: statsModel(envelope, { fetchedAt }), envelope, fetchedAt };
+  return { model: screen.model(input, { fetchedAt }, now()), input, fetchedAt };
 }
 
 /**
@@ -46,39 +52,46 @@ async function fetchModel(source) {
  * throws. Resolves with the exit code; never leaves the terminal changed.
  *
  * @param {object} options
- * @param {{ stats: () => Promise<object> } | { forRequest: () => object }} options.adapter a bare adapter, or
+ * @param {object} options.adapter a bare adapter, or
  *   `servedFromCache(createCache(...))`, which has `forRequest()` instead
+ * @param {string} [options.screen] the screen shown first (and the one printed
+ *   when the full screen is not available): stats, plan, release or decisions
  * @param {any} [options.stdin] @param {any} [options.stdout] @param {any} [options.stderr]
  * @param {any} [options.proc] emits SIGINT, SIGTERM, SIGHUP, uncaughtException, unhandledRejection, exit
  * @param {Record<string, string|undefined>} [options.env]
  * @param {typeof renderScreen} [options.render] for tests
+ * @param {() => number} [options.now] the clock, for the ages of questions
  * @returns {Promise<number>}
  */
 export async function runTui({
   adapter,
+  screen: first = SCREENS[0].id,
   stdin = process.stdin,
   stdout = process.stdout,
   stderr = process.stderr,
   proc = process,
   env = process.env,
   render = renderScreen,
+  now = Date.now,
 } = {}) {
+  const firstScreen = screenById(first);
+  if (!firstScreen) throw new RangeError(`no screen named ${JSON.stringify(first)}; the screens are ${SCREENS.map(s => s.id).join(", ")}`);
   const colour = colourEnabled(stdout, env);
 
   if (!canDriveScreen({ stdin, stdout, env })) {
     // Piped, redirected or TERM=dumb: print the screen once, plainly or with
     // colour as stdout allows, and stop. Raw mode is never touched.
-    const { model } = await fetchModel(adapter);
+    const { model } = await fetchModel(firstScreen, adapter, now);
     stdout.write(render(model, { width: stdout.columns || 80, colour }).join("\n") + "\n");
     return model.state === "ready" || model.state === "empty" ? 0 : 1;
   }
 
   return new Promise(resolve => {
     const screen = createScreen({ stdin, stdout });
-    let model = loadingState("stats");
-    let lastEnvelope = null;
-    let lastFetchedAt = null;
-    let generation = 0;
+    // What each screen shows: its model, the last answer it had (kept to show
+    // stale while a new read runs), its read generation and its scroll.
+    const states = new Map(SCREENS.map(s => [s.id, { model: loadingState(s.id), last: null, generation: 0, offset: 0 }]));
+    let current = firstScreen.id;
     let finished = false;
 
     const listeners = [];
@@ -108,34 +121,61 @@ export async function runTui({
       }
     };
 
+    const size = () => ({ width: stdout.columns || 80, height: stdout.rows || 24 });
+
     function draw() {
       if (finished) return;
-      screen.draw(render(model, { width: stdout.columns || 80, height: stdout.rows || 24, colour, keys: KEYS }));
+      const st = states.get(current);
+      st.offset = Math.min(st.offset, maxScroll(st.model, size()));
+      screen.draw(render(st.model, { ...size(), colour, keys: KEYS, offset: st.offset }));
     }
 
-    async function refresh() {
-      const mine = ++generation;
+    async function refresh(id = current) {
+      const scr = screenById(id);
+      const st = states.get(id);
+      const mine = ++st.generation;
       // Keep what is on screen while the new read runs, marked stale, rather
       // than blanking it. The cache never hands out a stale answer (a hit
       // means nothing changed), so "stale" here only ever means "in flight".
-      model = lastEnvelope ? statsModel(lastEnvelope, { stale: true, fetchedAt: lastFetchedAt }) : loadingState("stats");
-      draw();
-      const next = await fetchModel(adapter);
-      if (finished || mine !== generation) return;
-      model = next.model;
-      if (next.envelope) { lastEnvelope = next.envelope; lastFetchedAt = next.fetchedAt; }
+      st.model = st.last ? scr.model(st.last.input, { stale: true, fetchedAt: st.last.fetchedAt }, now()) : loadingState(id);
+      if (id === current) draw();
+      const next = await fetchModel(scr, adapter, now);
+      if (finished || mine !== st.generation) return;
+      st.model = next.model;
+      if (next.input !== null) st.last = { input: next.input, fetchedAt: next.fetchedAt };
+      if (id === current) draw();
+    }
+
+    /** Shows another screen and reads it again; its last answer, if any, is shown stale meanwhile. */
+    function show(id) {
+      if (id === current) return undefined;
+      current = id;
+      return refresh(id);
+    }
+
+    function scroll(by) {
+      const st = states.get(current);
+      const to = Math.min(Math.max(st.offset + by, 0), maxScroll(st.model, size()));
+      if (to === st.offset) return;
+      st.offset = to;
       draw();
     }
 
     function onKey(chunk) {
       const text = String(chunk);
       // An escape sequence (arrow keys, function keys) is not a command.
-      if (text.startsWith("\x1b")) return;
+      if (text.startsWith("\x1b")) return undefined;
       for (const ch of text) {
         if (ch === "\x03") return finish(SIGNAL_CODES.SIGINT); // Ctrl-C arrives as a key in raw mode
-        if (ch === "q" || ch === "Q") return finish(0);
-        if (ch === "r" || ch === "R") return refresh();
+        const action = actionFor(ch, KEYS);
+        if (action === "quit") return finish(0);
+        if (action === "refresh") return refresh();
+        if (action === "next") return show(SCREENS[(SCREENS.findIndex(s => s.id === current) + 1) % SCREENS.length].id);
+        if (action === "down") scroll(1);
+        else if (action === "up") scroll(-1);
+        else if (action && action.startsWith("screen:")) return show(action.slice("screen:".length));
       }
+      return undefined;
     }
 
     for (const [signal, code] of Object.entries(SIGNAL_CODES)) listen(proc, signal, () => finish(code));

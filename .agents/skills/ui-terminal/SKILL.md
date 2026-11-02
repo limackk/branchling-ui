@@ -1,6 +1,6 @@
 ---
 name: ui-terminal
-description: Build or change a screen of the branchling-ui terminal interface (the TUI). Covers bin/branchling-ui-tui.mjs, src/tui/ (terminal.mjs, render.mjs, app.mjs), rendering the shared view model as lines of text, the keyboard model and the key map, NO_COLOR, TERM=dumb and TTY checks per stream, the 16 ANSI colours and colour roles, the alternate screen and restoring the terminal on every exit path, resize, Windows terminals, and the tests in test/tui.test.mjs. Use this skill whenever work touches the terminal interface, a key binding, ANSI output or terminal colour, and for requests like "show the plan in the terminal", "add a key for X", "the TUI should show Y", "make it work in Windows Terminal", "the terminal is broken after a crash" — even if the word TUI never comes up.
+description: Build or change a screen of the branchling-ui terminal interface (the TUI). Covers bin/branchling-ui-tui.mjs, src/tui/ (terminal.mjs, render.mjs, text.mjs, screens/, app.mjs), rendering the shared view model as lines of text, the keyboard model and the key map, NO_COLOR, TERM=dumb and TTY checks per stream, the 16 ANSI colours and colour roles, the alternate screen and restoring the terminal on every exit path, resize, Windows terminals, and the tests in test/tui.test.mjs. Use this skill whenever work touches the terminal interface, a key binding, ANSI output or terminal colour, and for requests like "show the plan in the terminal", "add a key for X", "the TUI should show Y", "make it work in Windows Terminal", "the terminal is broken after a crash" — even if the word TUI never comes up.
 ---
 
 # How a screen is built in the terminal interface
@@ -39,8 +39,17 @@ were compared and rejected.
    env })`, the loop. Every stream and the process-like event source are
    parameters, so tests pass fakes.
 
-A second screen is a second render function next to `renderScreen` and a way
-to switch to it in the loop; it never gets its own lifecycle code.
+A screen is one module in `src/tui/screens/` and one line in
+`src/tui/screens/index.mjs`: its id, key, title, loading and stale sentences
+(from the view model's `*_TEXT`), `read(adapter)` making the same adapter calls
+the web page's routes make, `model(input, freshness, now)` calling the view
+model, and `body(model, width)` returning lines for a ready or empty model.
+Loading, error, refusal, rejected and stale are drawn by `render.mjs` for every
+screen alike; the loop reads through one cache scope per refresh and keeps
+each screen's last answer to show stale. A screen never gets its own
+lifecycle code. The line helpers (`seg`, `fit`, `wrap`, `para`, `taskLine`,
+`commandLines`) are in `src/tui/text.mjs`. A body taller than the terminal
+scrolls (`j`/`k`) and the row above the key map says which lines are shown.
 
 ## Colour
 
@@ -83,8 +92,8 @@ to switch to it in the loop; it never gets its own lifecycle code.
 ## The keyboard model
 
 Single keys, no modifiers, listed in `KEYS` in `src/tui/render.mjs` and shown
-on the last row (`q quit  r refresh`). A key that is not in `KEYS` does not
-exist. Escape sequences (arrows, function keys) are ignored until a screen
+on the last row (`1 stats … q quit`), each with the characters that press it
+(`inputs`). A key that is not in `KEYS` does not exist. Escape sequences (arrows, function keys) are ignored until a screen
 needs them. A key that writes must ask for confirmation on screen first and
 then call an adapter method.
 
