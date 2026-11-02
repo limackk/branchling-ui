@@ -18,6 +18,8 @@
  */
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, extname, join } from "node:path";
 
 /** Envelope versions this package understands. A new version is a code change
  *  here, never a silent best effort: a renamed key reads as a missing value. */
@@ -55,9 +57,71 @@ function resolveBin(bin) {
   return bin || process.env.BRANCHLING_BIN || "branchling";
 }
 
-function run(bin, args, { cwd, input } = {}) {
+/**
+ * WINDOWS. npm installs a bin there as a `.cmd` shim, and a `.cmd` file can
+ * only be started by cmd.exe: `execFile` neither searches PATHEXT nor runs a
+ * batch file without a shell. A shell would then parse the arguments, and
+ * they carry task ids and filter values a user typed, so `shell: true` with
+ * Node's own joining is an injection path. Instead the shim is found here and
+ * the cmd.exe command line is built with every argument quoted for the C
+ * runtime and every cmd.exe metacharacter caret-escaped TWICE: once for the
+ * `cmd /c` line and once more because a batch file re-parses `%*` when it
+ * runs the line that forwards it. This is the scheme cross-spawn uses for npm
+ * shims, written out so the package keeps no runtime dependency.
+ */
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+/** One argument as the Microsoft C runtime will split it back out. */
+export function quoteWindowsArg(arg) {
+  let out = '"';
+  let slashes = 0;
+  for (const ch of String(arg)) {
+    if (ch === "\\") { slashes++; continue; }
+    out += "\\".repeat(ch === '"' ? slashes * 2 + 1 : slashes) + ch;
+    slashes = 0;
+  }
+  return out + "\\".repeat(slashes * 2) + '"';
+}
+
+/** The full cmd.exe command line that starts a batch file with these args. */
+export function cmdLineForBatch(file, args) {
+  const meta = s => s.replace(CMD_META, "^$1");
+  return [meta(file), ...args.map(a => meta(meta(quoteWindowsArg(a))))].join(" ");
+}
+
+function whichWindows(command) {
+  const exts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  const names = extname(command) ? [command] : exts.map(ext => command + ext);
+  const dirs = /[\\/]/.test(command) ? [""] : (process.env.PATH || "").split(delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    for (const name of names) {
+      const candidate = dir ? join(dir, name) : name;
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function spawnTarget(command, args) {
+  if (process.platform !== "win32") return { file: command, args, options: {} };
+  const found = whichWindows(command);
+  if (!found || !/\.(cmd|bat)$/i.test(found)) return { file: found || command, args, options: {} };
+  return {
+    file: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", `"${cmdLineForBatch(found, args)}"`],
+    options: { windowsVerbatimArguments: true },
+  };
+}
+
+/**
+ * Starts the executable and collects its output. Exported for the test
+ * fixtures, which have to start branchling exactly the way the adapter does.
+ */
+export function run(bin, args, { cwd, input } = {}) {
+  const target = spawnTarget(resolveBin(bin), args);
   return new Promise((resolve, reject) => {
-    const child = execFile(resolveBin(bin), args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const options = { cwd, maxBuffer: 64 * 1024 * 1024, ...target.options };
+    const child = execFile(target.file, target.args, options, (err, stdout, stderr) => {
       if (err && typeof err.code !== "number") { reject(err); return; }
       resolve({ code: err ? err.code : 0, stdout, stderr });
     });

@@ -12,22 +12,32 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAdapter, BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
+import {
+  createAdapter, run, quoteWindowsArg, cmdLineForBatch,
+  BranchlingRefusal, BranchlingUsageError, ContractMismatch,
+} from "../src/adapter.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
 let dir;
 
-before(() => {
+/** The fixture is built through the adapter's own spawn, so it starts
+ *  branchling exactly as the adapter does, `.cmd` shim on Windows included. */
+async function branchling(args, opts) {
+  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
+}
+
+before(async () => {
   root = mkdtempSync(join(tmpdir(), "branchling-ui-"));
   dir = join(root, "backlog");
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
-  execFileSync(BIN, ["init", "--dir", dir, "--no-example", "--no-nudge"], { cwd: root });
+  await branchling(["init", "--dir", dir, "--no-example", "--no-nudge"]);
   const body = JSON.stringify({
     goal: "A fixture task exists.",
     verification: [{ id: "noop", bash: "true", proves: "The fixture can be closed." }],
   });
-  execFileSync(BIN, ["new", "--title", "Fixture task", "--priority", "P1", "--dir", dir], { cwd: root, input: body });
+  await branchling(["new", "--title", "Fixture task", "--priority", "P1", "--dir", dir], { input: body });
 });
 
 after(() => rmSync(root, { recursive: true, force: true }));
@@ -71,8 +81,42 @@ test("an unknown task id is a refusal carrying its envelope", async () => {
 });
 
 test("an unsupported schemaVersion is refused, not interpreted", async () => {
-  const fake = join(root, "fake-branchling");
-  writeFileSync(fake, '#!/bin/sh\necho \'{"schemaVersion": 99, "kind": "stats"}\'\n');
+  const envelope = '{"schemaVersion": 99, "kind": "stats"}';
+  const fake = join(root, process.platform === "win32" ? "fake-branchling.cmd" : "fake-branchling");
+  if (process.platform === "win32") writeFileSync(fake, `@echo ${envelope}\r\n`);
+  else writeFileSync(fake, `#!/bin/sh\necho '${envelope}'\n`);
   chmodSync(fake, 0o755);
   await assert.rejects(createAdapter({ bin: fake }).stats(), ContractMismatch);
+});
+
+test("shell metacharacters in an argument reach branchling as text", async () => {
+  // On Windows the argument passes through cmd.exe; unescaped, `&` would end
+  // the command there and start the next one. The filter must match nothing
+  // and the call must still answer with a task-list.
+  const hostile = 'x" & echo injected & "%PATH%^|<>()!';
+  const envelope = await createAdapter({ bin: BIN, dir, cwd: root }).query({ text: hostile });
+  assert.equal(envelope.kind, "task-list");
+  assert.deepEqual(envelope.tasks, []);
+});
+
+test("the same call with a plain value finds the fixture", async () => {
+  // Positive control for the test above: `text` filters by title at all.
+  const envelope = await createAdapter({ bin: BIN, dir, cwd: root }).query({ text: "Fixture" });
+  assert.equal(envelope.tasks.length, 1);
+});
+
+test("an argument is quoted the way the C runtime splits it back", () => {
+  assert.equal(quoteWindowsArg("plain"), '"plain"');
+  assert.equal(quoteWindowsArg("two words"), '"two words"');
+  assert.equal(quoteWindowsArg('say "hi"'), '"say \\"hi\\""');
+  assert.equal(quoteWindowsArg("C:\\dir\\"), '"C:\\dir\\\\"');
+  assert.equal(quoteWindowsArg('a\\"b'), '"a\\\\\\"b"');
+  assert.equal(quoteWindowsArg(""), '""');
+});
+
+test("every cmd.exe metacharacter in an argument is escaped twice", () => {
+  const line = cmdLineForBatch("C:\\npm\\branchling.cmd", ["a&b"]);
+  assert.equal(line, 'C:\\npm\\branchling.cmd ^^^"a^^^&b^^^"');
+  // Nothing in the argument is left for cmd.exe to act on after two passes.
+  assert.doesNotMatch(line.split(" ")[1], /(?<!\^)[&|<>]/);
 });

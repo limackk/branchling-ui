@@ -86,7 +86,9 @@ Every typed call gets a test in `test/adapter.test.mjs` (or a new
 
 - Build the fixture with branchling's own commands (`init`, `new` with a body
   on stdin, `take`, and so on) in a temporary directory, as the existing
-  `before()` does. Never assert values from this repository's own `backlog/`.
+  `before()` does. Start them through the adapter's exported `run`, never
+  `execFileSync`. On Windows the executable is a `.cmd` shim that only
+  `run` knows how to start safely (UI-17). Never assert values from this repository's own `backlog/`.
   Its contents are data, and they change.
 - Assert the `kind` and the keys the view will read.
 - Pair every negative assertion with a positive control. A test that only
