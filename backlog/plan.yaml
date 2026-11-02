@@ -1,0 +1,26 @@
+# The execution order is a deliberate decision, not a generated view.
+#
+# THIS PLAN (2026-11-02) schedules the thirteen tasks open on that day. Three
+# supervised loops work it in parallel, one worktree each, and the main session
+# merges what they finish. Only the first two waves can be worked now: the third
+# waits on branchling itself and the last on the maintainer.
+updated: 2026-11-02
+rationale: "Every view renders the same view model through the same server, so the decision and the skeleton come first and the cache beside them. The read views and the terminal surface then run in parallel on that base. What needs a branchling capability that is not on GitHub or not released yet waits in its own wave instead of being worked around, and the package is named last, once there is something to publish."
+waves:
+  # UI-1 decides the stack and defines the view model; UI-2 sits between the
+  # adapter and every view and touches none of UI-1's files.
+  - name: "Foundation"
+    tasks: [UI-1, UI-2]
+  # Each view reads one envelope through the foundation's view model. Plan
+  # and release views need the cache because they refresh several panels;
+  # decisions uses `decide`, the one write the pinned CLI already has.
+  - name: "First views"
+    tasks: [UI-16, UI-3, UI-4, UI-5]
+  # Blocked on branchling: a release with show and deploy (UI-14, then UI-9),
+  # `set` and `declare` on GitHub (UI-6, UI-8), a vocabulary envelope (UI-18),
+  # the watch stream (UI-7).
+  - name: "After upstream"
+    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7]
+  # The maintainer's decision.
+  - name: "Before publish"
+    tasks: [UI-10]
