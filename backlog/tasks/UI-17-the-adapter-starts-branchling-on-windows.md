@@ -8,7 +8,7 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P1
-status: in_progress
+status: done
 owner: agent:claude
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
@@ -44,5 +44,5 @@ The first CI run (run 41457636443, 2026-11-02) passed on all six Linux and macOS
 
 ## Acceptance criteria
 
-- [ ] The contract tests pass on this platform. [proof: suite]
-- [ ] The windows-latest job of the test workflow is green on the commit that closes this task. [proof: windows-ci]
+- [x] The contract tests pass on this platform. [proof: suite]
+- [x] The windows-latest job of the test workflow is green on the commit that closes this task. [proof: windows-ci]
