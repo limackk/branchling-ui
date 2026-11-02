@@ -20,11 +20,11 @@ waves:
   # `set` and `declare` on GitHub (UI-6, UI-8), a vocabulary envelope (UI-18),
   # the watch stream (UI-7).
   - name: "After upstream"
-    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24]
+    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24, UI-33, UI-34]
   # The maintainer's decision.
   - name: "Before publish"
     tasks: [UI-10]
 
   # The pinned branchling already answers query, show, log, doctor and check and has take, release and handoff, so the remaining mockup screens and the TUI screens are built while the next branchling release is prepared.
   - name: "Without a release"
-    tasks: [UI-26, UI-28, UI-31, UI-32, UI-27, UI-29, UI-30]
+    tasks: [UI-26, UI-28, UI-31, UI-32, UI-27, UI-29, UI-30, UI-35]
