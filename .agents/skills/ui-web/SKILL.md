@@ -44,16 +44,27 @@ call). Never add a runtime dependency.
 
 ## Design tokens
 
-All colours, spacing and radii are CSS custom properties on `:root` in
-`src/web/styles.css`, with a dark set under
-`@media (prefers-color-scheme: dark)`. A view uses only tokens, never a
-literal colour. Adding a token means adding it to both sets, with contrast
-checked in both.
+The design system is "Ledger", documented in `docs/design/` (open
+`design-system.html` through a static server; mockups of every planned
+screen are in `docs/design/mockups/`). `src/web/styles.css` is a copy of
+`docs/design/tokens.css` and `components.css`, followed by the rules that
+map this page's own markup onto it. Change a token or a component in
+`docs/design/` first, then copy it, so the documentation stays the truth.
+
+Views use only the semantic custom properties (`--color-bg-surface`,
+`--color-text-muted`, `--color-action-primary`, `--role-<role>-bg`…), never
+a primitive (`--n-500`, `--teal-600`) and never a literal colour. Each
+semantic token is one `light-dark(light, dark)` declaration, so the dark
+scheme cannot drift from the light one. Adding a token means checking its
+contrast in both schemes and adding the pairs to
+`docs/design/contrast-pairs.json`.
 
 ## Colour roles
 
 Statuses and priorities get a **role** (`role` in the view model, class
-`role-<role>` on the page, `--role-<role>-bg/-fg` tokens), never a colour.
+`role-<role>` on the page, `--role-<role>-bg/-fg/-dot` tokens), never a
+colour. Six roles are styled: `neutral`, `progress`, `attention`, `danger`,
+`success`, `muted` (their meaning is on the design-system page).
 **Every status and priority is `neutral` until UI-18** brings the status and
 priority vocabulary from the CLI as JSON. The UI may not read config.yaml,
 and guessing from key names (`done` is green) would colour a custom or

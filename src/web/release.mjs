@@ -49,7 +49,7 @@ function renderState(model, retry) {
     box.append(el("p", { text: "Loading the release pipeline…" }));
     return box;
   }
-  box.append(el("h3", { text: model.title }), el("p", { text: model.detail }));
+  box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
   if (model.refusalKind) box.append(el("p", { text: `Reason code: ${model.refusalKind}` }));
   const again = el("button", { type: "button", text: "Try again" });
   again.addEventListener("click", retry);

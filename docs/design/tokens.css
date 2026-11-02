@@ -1,0 +1,197 @@
+/* branchling-ui design tokens — "Ledger".
+ *
+ * Three layers. Components use only the SEMANTIC layer; primitives exist so
+ * the semantic layer has something to point at. Light and dark are one
+ * declaration each, through light-dark(): the scheme follows the system
+ * (prefers-color-scheme) unless <html data-theme="light|dark"> pins it.
+ *
+ * Contrast of every text/background pair is checked in both schemes
+ * (docs/design/contrast-pairs.json); see docs/design/README.md.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------- primitives: neutral, tinted toward moss ---------- */
+  --n-0: #ffffff;
+  --n-25: #fafbfa;
+  --n-50: #f4f6f5;
+  --n-100: #e9edeb;
+  --n-200: #d8dedb;
+  --n-300: #bcc5c1;
+  --n-400: #8f9a95;
+  --n-500: #6b7671;
+  --n-600: #535d59;
+  --n-700: #3d4643;
+  --n-800: #2a312e;
+  --n-900: #1b201e;
+  --n-950: #111513;
+
+  --d-canvas: #0f1311;
+  --d-surface: #161b19;
+  --d-raised: #1d2321;
+  --d-subtle: #232a27;
+  --d-line: #323b37;
+  --d-strong: #6f7a75;
+
+  /* ---------- primitives: action (teal ink) ---------- */
+  --teal-50: #e8f5f4;
+  --teal-100: #cdeae8;
+  --teal-200: #9fd5d1;
+  --teal-300: #6bbab5;
+  --teal-400: #3c9d98;
+  --teal-500: #1f817d;
+  --teal-600: #136a67;
+  --teal-700: #0f5654;
+  --teal-800: #0d4442;
+  --teal-900: #0b3332;
+
+  /* ---------- primitives: roles ---------- */
+  --green-50: #e9f6ec;  --green-200: #a9dcb5; --green-600: #1e7a3c; --green-700: #17612f;
+  --amber-50: #fdf3e1;  --amber-200: #f3d08f; --amber-600: #9a5b00; --amber-700: #7a4700;
+  --red-50: #fdeceb;    --red-200: #f4b7b2;   --red-600: #b42318;   --red-700: #8f1c13;
+  --blue-50: #eaf1fd;   --blue-200: #b3cdf6;  --blue-600: #1f5fbf;  --blue-700: #194c99;
+
+  /* ---------- semantic: surfaces ---------- */
+  --color-bg-canvas: light-dark(var(--n-25), var(--d-canvas));
+  --color-bg-surface: light-dark(var(--n-0), var(--d-surface));
+  --color-bg-raised: light-dark(var(--n-0), var(--d-raised));
+  --color-bg-subtle: light-dark(var(--n-50), var(--d-subtle));
+  --color-bg-hover: light-dark(var(--n-100), #28302d);
+  --color-bg-selected: light-dark(var(--teal-50), #12302e);
+  --color-bg-inverse: light-dark(var(--n-900), var(--n-100));
+  --color-bg-overlay: light-dark(rgb(17 21 19 / 0.45), rgb(0 0 0 / 0.6));
+
+  /* ---------- semantic: text ---------- */
+  --color-text-default: light-dark(var(--n-900), #e7ecea);
+  --color-text-muted: light-dark(var(--n-600), #a7b1ad);
+  --color-text-subtle: light-dark(var(--n-500), #8d9793);
+  --color-text-inverse: light-dark(var(--n-0), var(--n-950));
+  --color-text-on-action: light-dark(var(--n-0), var(--n-950));
+  --color-text-link: light-dark(var(--teal-700), var(--teal-200));
+
+  /* ---------- semantic: borders ---------- */
+  --color-border-default: light-dark(var(--n-200), var(--d-line));
+  --color-border-strong: light-dark(var(--n-500), var(--d-strong));
+  --color-border-focus: light-dark(var(--teal-600), var(--teal-300));
+
+  /* ---------- semantic: actions ---------- */
+  --color-action-primary: light-dark(var(--teal-600), var(--teal-300));
+  --color-action-primary-hover: light-dark(var(--teal-700), var(--teal-200));
+  --color-action-primary-active: light-dark(var(--teal-800), var(--teal-100));
+  --color-action-secondary: light-dark(var(--n-0), var(--d-raised));
+  --color-action-secondary-hover: light-dark(var(--n-50), #262e2b);
+  --color-action-danger: light-dark(var(--red-600), #f08b82);
+  --color-action-danger-hover: light-dark(var(--red-700), #f5a59e);
+  --color-action-disabled-bg: light-dark(var(--n-100), var(--d-subtle));
+  --color-action-disabled-fg: light-dark(#5d6863, #8a948f);
+
+  /* ---------- semantic: colour ROLES for statuses and priorities ----------
+   * A role is what a status or priority MEANS to the reader, never which
+   * status it is. Until UI-18 brings the vocabulary from the CLI, every
+   * status and priority renders as `neutral` (see roles.mjs). */
+  --role-neutral-bg: light-dark(var(--n-100), #252c29);
+  --role-neutral-fg: light-dark(var(--n-800), #d4dbd8);
+  --role-neutral-dot: light-dark(var(--n-500), #8d9793);
+
+  --role-progress-bg: light-dark(var(--blue-50), #142440);
+  --role-progress-fg: light-dark(var(--blue-700), #a5c4f5);
+  --role-progress-dot: light-dark(var(--blue-600), #86aef0);
+
+  --role-attention-bg: light-dark(var(--amber-50), #2e2210);
+  --role-attention-fg: light-dark(var(--amber-700), #f0c879);
+  --role-attention-dot: light-dark(var(--amber-600), #e8b45a);
+
+  --role-danger-bg: light-dark(var(--red-50), #331614);
+  --role-danger-fg: light-dark(var(--red-700), #f5a59e);
+  --role-danger-dot: light-dark(var(--red-600), #f08b82);
+
+  --role-success-bg: light-dark(var(--green-50), #12291a);
+  --role-success-fg: light-dark(var(--green-700), #8fd6a1);
+  --role-success-dot: light-dark(var(--green-600), #6cc283);
+
+  --role-muted-bg: light-dark(var(--n-50), #1a1f1d);
+  --role-muted-fg: light-dark(var(--n-600), #8f9995);
+  --role-muted-dot: light-dark(#848f8a, #5f6a65);
+
+  /* ---------- semantic: view states ---------- */
+  --state-error-bg: var(--role-danger-bg);
+  --state-error-fg: var(--role-danger-fg);
+  --state-error-border: light-dark(var(--red-200), #6b2621);
+  --state-refusal-bg: var(--role-attention-bg);
+  --state-refusal-fg: var(--role-attention-fg);
+  --state-refusal-border: light-dark(var(--amber-200), #5e4417);
+  --state-stale-bg: var(--role-progress-bg);
+  --state-stale-fg: var(--role-progress-fg);
+  --state-stale-border: light-dark(var(--blue-200), #26406b);
+
+  /* ---------- typography ---------- */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --font-size-100: 0.75rem;   /* 12 — caption, kbd */
+  --font-size-200: 0.8125rem; /* 13 — dense meta, table secondary */
+  --font-size-300: 0.875rem;  /* 14 — table body, controls */
+  --font-size-400: 1rem;      /* 16 — body, prose */
+  --font-size-500: 1.125rem;  /* 18 — section title */
+  --font-size-600: 1.375rem;  /* 22 — page title */
+  --font-size-700: 1.75rem;   /* 28 — stat value */
+
+  --line-height-tight: 1.25;
+  --line-height-dense: 1.4;
+  --line-height-body: 1.55;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 520;
+  --font-weight-semibold: 620;
+
+  /* ---------- space (4 px base) ---------- */
+  --space-0: 0;
+  --space-0-5: 0.125rem; /* 2 */
+  --space-1: 0.25rem;    /* 4 */
+  --space-2: 0.5rem;     /* 8 */
+  --space-3: 0.75rem;    /* 12 */
+  --space-4: 1rem;       /* 16 */
+  --space-5: 1.25rem;    /* 20 */
+  --space-6: 1.5rem;     /* 24 */
+  --space-8: 2rem;       /* 32 */
+  --space-10: 2.5rem;    /* 40 */
+  --space-12: 3rem;      /* 48 */
+
+  /* ---------- layout ---------- */
+  --sidebar-width: 15rem;
+  --topbar-height: 3.25rem;
+  --drawer-width: 36rem;
+  --content-max: 80rem;
+  --prose-max: 68ch;
+  --control-height-sm: 1.75rem; /* 28 */
+  --control-height-md: 2.25rem; /* 36 */
+  --control-height-lg: 2.75rem; /* 44 — touch */
+
+  /* ---------- shape ---------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+  --border-width: 1px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* ---------- elevation (dark leans on lighter surfaces, not shadow) ---------- */
+  --shadow-1: light-dark(0 1px 2px rgb(27 32 30 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.2));
+  --shadow-2: light-dark(0 2px 8px rgb(27 32 30 / 0.08), 0 4px 12px rgb(0 0 0 / 0.35));
+  --shadow-3: light-dark(0 12px 32px rgb(27 32 30 / 0.16), 0 16px 40px rgb(0 0 0 / 0.5));
+
+  /* ---------- motion ---------- */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0ms; --duration-base: 0ms; --duration-slow: 0ms; }
+}

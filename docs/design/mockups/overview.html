@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="overview" data-crumb="Overview">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Overview</h1>
+      <p class="lede">Where the backlog stands, and what needs a person today.</p>
+    </div>
+  </div>
+
+  <!-- What needs me: the first thing a returning reader looks for -->
+  <section aria-labelledby="needs" class="grid grid-3">
+    <h2 id="needs" class="visually-hidden">Needs attention</h2>
+    <a class="card card-pad stack" href="decisions.html" style="text-decoration:none;color:inherit;border-color:var(--state-refusal-border)">
+      <div class="row"><span class="badge role-attention">3 decisions</span><span class="t-meta">oldest 4 days</span></div>
+      <p class="t-title">Questions waiting on a person</p>
+      <p class="t-meta">HB-27 refund approver · HB-42 data retention · HB-45 key rotation</p>
+      <span class="row t-meta" style="color:var(--color-text-link)">Answer them <i data-icon="arrow-right"></i></span>
+    </a>
+    <a class="card card-pad stack" href="plan.html" style="text-decoration:none;color:inherit">
+      <div class="row"><span class="badge role-progress">Wave 2 of 4</span><span class="t-meta">Billing core</span></div>
+      <p class="t-title">2 tasks may start now</p>
+      <p class="t-meta">HB-35 rate limits per key · HB-38 test keys kept out of production</p>
+      <span class="row t-meta" style="color:var(--color-text-link)">Open the plan <i data-icon="arrow-right"></i></span>
+    </a>
+    <a class="card card-pad stack" href="health.html" style="text-decoration:none;color:inherit">
+      <div class="row"><span class="badge role-danger">1 failing check</span><span class="t-meta">doctor</span></div>
+      <p class="t-title">The backlog has a problem</p>
+      <p class="t-meta">HB-44 holds a status the configuration does not list.</p>
+      <span class="row t-meta" style="color:var(--color-text-link)">See the checks <i data-icon="arrow-right"></i></span>
+    </a>
+  </section>
+
+  <section class="section" aria-labelledby="totals">
+    <div class="section-head"><h2 id="totals" class="t-section">Totals</h2><span class="t-meta">from <code>branchling stats</code></span></div>
+    <dl class="stats">
+      <div class="stat"><dt>Open</dt><dd class="t-stat">24</dd><span class="delta">of 38 tasks</span></div>
+      <div class="stat"><dt>In progress</dt><dd class="t-stat">4</dd><span class="delta">2 agents, 2 people</span></div>
+      <div class="stat"><dt>Blocked</dt><dd class="t-stat">6</dd><span class="delta">3 on a decision</span></div>
+      <div class="stat"><dt>Open hours</dt><dd class="t-stat">146<span class="t-meta"> h</span></dd><span class="delta">2 tasks without estimate</span></div>
+      <div class="stat"><dt>Divergent <i data-icon="branch"></i></dt><dd class="t-stat">4</dd><span class="delta">differ on another branch</span></div>
+    </dl>
+  </section>
+
+  <div class="grid grid-2 section">
+    <section class="card" aria-labelledby="by-status">
+      <div class="card-head"><h2 id="by-status">By status</h2><a class="end t-meta" href="tasks.html">All tasks</a></div>
+      <div class="card-body">
+        <ul class="dist">
+          <li><span class="badge role-neutral">pending</span><span class="bar" aria-hidden="true"><span style="width:58%;--dot:var(--role-neutral-dot)"></span></span><a class="n" href="tasks.html?status=pending">14</a></li>
+          <li><span class="badge role-progress">in_progress</span><span class="bar" aria-hidden="true"><span style="width:17%;--dot:var(--role-progress-dot)"></span></span><a class="n" href="tasks.html?status=in_progress">4</a></li>
+          <li><span class="badge role-attention">blocked</span><span class="bar" aria-hidden="true"><span style="width:25%;--dot:var(--role-attention-dot)"></span></span><a class="n" href="tasks.html?status=blocked">6</a></li>
+          <li><span class="badge role-success">done</span><span class="bar" aria-hidden="true"><span style="width:50%;--dot:var(--role-success-dot)"></span></span><a class="n" href="tasks.html?status=done">12</a></li>
+          <li><span class="badge role-muted">cancelled</span><span class="bar" aria-hidden="true"><span style="width:8%;--dot:var(--role-muted-dot)"></span></span><a class="n" href="tasks.html?status=cancelled">2</a></li>
+        </ul>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="by-prio">
+      <div class="card-head"><h2 id="by-prio">Open by priority</h2></div>
+      <div class="card-body">
+        <ul class="dist">
+          <li><span><span class="prio role-danger">P0</span></span><span class="bar" aria-hidden="true"><span style="width:12%;--dot:var(--role-danger-dot)"></span></span><span class="n">2</span></li>
+          <li><span><span class="prio role-attention">P1</span></span><span class="bar" aria-hidden="true"><span style="width:38%;--dot:var(--role-attention-dot)"></span></span><span class="n">7</span></li>
+          <li><span><span class="prio role-neutral">P2</span></span><span class="bar" aria-hidden="true"><span style="width:60%;--dot:var(--role-neutral-dot)"></span></span><span class="n">11</span></li>
+          <li><span><span class="prio role-muted">P3</span></span><span class="bar" aria-hidden="true"><span style="width:22%;--dot:var(--role-muted-dot)"></span></span><span class="n">4</span></li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <section class="section card" aria-labelledby="flight">
+    <div class="card-head"><h2 id="flight">In flight</h2><span class="end t-meta">who holds what now</span></div>
+    <ul class="tlist">
+      <li><span class="badge role-progress">in_progress</span><a class="task-link" href="task.html">The billing service reads tax rates from the rates table</a><span class="task-id">HB-23</span>
+        <span class="meta"><span class="who"><span class="avatar agent">C1</span>agent:claude-1</span><span class="t-meta">· taken 3 h ago</span><span class="prio role-attention">P1</span></span></li>
+      <li><span class="badge role-progress">in_progress</span><a class="task-link" href="task.html">The admin audit log is searchable by actor</a><span class="task-id">HB-34</span>
+        <span class="meta"><span class="who"><span class="avatar">MN</span>human:maja</span><span class="t-meta">· taken yesterday</span><span class="prio role-neutral">P2</span><span class="badge plain role-attention">ahead of plan</span></span></li>
+      <li><span class="badge role-progress">in_progress</span><a class="task-link" href="task.html">Webhook signatures rotate with the API key</a><span class="task-id">HB-39</span>
+        <span class="meta"><span class="who"><span class="avatar agent">C2</span>agent:claude-2</span><span class="t-meta">· taken 20 min ago</span><span class="prio role-neutral">P2</span></span></li>
+      <li><span class="badge role-progress">in_progress</span><a class="task-link" href="task.html">Exports log who downloaded them</a><span class="task-id">HB-33</span>
+        <span class="meta"><span class="who"><span class="avatar">TK</span>human:tomek</span><span class="t-meta">· taken 6 days ago</span><span class="badge plain role-attention">no change for 5 days</span></span></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

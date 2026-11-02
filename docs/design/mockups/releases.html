@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Releases · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="releases" data-crumb="Releases">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Releases</h1>
+      <p class="lede">What waits for each stage, per deploy target, and for how long.</p>
+    </div>
+    <div class="actions">
+      <label class="visually-hidden" for="rel">Compare with a planned release</label>
+      <select id="rel" class="select" style="width:auto"><option>All closed work</option><option selected>Release 2026.11</option><option>Release 2026.12</option></select>
+      <a class="btn btn-secondary" href="#planning"><i data-icon="plus"></i>Declare a release</a>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Releases" style="margin-bottom:var(--space-6)">
+    <button role="tab" aria-selected="true" type="button"><i data-icon="pipeline"></i>Pipeline</button>
+    <button role="tab" aria-selected="false" type="button"><i data-icon="flag"></i>Planning</button>
+  </div>
+
+  <!-- target lane: api -->
+  <section aria-labelledby="t-api">
+    <div class="lane-head">
+      <h2 id="t-api" class="t-section">api</h2>
+      <span class="t-meta">harbor/harbor-api</span>
+      <div class="refs">
+        <span><i data-icon="branch"></i>trunk <code>origin/main</code> <span class="sha">a41c9e2</span></span>
+        <span><i data-icon="commit"></i>staging <span class="sha">9f02b1d</span></span>
+        <span><i data-icon="commit"></i>production tag <code>v2026.10.3</code> <span class="sha">77e3a0c</span></span>
+      </div>
+    </div>
+    <div class="pipeline" role="list" aria-label="Stages of api, in order">
+      <div class="stage" data-kind="gap" role="listitem">
+        <div class="stage-head">
+          <span class="name">Closed, not on trunk <span class="count badge plain role-attention">1</span></span>
+          <span class="wait">oldest 2 days</span>
+        </div>
+        <div class="stage-body">
+          <a class="tcard" href="task.html"><span class="top"><span class="task-id">HB-21</span></span><span class="title">Tax rates migrate without downtime</span><span class="why"><i data-icon="branch"></i>on <code>hb-21-rates</code></span></a>
+        </div>
+      </div>
+      <div class="stage" role="listitem">
+        <div class="stage-head">
+          <span class="name">On trunk <span class="count badge plain role-neutral">2</span></span>
+          <span class="wait">waiting for staging · oldest 5 days</span>
+        </div>
+        <div class="stage-body">
+          <a class="tcard" href="task.html"><span class="top"><span class="task-id">HB-18</span><span class="end"><span class="badge plain role-success">in 2026.11</span></span></span><span class="title">Webhook retries back off exponentially</span><span class="why"><i data-icon="clock"></i>5 days</span></a>
+          <a class="tcard" href="task.html"><span class="top"><span class="task-id">HB-12</span></span><span class="title">Invoices export to CSV in the customer’s locale</span><span class="why"><i data-icon="clock"></i>1 day</span></a>
+        </div>
+      </div>
+      <div class="stage" role="listitem">
+        <div class="stage-head">
+          <span class="name">staging <span class="count badge plain role-neutral">1</span></span>
+          <span class="wait">waiting for production · 3 days</span>
+        </div>
+        <div class="stage-body">
+          <a class="tcard" href="task.html"><span class="top"><span class="task-id">HB-9</span><span class="end"><span class="badge plain role-success">in 2026.11</span></span></span><span class="title">Customers see invoices in their timezone</span><span class="why"><i data-icon="clock"></i>3 days</span></a>
+        </div>
+      </div>
+      <div class="stage" role="listitem">
+        <div class="stage-head">
+          <span class="name">production <span class="count badge plain role-success">14</span></span>
+          <span class="wait">last promotion 31 Oct</span>
+        </div>
+        <div class="stage-body t-meta" style="padding:var(--space-3)">14 tasks shipped. <a href="#">Show them</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section card" aria-labelledby="cmp">
+    <div class="card-head"><h2 id="cmp">Release 2026.11: planned against shipped</h2><span class="end t-meta"><code>deploy status --release 2026.11</code></span></div>
+    <div class="card-body">
+      <dl class="stats">
+        <div class="stat"><dt>Planned</dt><dd class="t-stat">9</dd></div>
+        <div class="stat"><dt>In production</dt><dd class="t-stat">1</dd></div>
+        <div class="stat"><dt>On the way</dt><dd class="t-stat">2</dd><span class="delta">trunk or staging</span></div>
+        <div class="stat"><dt>Still open</dt><dd class="t-stat">6</dd><span class="delta">2 may start now</span></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="t-web">
+    <div class="lane-head">
+      <h2 id="t-web" class="t-section">web</h2><span class="t-meta">harbor/harbor-web</span>
+      <div class="refs"><span><i data-icon="branch"></i>trunk <code>origin/main</code> <span class="sha">c0de511</span></span></div>
+    </div>
+    <div class="state state-empty">
+      <span class="glyph"><i data-icon="check" class="icon-lg"></i></span>
+      <p class="t-title" style="color:var(--color-text-default)">Nothing waits on web</p>
+      <p>Every closed task with this target is in production.</p>
+    </div>
+  </section>
+
+  <!-- Planning tab, shown under the pipeline in this mockup -->
+  <section id="planning" class="section" aria-labelledby="plan-h" style="margin-top:var(--space-12)">
+    <p class="t-overline">Planning tab</p>
+    <div class="grid grid-2" style="margin-top:var(--space-3);align-items:start">
+      <form class="card" aria-labelledby="plan-h">
+        <div class="card-head"><h2 id="plan-h">Declare a release</h2></div>
+        <div class="card-body stack">
+          <div class="field">
+            <label for="rn">Name</label>
+            <input id="rn" class="input mono" value="2026.12" autocomplete="off" aria-describedby="rn-h">
+            <span id="rn-h" class="hint">Added to <code>releases:</code> in config.yaml; comments in the file are kept.</span>
+          </div>
+          <div class="field">
+            <label for="rr">Why <span class="req">(recorded)</span></label>
+            <textarea id="rr" class="textarea" placeholder="What this release is for">Holiday freeze: everything finance needs before 15 December.</textarea>
+          </div>
+          <div class="cmd"><code>branchling declare releases <span class="arg">2026.12</span> --reason <span class="arg">"Holiday freeze: …"</span></code></div>
+        </div>
+        <div class="card-foot row"><button class="btn btn-primary" type="submit">Declare release</button><button class="btn btn-ghost" type="button">Cancel</button></div>
+      </form>
+
+      <section class="card" aria-labelledby="assign">
+        <div class="card-head"><h2 id="assign">Plan tasks for 2026.12</h2><span class="end t-meta">each runs <code>set &lt;ID&gt; release</code></span></div>
+        <ul class="tlist">
+          <li><input type="checkbox" class="check" checked aria-label="Plan HB-29 for 2026.12" style="width:1rem;height:1rem;accent-color:var(--color-action-primary)"><a class="task-link" href="task.html">Customers download a year of invoices as one ZIP</a><span class="task-id">HB-29</span></li>
+          <li><input type="checkbox" checked aria-label="Plan HB-44 for 2026.12" style="width:1rem;height:1rem;accent-color:var(--color-action-primary)"><a class="task-link" href="task.html">Invoice PDFs render in Polish and German</a><span class="task-id">HB-44</span></li>
+          <li><input type="checkbox" aria-label="Plan HB-40 for 2026.12" style="width:1rem;height:1rem;accent-color:var(--color-action-primary)"><a class="task-link" href="task.html">Currency rounding follows ISO 4217 minor units</a><span class="task-id">HB-40</span></li>
+        </ul>
+        <div class="card-foot row"><button class="btn btn-primary" type="button">Plan 2 tasks</button><span class="t-meta">one history record per task</span></div>
+      </section>
+    </div>
+  </section>
+</main>
+</body>
+</html>

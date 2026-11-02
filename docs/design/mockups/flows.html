@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Write flows · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  /* Mockup only: dialogs laid out in a grid instead of over the page. */
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr)); gap: var(--space-8) var(--space-6); align-items: start; }
+  .board .dialog { position: static; width: 100%; max-height: none; }
+  .board figure { margin: 0; display: grid; gap: var(--space-2); }
+  .board figcaption { font-size: var(--font-size-200); color: var(--color-text-muted); }
+  @media (max-width: 30rem) { .board { grid-template-columns: 1fr; } }
+</style>
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="tasks" data-crumb="Write flows">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Write flows</h1>
+      <p class="lede">Every write is one branchling command. The dialog names it, asks for what the command requires, and shows branchling’s answer unchanged.</p>
+    </div>
+  </div>
+
+  <div class="board">
+    <figure id="edit">
+      <figcaption>Edit a field · <code>set</code></figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="e-h">
+        <div class="dialog-head"><h2 id="e-h" class="t-section">Change priority of HB-27</h2><p class="t-meta">Refunds over 500 EUR need a second approver</p></div>
+        <div class="dialog-body">
+          <fieldset class="segmented" style="border:0;margin:0" aria-label="Priority">
+            <button type="button" aria-pressed="false">P0</button><button type="button" aria-pressed="false">P1</button><button type="button" aria-pressed="true">P2</button><button type="button" aria-pressed="false">P3</button>
+          </fieldset>
+          <div class="field"><label for="er">Why <span class="req">(optional, recorded in history)</span></label><input id="er" class="input" value="Audit moved to January"></div>
+          <div class="cmd"><code>branchling set HB-27 priority <span class="arg">P2</span> --reason <span class="arg">"Audit moved to January"</span></code></div>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Cancel</button><button class="btn btn-primary" type="button">Save</button></div>
+      </section>
+    </figure>
+
+    <figure id="take">
+      <figcaption>Take a task · <code>take</code></figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="t-h">
+        <div class="dialog-head"><h2 id="t-h" class="t-section">Take HB-38?</h2><p class="t-meta">Stripe test keys never reach the production config</p></div>
+        <div class="dialog-body">
+          <p class="t-dense">It will be reserved for you and set to <span class="badge role-progress">in_progress</span>. Agents running <code>next</code> will skip it.</p>
+          <div class="field"><label for="ta">Act as</label><select id="ta" class="select"><option>human:maja</option><option>human:tomek</option></select><span class="hint">Remembered for this browser only.</span></div>
+          <div class="cmd"><code>branchling take HB-38 --actor <span class="arg">human:maja</span></code></div>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Cancel</button><button class="btn btn-primary" type="button"><i data-icon="play"></i>Take it</button></div>
+      </section>
+    </figure>
+
+    <figure id="handoff">
+      <figcaption>Hand off · <code>handoff</code> (reason required)</figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="h-h">
+        <div class="dialog-head"><h2 id="h-h" class="t-section">Hand off HB-23</h2><p class="t-meta">The billing service reads tax rates from the rates table</p></div>
+        <div class="dialog-body">
+          <div class="field"><label for="hr">To role</label><select id="hr" class="select"><option>reviewer</option><option>finance</option></select></div>
+          <div class="field"><label for="ho">To a person <span class="req">(optional)</span></label><input id="ho" class="input" placeholder="human:name"></div>
+          <div class="field"><label for="hw">Why</label><textarea id="hw" class="textarea" aria-invalid="true" aria-describedby="hw-e"></textarea><span id="hw-e" class="error"><i data-icon="alert"></i>A handoff needs a reason. It is what the next person reads first.</span></div>
+          <div class="cmd"><code>branchling handoff HB-23 --to-role <span class="arg">reviewer</span> --reason <span class="arg">"…"</span></code></div>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Cancel</button><button class="btn btn-primary" type="button" aria-disabled="true">Hand off</button></div>
+      </section>
+    </figure>
+
+    <figure id="done">
+      <figcaption>Close · <code>done</code> runs the task’s verification</figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="d-h" aria-busy="true">
+        <div class="dialog-head"><h2 id="d-h" class="t-section">Closing HB-23</h2><p class="t-meta">Running 3 checks. The task closes only if all of them pass.</p></div>
+        <div class="dialog-body">
+          <ol class="timeline" aria-live="polite">
+            <li><span class="mark" style="background:var(--role-success-bg);color:var(--role-success-fg);border-color:var(--role-success-dot)"><i data-icon="check"></i></span><div><p class="what"><code>rates-table</code> passed</p><p class="t-meta">node --test test/rates.test.mjs · 1.8 s</p></div></li>
+            <li><span class="mark" style="background:var(--role-danger-bg);color:var(--role-danger-fg);border-color:var(--role-danger-dot)"><i data-icon="x"></i></span><div><p class="what"><code>invoice-totals</code> failed · exit 1</p><p class="t-meta">node --test test/totals.test.mjs · 2.4 s</p><pre class="cmd" style="margin-top:var(--space-2)"><code>✖ totals round half-even (4.1ms)
+  expected 10.05, got 10.04</code></pre></div></li>
+            <li><span class="mark"><span class="spinner" style="width:.7rem;height:.7rem"></span></span><div><p class="what"><code>lint</code> running…</p></div></li>
+          </ol>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Run as dry run</button><button class="btn btn-primary" type="button" aria-busy="true" disabled><span class="spinner"></span>Running</button></div>
+      </section>
+    </figure>
+
+    <figure id="new">
+      <figcaption>New task · <code>new</code></figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="n-h">
+        <div class="dialog-head"><h2 id="n-h" class="t-section">New task</h2><p class="t-meta">The id is chosen by branchling across every branch: <span class="task-id">HB-46</span> is next.</p></div>
+        <div class="dialog-body">
+          <div class="field"><label for="nt">Title</label><input id="nt" class="input" value="Invoices show the reverse-charge note for EU B2B" aria-describedby="nt-h"><span id="nt-h" class="hint">Say what will be true when it is done.</span></div>
+          <div class="grid" style="grid-template-columns:1fr 1fr">
+            <div class="field"><label for="np">Priority</label><select id="np" class="select"><option>P0</option><option>P1</option><option selected>P2</option><option>P3</option></select></div>
+            <div class="field"><label for="ne">Estimate</label><input id="ne" class="input mono" value="4h"></div>
+          </div>
+          <div class="field"><label for="nb">Blocked by <span class="req">(optional)</span></label><input id="nb" class="input mono" placeholder="HB-23, HB-27"></div>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Cancel</button><button class="btn btn-primary" type="button">Create HB-46</button></div>
+      </section>
+    </figure>
+
+    <figure id="release">
+      <figcaption>Return to the queue · <code>release</code>, refused</figcaption>
+      <section class="dialog" role="dialog" aria-labelledby="r-h">
+        <div class="dialog-head"><h2 id="r-h" class="t-section">Return HB-27 to the queue?</h2></div>
+        <div class="dialog-body">
+          <div class="state state-refusal" role="alert">
+            <div class="state-head"><i data-icon="stop"></i>branchling declined</div>
+            <p class="detail">HB-27 is held by agent:claude-2, not by human:maja. Only the holder releases a task; hand it off instead.</p>
+            <p class="t-meta" style="color:inherit">Refusal kind: <code>not-holder</code>. Nothing was written.</p>
+          </div>
+        </div>
+        <div class="dialog-foot"><button class="btn btn-ghost" type="button">Close</button><button class="btn btn-secondary" type="button"><i data-icon="handoff"></i>Hand off instead</button></div>
+      </section>
+    </figure>
+  </div>
+</main>
+</body>
+</html>

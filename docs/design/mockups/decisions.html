@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decisions · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="decisions" data-crumb="Decisions">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Decisions</h1>
+      <p class="lede">3 questions are waiting on a person. Work on these tasks has stopped until somebody answers.</p>
+    </div>
+    <div class="actions">
+      <div class="segmented" role="group" aria-label="Show">
+        <button type="button" aria-pressed="true">Waiting <span class="badge plain role-attention">3</span></button>
+        <button type="button" aria-pressed="false">Answered</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stack" style="gap:var(--space-4);max-width:52rem">
+    <!-- 1: a question with options; the recommended one is marked, never preselected -->
+    <article class="card" aria-labelledby="q27">
+      <div class="decision">
+        <div class="row">
+          <a class="task-id" href="task.html">HB-27</a>
+          <a id="q27" class="task-link" href="task.html">Refunds over 500 EUR need a second approver</a>
+          <span class="prio role-attention" style="margin-left:auto">P1</span>
+        </div>
+        <p class="question">Should the second approver be any admin, or only someone with the finance role?</p>
+        <div class="asked">
+          <span class="who"><span class="avatar agent">C2</span>asked by agent:claude-2</span>
+          <span class="age old"><i data-icon="clock"></i> 4 days ago</span>
+          <span>blocks <a class="task-id" href="#">HB-36</a></span>
+        </div>
+
+        <form class="stack" style="gap:var(--space-4);margin-top:var(--space-2)">
+          <fieldset class="choices">
+            <legend class="field label" style="margin-bottom:var(--space-2);font-size:var(--font-size-300);font-weight:var(--font-weight-medium)">Pick an answer</legend>
+            <label class="choice"><input type="radio" name="a27" value="1"><span class="stack" style="gap:var(--space-1)"><span class="row"><span class="n">1</span><strong>Finance role only</strong><span class="badge plain role-progress">recommended</span></span><span class="t-meta">Matches the finance team’s control document and the November audit.</span></span></label>
+            <label class="choice"><input type="radio" name="a27" value="2" checked><span class="stack" style="gap:var(--space-1)"><span class="row"><span class="n">2</span><strong>Any admin</strong></span><span class="t-meta">Faster on weekends; the spec says “an approver”.</span></span></label>
+            <label class="choice"><input type="radio" name="a27" value="other"><span class="stack" style="gap:var(--space-1)"><span class="row"><strong>Something else</strong></span><span class="t-meta">Write the decision in your own words.</span></span></label>
+          </fieldset>
+          <div class="cmd"><code>branchling decide HB-27 --resolves <span class="arg">ev_8f2c</span> --choose <span class="arg">2</span> --actor <span class="arg">human:maja</span></code></div>
+          <div class="row"><button class="btn btn-primary" type="submit">Record decision</button><span class="t-meta">The option’s text becomes the recorded reason. HB-27 goes back to the queue.</span></div>
+        </form>
+      </div>
+    </article>
+
+    <!-- 2: an open question, free text, with a validation error -->
+    <article class="card" aria-labelledby="q42">
+      <div class="decision">
+        <div class="row">
+          <a class="task-id" href="task.html">HB-42</a>
+          <a id="q42" class="task-link" href="task.html">Closed accounts are removed after seven years</a>
+          <span class="prio role-neutral" style="margin-left:auto">P2</span>
+        </div>
+        <p class="question">Do we delete the invoices of closed accounts, or keep them anonymised for the tax office?</p>
+        <div class="asked">
+          <span class="who"><span class="avatar">MN</span>asked by human:maja</span>
+          <span class="age"><i data-icon="clock"></i> 1 day ago</span>
+        </div>
+        <form class="stack" style="margin-top:var(--space-2)">
+          <div class="field">
+            <label for="d42">Your decision</label>
+            <textarea id="d42" class="textarea" aria-invalid="true" aria-describedby="d42-e d42-h"></textarea>
+            <span id="d42-e" class="error"><i data-icon="alert"></i>Write the decision. A record that something was settled without saying how cannot be read back later.</span>
+            <span id="d42-h" class="hint">Recorded word for word in the task’s history.</span>
+          </div>
+          <div class="row"><button class="btn btn-primary" type="submit">Record decision</button><button class="btn btn-ghost" type="button">Not mine to decide…</button></div>
+        </form>
+      </div>
+    </article>
+
+    <!-- 3: after submit, branchling refused: the text is shown unchanged -->
+    <article class="card" aria-labelledby="q45">
+      <div class="decision">
+        <div class="row">
+          <a class="task-id" href="task.html">HB-45</a>
+          <a id="q45" class="task-link" href="task.html">API keys rotate without downtime</a>
+          <span class="prio role-attention" style="margin-left:auto">P1</span>
+        </div>
+        <p class="question">Rotate keys with a 24 h overlap, or require clients to re-authenticate at once?</p>
+        <div class="asked">
+          <span class="who"><span class="avatar agent">C1</span>asked by agent:claude-1</span>
+          <span class="age"><i data-icon="clock"></i> 2 hours ago</span>
+        </div>
+        <div class="state state-refusal" role="alert">
+          <div class="state-head"><i data-icon="stop"></i>branchling declined the decision</div>
+          <p class="detail">event ev_91aa is not in this task's history: it was answered at 15:02 by human:tomek</p>
+          <p class="t-meta" style="color:inherit">Refusal kind: <code>stale-reference</code>. Nothing was written.</p>
+          <button class="btn btn-secondary btn-sm" type="button"><i data-icon="refresh"></i>Reload this task</button>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <!-- success toast after a recorded decision -->
+  <div class="toast-region" aria-live="polite">
+    <div class="toast"><i data-icon="check"></i><span>Decision recorded on <strong>HB-12</strong>. It is back in the queue.</span><button class="btn btn-ghost btn-sm" type="button">View</button></div>
+  </div>
+</main>
+</body>
+</html>
