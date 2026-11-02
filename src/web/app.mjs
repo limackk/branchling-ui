@@ -7,6 +7,7 @@
 
 import { statsModel } from "/view-model/stats.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
+import "/release.mjs";
 
 /** The capability every write sends (UI-5, UI-6). Reads do not need it. */
 export const capability = document.querySelector('meta[name="branchling-ui-capability"]')?.content || "";

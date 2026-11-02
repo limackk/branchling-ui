@@ -86,5 +86,24 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-3); cursor: pointer; margin-top: var(--space-2); }
 
+/* The release view (UI-4). Unknown is marked by its word and a dashed border,
+   never by colour alone. */
+.release-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.release-controls input, .release-controls select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-2); min-height: 24px; }
+.release-controls button { margin-top: 0; }
+.release-refs caption { text-align: left; font-weight: 600; padding: var(--space-1) 0; }
+.release-refs { margin-bottom: var(--space-3); }
+.sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.lane { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--space-2); }
+.bucket { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.bucket h4 { margin: 0; font-size: 0.875rem; color: var(--text-muted); font-weight: 600; }
+.bucket-count { margin: 0; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.bucket-unknown { border-style: dashed; }
+.bucket-note { margin: 0; color: var(--text-muted); font-size: 0.875rem; }
+.bucket-tasks { padding-left: var(--space-3); margin: var(--space-2) 0 0; font-size: 0.875rem; }
+.task-id { font-weight: 600; }
+.task-meta { color: var(--text-muted); }
+.unknown { font-style: italic; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

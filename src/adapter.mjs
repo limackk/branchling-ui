@@ -196,7 +196,21 @@ export function createAdapter({ dir, bin, cwd } = {}) {
     plan: () => json(["plan"], "plan"),
     show: id => json(["show", id], "task-show"),
     log: id => json(["log", id], "task-log"),
-    deployStatus: () => json(["deploy", "status"], "release-status"),
+    /**
+     * `deploy status`, optionally for one target (`--target`) or compared with
+     * one planned release (`--release`). An undeclared target or release is a
+     * usage error from branchling (no envelope), never an empty pipeline.
+     */
+    async deployStatus({ target, release } = {}) {
+      const args = ["deploy", "status"];
+      for (const [flag, value] of [["--target", target], ["--release", release]]) {
+        if (value === undefined || value === null || value === "") continue;
+        // A value that looks like a flag would be read as one (`--release --count`).
+        if (String(value).startsWith("-")) throw new BranchlingUsageError([...args, flag, String(value)], 2, `${flag} takes a name, not a flag`);
+        args.push(flag, String(value));
+      }
+      return json(args, "release-status");
+    },
 
     /** Escape hatch for commands without a typed wrapper yet. */
     raw: json,

@@ -16,8 +16,10 @@
  * trivial.
  */
 
+import release from "./release.mjs";
 import stats from "./stats.mjs";
 
 export const views = [
+  release,
   stats,
 ];
