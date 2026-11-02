@@ -15,6 +15,7 @@
   <p class="root" id="root"></p>
   <nav aria-label="Views">
     <ul class="views">
+      <li><a href="?view=decisions" data-view-link="decisions">Decisions</a></li>
       <li><a href="?view=plan" data-view-link="plan">Plan</a></li>
       <li><a href="?view=release" data-view-link="release">Release</a></li>
       <li><a href="?view=stats" data-view-link="stats">Stats</a></li>
@@ -32,6 +33,12 @@
     <h2 id="stats-title">Stats</h2>
     <div id="stats" aria-live="polite" aria-busy="true">
       <p class="state state-loading">Loading stats…</p>
+    </div>
+  </section>
+  <section aria-labelledby="decisions-title" data-view="decisions" hidden>
+    <h2 id="decisions-title">Decisions waiting on a person</h2>
+    <div id="decisions">
+      <p class="state state-loading">Loading the questions waiting on a decision…</p>
     </div>
   </section>
   <section aria-labelledby="release-title" data-view="release" hidden>

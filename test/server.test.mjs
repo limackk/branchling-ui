@@ -134,8 +134,8 @@ test("a write from a loopback host needs the matching origin and the capability 
   assert.equal((await post({ origin, [CAPABILITY_HEADER]: "x".repeat(token.length) })).status, 403, "wrong token");
   assert.equal((await post({ origin: "http://evil.example", [CAPABILITY_HEADER]: token })).status, 403, "foreign origin");
   assert.equal((await post({ [CAPABILITY_HEADER]: token })).status, 403, "no origin");
-  // Positive control: the guard lets this one through; there is simply no
-  // writing route yet, so it ends as 405 rather than 403.
+  // Positive control: the guard lets this one through; /api/stats has no
+  // POST route, so it ends as 405 rather than 403.
   const passed = await post({ origin, [CAPABILITY_HEADER]: token });
   assert.equal(passed.status, 405);
   assert.equal(passed.json.error.type, "method-not-allowed");

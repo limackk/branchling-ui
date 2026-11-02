@@ -30,6 +30,7 @@ const PAIRS = [
   ["state-error-fg", "state-error-bg", 4.5],
   ["state-refusal-fg", "state-refusal-bg", 4.5],
   ["state-stale-fg", "state-stale-bg", 4.5],
+  ["state-recorded-fg", "state-recorded-bg", 4.5],
   ["border", "bg", 3], ["border", "surface", 3],
   ["focus", "bg", 3], ["focus", "surface", 3],
 ];

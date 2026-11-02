@@ -22,6 +22,8 @@
   --state-refusal-fg: #6b4300;
   --state-stale-bg: #eef2ff;
   --state-stale-fg: #283a8c;
+  --state-recorded-bg: #e7f5ec;
+  --state-recorded-fg: #14532d;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -48,6 +50,8 @@
     --state-refusal-fg: #ffdca3;
     --state-stale-bg: #1d2547;
     --state-stale-fg: #c9d4ff;
+    --state-recorded-bg: #12301f;
+    --state-recorded-fg: #bff0d0;
   }
 }
 
@@ -104,6 +108,27 @@ button { font: inherit; color: var(--text); background: var(--surface); border: 
 .task-id { font-weight: 600; }
 .task-meta { color: var(--text-muted); }
 .unknown { font-style: italic; }
+
+/* The decisions view (UI-5). The recommended option is marked in its label's
+   text, never by colour alone. Targets are at least 24px (WCAG 2.5.8). */
+.decisions { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-3); }
+.decision { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.decision h3 { margin: 0; }
+.decision .task-meta { margin: 0; font-size: 0.875rem; }
+.decision-question { font-size: 1.0625rem; margin: var(--space-2) 0; overflow-wrap: anywhere; }
+.decision-form fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); }
+.decision-form legend { font-weight: 600; padding: 0 var(--space-1); }
+.decision-options { margin-bottom: var(--space-2); }
+.decision-option { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 24px; margin: var(--space-1) 0; }
+.decision-option input { width: 24px; height: 24px; margin: 0; flex: none; accent-color: var(--accent); }
+.decision-reason-label { display: block; margin-top: var(--space-2); }
+.decision-form textarea { display: block; width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-2); }
+.decision-form button { min-height: 24px; }
+.decision-form button:disabled { cursor: progress; }
+.decision-feedback .state { margin-top: var(--space-2); }
+.refusal-details { margin: var(--space-1) 0 0; padding-left: var(--space-3); }
+.state-recorded { background: var(--state-recorded-bg); color: var(--state-recorded-fg); margin-bottom: var(--space-3); }
+.state-recorded p + p { margin-top: var(--space-1); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

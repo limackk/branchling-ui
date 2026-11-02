@@ -164,6 +164,114 @@ export function parseEnvelope(text, expectedKind) {
   return envelope;
 }
 
+/** How many `log` calls `listDecisions()` keeps running at once. */
+export const DECISIONS_CONCURRENCY = 4;
+
+/** `items` mapped through the async `fn`, at most `limit` at a time, in order. */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Every open question in the backlog, as ONE answer.
+ *
+ * branchling 0.2 has no single command that lists open questions across
+ * tasks (an upstream gap, UI-23). An open question is defined by branchling as
+ * a question no decision points at, computed from each task's log, so this
+ * reads `query` once (the active tasks, branchling's own default scope, no
+ * status named) and then `log <ID> --decisions` for each of them,
+ * DECISIONS_CONCURRENCY at a time. Any failure rejects the whole answer, never
+ * a shorter list.
+ *
+ * It takes an adapter-shaped object rather than being a method, so the reads
+ * it makes are that object's: given the server's per-request scope, every
+ * `query` and `log` goes through UI-2's cache like any other read, and the
+ * response's X-Branchling-UI-Fetched-At covers them. As a method it would be
+ * one opaque call the cache treats as a write. It spawns nothing itself.
+ *
+ * `log --decisions` keeps a `question` message only while it is open
+ * (answered ones are left out; see `branchling log --help`), so a task is
+ * listed when its log holds at least one. The answer is composed here, so its
+ * `kind` is this package's, `decisions`:
+ *
+ *   { kind: "decisions", composed: true, scanned: <tasks whose log was read>,
+ *     tasks: [{ task: <the task's row from query, unchanged>,
+ *               log:  <its task-log envelope, unchanged> }] }
+ *
+ * The view model (src/view-model/decisions.mjs) turns that into questions.
+ *
+ * @param {{ query: Function, log: Function }} adapter
+ */
+export async function listDecisions(adapter) {
+  const list = await adapter.query();
+  const rows = Array.isArray(list.tasks) ? list.tasks : [];
+  for (const row of rows) {
+    if (!row || typeof row.id !== "string" || !row.id || row.id.startsWith("-")) throw new ContractMismatch("query returned a task without a usable id");
+  }
+  const logs = await mapLimit(rows, DECISIONS_CONCURRENCY, row => adapter.log(row.id, { decisions: true }));
+  const tasks = [];
+  rows.forEach((row, i) => {
+    const exchanges = Array.isArray(logs[i].exchanges) ? logs[i].exchanges : [];
+    const open = exchanges.some(x => Array.isArray(x.messages) && x.messages.some(m => m && m.kind === "question"));
+    if (open) tasks.push({ task: row, log: logs[i] });
+  });
+  return { kind: "decisions", composed: true, scanned: rows.length, tasks };
+}
+
+/**
+ * Reads what `branchling decide --json` prints.
+ *
+ * WHY NOT parseEnvelope. In the supported range (0.2.x) `decide --json` does
+ * not print the envelope every other command prints: there is no
+ * `schemaVersion` and no `kind` of its own. A recorded decision is
+ *
+ *   { ok: true, id, decision: { id, ts, text, actor, resolves, chose }, chosen, openQuestions, lifted }
+ *
+ * and a refusal is `{ ok: false, kind: "<refusal kind>", id, message, details }`
+ * with a non-zero exit (1, or 2 for an unknown task). That is an upstream gap,
+ * reported, not a shape to guess around: this function accepts exactly those
+ * two shapes, turns the second into a BranchlingRefusal whose envelope carries
+ * `refusalKind` and `refusal` as everywhere else (the text unchanged), and
+ * fails loudly with ContractMismatch on anything else, including a future
+ * `decide` that prints a real envelope, so that change is a deliberate edit
+ * here and not a silent best effort.
+ */
+export function parseDecideOutput(text, code) {
+  let out;
+  try {
+    out = JSON.parse(text);
+  } catch {
+    throw new ContractMismatch("decide output is not JSON: " + text.slice(0, 200));
+  }
+  if (!out || typeof out !== "object" || Array.isArray(out)) throw new ContractMismatch("decide output is not an object");
+  if ("schemaVersion" in out) {
+    throw new ContractMismatch("decide now prints an envelope (schemaVersion " + out.schemaVersion + "); the adapter reads only the 0.2 shape and must be updated");
+  }
+  if (out.ok === true && code === 0 && typeof out.id === "string" && out.decision && typeof out.decision.id === "string") {
+    return out;
+  }
+  if (out.ok === false && code !== 0 && typeof out.kind === "string" && typeof out.message === "string") {
+    throw new BranchlingRefusal({
+      kind: "decide",
+      ok: false,
+      id: typeof out.id === "string" ? out.id : null,
+      refusalKind: out.kind,
+      refusal: out.message,
+      details: Array.isArray(out.details) ? out.details.map(String) : [],
+    }, code);
+  }
+  throw new ContractMismatch(`decide output has an unexpected shape (exit ${code}): ` + text.slice(0, 200));
+}
+
 export function createAdapter({ dir, bin, cwd } = {}) {
   const withDir = args => (dir ? [...args, "--dir", dir] : args);
 
@@ -198,7 +306,8 @@ export function createAdapter({ dir, bin, cwd } = {}) {
     stats: () => json(["stats"], "stats"),
     plan: () => json(["plan"], "plan"),
     show: id => json(["show", id], "task-show"),
-    log: id => json(["log", id], "task-log"),
+    /** `log <ID>`; `{ decisions: true }` adds `--decisions` (what is decided and what is still open). */
+    log: (id, { decisions = false } = {}) => json(decisions ? ["log", id, "--decisions"] : ["log", id], "task-log"),
     /**
      * `deploy status`, optionally for one target (`--target`) or compared with
      * one planned release (`--release`). An undeclared target or release is a
@@ -213,6 +322,40 @@ export function createAdapter({ dir, bin, cwd } = {}) {
         args.push(flag, String(value));
       }
       return json(args, "release-status");
+    },
+
+    /**
+     * `decide <id> --resolves <event id> (--choose <n> | --reason "…") [--actor <ns:name>]`.
+     *
+     * `actor` is passed only when the caller states one. The server never does:
+     * branchling then resolves the actor itself (`$BACKLOG_ACTOR`, then the
+     * user's own config, then its default). Values are an argv array, never a
+     * shell string; a value starting with "-" would be read as a flag, so it is
+     * refused here before branchling sees it.
+     */
+    async decide({ id, resolves, choose, reason, actor } = {}) {
+      const base = ["decide"];
+      const bad = message => new BranchlingUsageError([...base, String(id)], 2, message);
+      const word = (name, value) => {
+        if (typeof value !== "string" || !value.trim()) throw bad(`${name} is required`);
+        if (value.startsWith("-")) throw bad(`${name} cannot start with "-": branchling would read it as a flag`);
+        return value;
+      };
+      const args = [...base, word("the task id", id), "--resolves", word("--resolves", resolves)];
+      const hasChoose = choose !== undefined && choose !== null;
+      const hasReason = reason !== undefined && reason !== null;
+      if (hasChoose === hasReason) throw bad("exactly one of --choose and --reason is required");
+      if (hasChoose) {
+        if (!Number.isInteger(choose) || choose < 1) throw bad("--choose takes a positive whole number");
+        args.push("--choose", String(choose));
+      } else {
+        args.push("--reason", word("--reason", reason));
+      }
+      if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", word("--actor", actor));
+      const full = withDir([...args, "--json"]);
+      const { code, stdout, stderr } = await run(bin, full, { cwd });
+      if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
+      return parseDecideOutput(stdout, code);
     },
 
     /** Escape hatch for commands without a typed wrapper yet. */

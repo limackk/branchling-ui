@@ -5,7 +5,8 @@
  *
  *   { id: "plan", routes: [{ method: "GET", path: "/api/plan", handler }] }
  *
- * where `handler({ adapter, req, url, params })` returns the JSON body (usually
+ * where `handler({ adapter, req, url, params, body })` (`body`: the parsed JSON
+ * of a non-GET request, see readJsonBody in src/server.mjs) returns the JSON body (usually
  * an adapter envelope, unchanged) or throws one of the adapter's errors, which
  * the server maps to a JSON error response. A handler never spawns anything,
  * never touches the file system, and never writes a response itself.
@@ -16,11 +17,13 @@
  * trivial.
  */
 
+import decisions from "./decisions.mjs";
 import plan from "./plan.mjs";
 import release from "./release.mjs";
 import stats from "./stats.mjs";
 
 export const views = [
+  decisions,
   plan,
   release,
   stats,

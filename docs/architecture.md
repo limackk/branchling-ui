@@ -62,7 +62,7 @@ bin/branchling-ui.mjs        starts the server for one backlog, prints the URL
 src/adapter.mjs              the only door into branchling (unchanged by UI-1)
 src/server.mjs               HTTP, the loopback guard, static files, the route table
 src/cache.mjs                UI-2's read cache, and servedFromCache, its join to the server
-src/request-error.mjs        RequestError: a handler's 4xx before any spawn
+src/request-error.mjs        RequestError: a request answered with a 4xx before branchling runs
 src/views/index.mjs          the view registry: one import and one entry per view
 src/views/<view>.mjs         a view's API routes
 src/view-model/<view>.mjs    the shared view model, pure functions
@@ -86,7 +86,8 @@ export default {
 };
 ```
 
-and is listed once in `src/views/index.mjs`. A handler returns the JSON body,
+and is listed once in `src/views/index.mjs`. A handler of a non-GET route
+also receives the parsed request `body`. A handler returns the JSON body,
 usually the adapter's envelope unchanged, or throws one of the adapter's
 errors. It never spawns anything, touches the file system or writes the
 response itself. The server builds one route table from the registry at
@@ -135,6 +136,7 @@ JSON, `{ "error": { "type", "message", ... } }`, with distinct statuses:
 
 | Thrown by the adapter | HTTP | `error.type` |
 |---|---|---|
+| `RequestError` (`src/request-error.mjs`, thrown by the server or a handler, not the adapter) | 400, 413, 415 | `bad-request`, `payload-too-large`, `unsupported-media-type` |
 | `BranchlingRefusal` | 409 | `refusal`, with `refusalKind` and the `envelope` |
 | `ContractMismatch` | 502 | `contract-mismatch` |
 | `BranchlingUsageError` | 500 | `usage-error` |
@@ -202,8 +204,8 @@ resolve to it. The guard follows `branchling serve`
 
 ### The write guard (for UI-5 and UI-6)
 
-No route writes yet, but the check is already in `src/server.mjs`
-(`isAllowedWrite`) and runs on every request that is not a GET:
+The check is in `src/server.mjs` (`isAllowedWrite`) and runs on every request
+that is not a GET (UI-5's `POST /api/decide` is the first route behind it):
 
 1. `Host` passes the allowlist above;
 2. `Origin` equals `http://<that Host>` exactly. A browser always sends it on
@@ -220,6 +222,58 @@ it never implements its own check. The handler then calls an adapter method
 that runs a branchling command; it never writes a file. If UI-5 needs
 short-lived tokens as `branchling serve` has, the change belongs in
 `src/server.mjs`, for every route at once.
+
+**Request bodies.** Only after the guard has passed, the server reads the body
+of a non-GET route once, for every route alike (`readJsonBody`):
+`application/json` only (else 415), at most `MAX_BODY_BYTES`, 16 KiB (else
+413, and the connection is closed), valid JSON (else 400). The handler gets it
+as `body` and checks its shape itself, throwing a `RequestError` (400) for a
+malformed one before any branchling command runs.
+
+## The decisions view (UI-5)
+
+**Data.** branchling 0.2 has no command that lists open questions across
+tasks. It defines an open question as one no decision points at, computed from
+a task's log, and `log <ID> --decisions --json` is the read it names for that.
+So `listDecisions(adapter)` in `src/adapter.mjs` composes one answer from
+`query --json` (the active tasks, branchling's own default scope) plus one
+`log <ID> --decisions` per task, four at a time. It takes the server's
+per-request scope, so each of those reads goes through UI-2's cache and is
+covered by `X-Branchling-UI-Fetched-At`; `adapter.decide()` is a write, which
+the cache passes through and which invalidates every cached answer. No status name is used: no command reports which
+statuses mean "waiting for somebody" (`reason_required_statuses` minus the
+archived ones, inside branchling), and a task can carry an open question in
+any status. The cost is one spawn per active task (about 0.45 s each, so
+about 1.5 s for a dozen tasks); the upstream command that lists every open
+question would make it one. `log --decisions --json` does not report a
+question's options or recommendation yet, so the page offers a free-text
+answer until it does; the view model reads options when they appear, under the
+names `ask --json` uses. `resume --json` does carry them but was rejected: it
+briefs a successor on one task, may refuse a task somebody else holds, and
+runs the task's verification unless told not to.
+
+**The write.** `POST /api/decide` takes `{ id, resolves, choose }` or
+`{ id, resolves, reason }` and runs `branchling decide` through
+`adapter.decide()`. A refusal (an unknown event, an option out of range)
+comes back as the usual 409 with branchling's text unchanged and its detail
+lines in `envelope.details`. In 0.2, `decide --json` prints no envelope (no
+`schemaVersion`, the refusal kind under `kind`); `parseDecideOutput` in the
+adapter reads exactly those two shapes and fails with a contract mismatch on
+anything else, including a future real envelope, which is then a deliberate
+change there.
+
+**The actor.** The page cannot authenticate anybody, so the server never
+passes `--actor` and refuses a body that names one. branchling resolves the
+actor itself, in its own order: `$BACKLOG_ACTOR` in the environment of the
+person who started the server, then the `actor:` in their branchling user
+config, then branchling's default, `agent:claude`. The answer shows the actor
+branchling recorded, so a person who has configured neither sees that their
+answer was attributed to the default. Rejected: an actor typed on the page
+(anybody with the tab open could claim to be anybody); a `--actor` flag on
+`bin/branchling-ui.mjs` or a variable of this package's own (a second way to
+say what `$BACKLOG_ACTOR` and the user config already say, and one more place
+for the two to disagree). branchling cannot yet be told to refuse when it
+falls back to its default actor; that is an upstream gap.
 
 ## The terminal interface (TUI, UI-16)
 

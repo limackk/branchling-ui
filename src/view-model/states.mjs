@@ -30,6 +30,8 @@ export function fromApiError(view, body, status) {
     "forbidden": "The request was refused by the local server",
     "not-found": "There is nothing at this address",
     "bad-request": "The request was not understood",
+    "payload-too-large": "The request was too large",
+    "unsupported-media-type": "The request was not sent as JSON",
   };
   return {
     view,

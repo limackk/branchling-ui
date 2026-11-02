@@ -96,6 +96,7 @@ async function load() {
  * itself on import as release.mjs does. A view not listed falls back to stats.
  */
 const VIEW_MODULES = {
+  decisions: "/decisions.mjs",
   plan: "/plan.mjs",
   release: "/release.mjs",
 };

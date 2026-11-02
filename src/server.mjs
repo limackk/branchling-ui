@@ -16,8 +16,13 @@
  *     [::1], with the bound port), or it is refused with 403;
  *   - every request that is not a GET must also carry an `Origin` equal to
  *     `http://<that Host>` and the per-process capability token injected into
- *     the served page, in the `X-Branchling-UI-Capability` header. No route
- *     writes yet; UI-5 and UI-6 add writes behind this check, not their own.
+ *     the served page, in the `X-Branchling-UI-Capability` header. Writing
+ *     routes (UI-5's decide, UI-6) sit behind this check, never their own.
+ *
+ * REQUEST BODIES. A non-GET route gets its body parsed here, once, for every
+ * route alike: `application/json` only, at most MAX_BODY_BYTES, handed to the
+ * handler as `body`. It is read only after the guard has passed, so a foreign
+ * page cannot make the server buffer anything.
  */
 
 import { createServer as createHttpServer } from "node:http";
@@ -34,6 +39,8 @@ import { views as defaultViews } from "./views/index.mjs";
 export const DEFAULT_PORT = 4322;
 export const CAPABILITY_HEADER = "x-branchling-ui-capability";
 export const FETCHED_AT_HEADER = "X-Branchling-UI-Fetched-At";
+/** The largest request body a route accepts. A decision is a few hundred bytes. */
+export const MAX_BODY_BYTES = 16 * 1024;
 
 const LOOPBACK_BIND = new Set(["127.0.0.1", "::1"]);
 const SRC = fileURLToPath(new URL(".", import.meta.url));
@@ -94,6 +101,50 @@ function sendJson(res, status, body, extra = {}) {
 
 function refuse(res, status, type, message) {
   sendJson(res, status, { error: { type, message } });
+}
+
+/**
+ * The JSON body of a non-GET request: `null` when there is none, the parsed
+ * value otherwise. Anything else is a RequestError: a body that is not
+ * `application/json` (415), larger than MAX_BODY_BYTES (413), or not JSON (400).
+ */
+export function readJsonBody(req, limit = MAX_BODY_BYTES) {
+  return new Promise((resolve, reject) => {
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > limit) {
+      reject(new RequestError(`The request body is larger than ${limit} bytes`, { status: 413, type: "payload-too-large" }));
+      return;
+    }
+    const chunks = [];
+    let size = 0;
+    let failed = false;
+    req.on("data", chunk => {
+      if (failed) return;
+      size += chunk.length;
+      if (size > limit) {
+        failed = true;
+        reject(new RequestError(`The request body is larger than ${limit} bytes`, { status: 413, type: "payload-too-large" }));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("error", err => { if (!failed) { failed = true; reject(err); } });
+    req.on("end", () => {
+      if (failed) return;
+      const text = Buffer.concat(chunks).toString("utf8");
+      if (!text.trim()) { resolve(null); return; }
+      const type = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      if (type !== "application/json") {
+        reject(new RequestError("A request body must be sent as application/json", { status: 415, type: "unsupported-media-type" }));
+        return;
+      }
+      try {
+        resolve(JSON.parse(text));
+      } catch {
+        reject(new RequestError("The request body is not valid JSON"));
+      }
+    });
+  });
 }
 
 /** Published path -> file, fixed at startup: nothing a request names is ever
@@ -171,11 +222,15 @@ export async function createServer({ adapter, port = DEFAULT_PORT, host = "127.0
         const scope = typeof adapter.forRequest === "function" ? adapter.forRequest() : { adapter, answeredAt: () => null };
         let body;
         try {
-          body = await handler({ adapter: scope.adapter, req, url, params: url.searchParams });
+          const requestBody = req.method === "GET" ? undefined : await readJsonBody(req);
+          body = await handler({ adapter: scope.adapter, req, url, params: url.searchParams, body: requestBody });
         } catch (err) {
           const { status, body: errBody } = errorBody(err);
           if (status >= 500) log(`branchling-ui: ${req.method} ${url.pathname}: ${err.message}`);
+          // An oversized body was left unread: do not keep the connection for another request.
+          if (status === 413) res.setHeader("Connection", "close");
           sendJson(res, status, errBody);
+          if (status === 413) res.on("finish", () => req.destroy());
           return;
         }
         // A cache hit is NOT stale: UI-2's cache answers from memory only when
