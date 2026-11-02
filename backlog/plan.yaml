@@ -24,3 +24,7 @@ waves:
   # The maintainer's decision.
   - name: "Before publish"
     tasks: [UI-10]
+
+  # The pinned branchling already answers query, show, log, doctor and check and has take, release and handoff, so the remaining mockup screens and the TUI screens are built while the next branchling release is prepared.
+  - name: "Without a release"
+    tasks: [UI-26, UI-28, UI-31, UI-32, UI-27, UI-29, UI-30]
