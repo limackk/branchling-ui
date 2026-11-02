@@ -17,7 +17,7 @@ estimate: 2h
 confidence: medium                 # how much you trust the estimate
 created: 2026-11-02
 updated: 2026-11-02
-blocked_by: [UI-2]                     # ids of tasks that MUST be closed before this one starts
+blocked_by: []  # ids of tasks that MUST be closed before this one starts
 blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
