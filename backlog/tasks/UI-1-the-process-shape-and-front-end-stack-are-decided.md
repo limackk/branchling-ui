@@ -18,11 +18,15 @@ confidence: medium                 # how much you trust the estimate
 created: 2026-11-02
 updated: 2026-11-02
 blocked_by: []                     # ids of tasks that MUST be closed before this one starts
-blocks: [UI-16]                         # ids this task will unblock
+blocks: [UI-3, UI-4, UI-5, UI-6, UI-16, UI-18]                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: server-smoke
     bash: "node --test test/server.test.mjs"
+  - id: server-guard
+    bash: "node --test --test-name-pattern=host test/server.test.mjs"
+  - id: view-model
+    bash: "node --test test/view-model.test.mjs"
   - id: web-skill
     bash: "test -f .agents/skills/ui-web/SKILL.md && test -L .claude/skills/ui-web && grep -qi 'view model' docs/architecture.md"
 ---
@@ -35,15 +39,23 @@ The process shape and the front-end stack are decided and written in docs/archit
 
 The adapter (src/adapter.mjs) exists; nothing renders yet. Open questions: a local HTTP server bound to 127.0.0.1 serving a single-page app (the model `branchling serve` uses) versus a desktop shell; a framework versus no framework; whether a build step is acceptable. Constraints: the adapter stays the only door into branchling; the server must never write task files itself; it must work on a backlog in any repository, not only this one.
 
+Binding to 127.0.0.1 is not enough on its own: any page open in the same browser can reach a loopback port, and DNS rebinding makes a foreign origin look local. `branchling serve` (scripts/serve-backlog.mjs, read it, do not import it) answers this with an allowlist of `Host` values, an `Origin` that must match it, and a short-lived capability token injected into the served page for every write. This task only reads, but UI-5 and UI-6 add writes through the adapter, so the guard belongs in the skeleton from the start rather than in the first view that writes. A port already in use must not stop startup.
+
+The colours cannot come from config.yaml directly: the UI may not read it, and no branchling command returns the status and priority vocabulary as JSON yet (`stats --json` gives only the keys of byStatus and byPriority). UI-18 tracks that upstream gap. Until it closes, the view model gives every status a neutral role and the skill says so.
+
+One `branchling` call costs about 500 ms (measured for UI-2). A single stats page can afford it; the view model and the page must still leave room for the cache UI-2 adds and for its stale state.
+
 ## Steps
 
 1. Compare at least two options against the constraints, including startup cost and the zero-dependency precedent branchling's own viewer sets.
 2. Write the decision, the options rejected and why, into docs/architecture.md.
-3. Add the minimal server skeleton the decision implies, serving one page that shows `stats` through the adapter.
-4. Define the view model both surfaces render: plain data computed from adapter envelopes, with no HTML or ANSI in it, so the web interface and the terminal interface (UI-16) cannot drift.
-5. Write `.agents/skills/ui-web/SKILL.md` (symlinked from `.claude/skills`) for the decided conventions: design tokens for light and dark, status and priority colours derived from config.yaml, the loading, empty, error, refusal and stale states every view has, view state in the URL, WCAG 2.2 AA and keyboard use.
+3. Add the minimal server skeleton the decision implies, serving one page that shows `stats` through the adapter. It refuses a request whose `Host` is not a loopback name with the server's port, and moves to another port when its own is taken. Record the write guard (matching `Origin` plus a capability token) in docs/architecture.md for UI-5 and UI-6.
+4. Define the view model both surfaces render: plain data computed from adapter envelopes, with no HTML or ANSI in it, so the web interface and the terminal interface (UI-16) cannot drift. Make it pure functions in its own module, tested without a server, starting with the stats model.
+5. Write `.agents/skills/ui-web/SKILL.md` (symlinked from `.claude/skills`) for the decided conventions: design tokens for light and dark, status and priority colour roles (neutral until UI-18 brings the vocabulary from the CLI), the loading, empty, error, refusal and stale states every view has, view state in the URL, the loopback guard, WCAG 2.2 AA and keyboard use.
 
 ## Acceptance criteria
 
 - [ ] The server starts on 127.0.0.1, serves the page, and its stats endpoint returns the adapter's stats envelope for a fixture backlog. [proof: server-smoke]
+- [ ] The server refuses a request with a foreign `Host` header. [proof: server-guard]
+- [ ] The stats view model is plain data built from a stats envelope, with no markup or escape codes in it. [proof: view-model]
 - [ ] The web conventions are a skill and the shared view model is recorded in docs/architecture.md. [proof: web-skill]
