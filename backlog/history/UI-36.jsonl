@@ -1,1 +1,2 @@
 {"id":"01M6F1067K08ACK8G5NCYP58TC","ts":"2026-11-02T21:00:17.523Z","task":"UI-36","field":"__created__","from":"","to":"Fixture backlogs keep branchling's state out of the user's home","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6F135WTYQM89A0QW26M9A9W","ts":"2026-11-02T21:01:55.482Z","task":"UI-36","field":"blocked_by","from":[],"to":["UI-32"],"actor":"agent:claude","source":"set","reason":"UI-32 is changing the same fixtures for the intermittent failure; this lands after it so two loops do not edit them at once"}
