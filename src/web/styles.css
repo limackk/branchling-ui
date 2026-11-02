@@ -806,6 +806,38 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
   .wave-chevron { transition: none; }
 }
 
+/* --- Overview (UI-29), after mockups/overview.html -------------------
+   The default view. "Needs a person" is first in the source, so it is the
+   first thing in the first viewport at 375 px. Existing tokens only: a
+   card's state is its badge's word and role, never a coloured border alone. */
+.overview-lede { color: var(--color-text-muted); max-width: var(--prose-max); margin: calc(var(--space-3) * -1) 0 var(--space-6); }
+.page .overview-stands > h3 { margin-top: var(--space-8); }
+.overview-slot { min-width: 0; }
+.overview-slot > .card { height: 100%; }
+.overview-card { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
+.page .overview-card h4.t-overline { margin: 0; font-size: var(--font-size-100); }
+.overview-card .t-title, .overview-card p { margin: 0; overflow-wrap: anywhere; }
+.overview-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.overview-lines li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); overflow-wrap: anywhere; }
+.overview-lines strong { color: var(--color-text-default); font-weight: var(--font-weight-medium); }
+.overview-more { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; justify-self: start; font-size: var(--font-size-300); }
+.overview-card .state, .overview-inflight .state { margin: 0; }
+.page .overview-inflight h4 { margin: 0; }
+.overview-inflight .tlist li { grid-template-columns: auto minmax(0, 1fr); }
+.overview-task { min-width: 0; overflow-wrap: anywhere; }
+.overview-totals { margin-top: var(--space-8); }
+.page .overview-totals h4 { margin: 0; font-size: var(--font-size-500); }
+.page .overview-totals h5 { margin: 0; font-size: var(--font-size-300); }
+.overview-totals .stats .delta { margin: 0; }
+.overview-dists { margin-top: var(--space-4); }
+.overview-dists .dist li { grid-template-columns: minmax(5rem, 8rem) 1fr 3rem; }
+.overview-dists .dist .n, .overview-all { display: inline-flex; align-items: center; justify-content: flex-end; min-height: 24px; min-width: 24px; }
+@media (max-width: 40rem) {
+  .overview-inflight .tlist li { grid-template-columns: minmax(0, 1fr); }
+  .overview-inflight .tlist .meta { grid-column: 1 / -1; }
+}
+/* --- end Overview --- */
+
 /* ---------- the tasks view (UI-26), after mockups/tasks.html ----------
    The mockup's filter chips are labelled fields here: each filter is free
    text with the values seen in the answers offered (a datalist), since the

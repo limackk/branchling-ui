@@ -54,7 +54,7 @@ assumptions, so correct any that are wrong.
 
 | Screen | Answers | CLI | Task |
 |---|---|---|---|
-| Overview | what needs me, where do we stand | `stats`, counts from `plan`, `doctor` | — |
+| Overview | what needs me, where do we stand | `stats`, `plan`, `doctor`, `query`, `log --decisions` (the other views' routes) | UI-29 |
 | Tasks | find and filter; filters live in the URL | `query` | — |
 | Task panel | everything about one task, and its actions | `show`, `log`, `set`, `take`, `handoff`, `release`, `done` | UI-6 |
 | Plan | waves, what may start now, unplanned, ahead of plan | `plan` | UI-3 |

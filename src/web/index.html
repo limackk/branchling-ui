@@ -21,7 +21,7 @@
     <span class="path" id="root"></span>
   </div>
   <nav class="nav" aria-label="Views">
-    <a href="?view=stats" data-view-link="stats"><svg class="icon" aria-hidden="true"><use href="/icons.svg#overview"/></svg><span>Stats</span></a>
+    <a href="?view=overview" data-view-link="overview"><svg class="icon" aria-hidden="true"><use href="/icons.svg#overview"/></svg><span>Overview</span></a>
     <a href="?view=tasks" data-view-link="tasks"><svg class="icon" aria-hidden="true"><use href="/icons.svg#tasks"/></svg><span>Tasks</span></a>
     <a href="?view=plan" data-view-link="plan"><svg class="icon" aria-hidden="true"><use href="/icons.svg#plan"/></svg><span>Plan</span></a>
     <a href="?view=release" data-view-link="release"><svg class="icon" aria-hidden="true"><use href="/icons.svg#pipeline"/></svg><span>Release</span></a>
@@ -30,7 +30,8 @@
   </nav>
 </header>
 <main id="main" class="page" tabindex="-1">
-  <section aria-labelledby="stats-title" data-view="stats">
+  <section aria-labelledby="overview-title" data-view="overview"><h2 id="overview-title">Overview</h2><div id="overview" aria-live="polite" aria-busy="true"><p class="state state-loading">Loading the overview…</p></div></section>
+  <section aria-labelledby="stats-title" data-view="stats" hidden>
     <h2 id="stats-title">Stats</h2>
     <div id="stats" aria-live="polite" aria-busy="true">
       <p class="state state-loading">Loading stats…</p>

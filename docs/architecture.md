@@ -261,8 +261,9 @@ read once on load by `src/web/app.mjs`: the other sections are `hidden` and
 only the current view's module is imported. The navigation is the app shell
 of the mockups (`docs/design/mockups/shell.js`): a `<header>` holding the
 brand, the backlog directory and a `<nav aria-label="Views">` of four real
-links (`?view=stats`, `plan`, `release`, `decisions`), the current one marked
-`aria-current="page"`. A link is a full page load, so Back, reload and a
+links (`?view=overview`, `tasks`, `plan`, `release`, `decisions`, `health`),
+the current one marked `aria-current="page"`; no `view` is the overview
+(UI-29). A link is a full page load, so Back, reload and a
 shared link show the same screen with no history code, and each view keeps
 the URL parameters it owns (`&task=`, `&target=`, `&release=`). From 64rem up
 the header is the sidebar; below it, the same header is a band above the page
@@ -335,6 +336,54 @@ answer was attributed to the default. Rejected: an actor typed on the page
 say what `$BACKLOG_ACTOR` and the user config already say, and one more place
 for the two to disagree). branchling cannot yet be told to refuse when it
 falls back to its default actor; that is an upstream gap.
+
+## The overview (UI-29)
+
+The default screen: no `view` (or one not listed) is the overview. It answers
+two questions, after `docs/design/mockups/overview.html`: what needs a person
+(open questions, failing setup checks, tasks waiting on other tasks) and
+where the backlog stands (the active wave and what may start now, what is in
+flight, the totals). Each part links to the view that has the detail.
+
+**Its reads are the existing routes, fetched in parallel by the page.** The
+page reads `/api/stats`, `/api/plan`, `/api/health/doctor`, `/api/decisions`
+and `/api/plan/tasks` (`OVERVIEW_READS` in `src/view-model/overview.mjs`) at
+once and rebuilds the model as each answers; there is no overview route and
+no new adapter call. `overviewPart()` turns one response into a part (its
+envelope, or the server's own JSON error for that route), and
+`overviewModel(parts)` builds six parts, each with its own state: a part is
+`loading` until the reads it is built from have answered, and a failed read
+turns only the parts built from it into `error` or `refusal`. Rejected: one
+composed `GET /api/overview` settling the reads with `Promise.allSettled`.
+It would make every part wait for the slowest read, and `doctor`, which the
+cache does not hold, is that read: about 1.4 s on an idle machine and 12 s
+measured with the test suites of other worktrees running, while a cached
+`stats` answers in about 0.1 s. That is the reason the health view (UI-28)
+gave each section its own route; a composed route would also have needed
+the server's error mapping inside a view module. The cost of parallel
+reads: `query` is asked twice (by `/api/decisions` and `/api/plan/tasks`),
+which UI-2's cache answers once when nothing changed, and five
+`X-Branchling-UI-Fetched-At` headers, of which the page shows the oldest.
+
+**Where each number comes from**, never from a status name (UI-18): open
+questions from the decisions answer; failing checks from doctor's `error`
+rows; "waiting on other tasks" from stats `blocked`, which in branchling 0.2
+counts ACTIVE tasks whose `blocked_by` is not empty (`summarize` in
+branchling's stats; its text report calls it "waiting on other tasks"). It is
+not the status named `blocked`: `ask` sets that status without a
+`blocked_by`, and a task with a `blocked_by` keeps its own status, so the two
+numbers differ (the fixture has one of each), and the overview labels the
+count by what it is. In flight is the task list's rows whose status is the
+plan's `inProgressStatus`, the name branchling itself gives that state, so it
+covers unplanned tasks too; the totals and distributions are `statsModel`'s.
+
+**The stats view folds into the overview.** The mockup's overview carries
+the stats view's totals and its by-status and by-priority counts, and the
+mockup's navigation has no Stats entry, so the nav link that said Stats now
+says Overview. `?view=stats` still shows the stats view (its section is in
+the page, hidden, and `app.mjs` lets that one address through) so an old
+link keeps working and the terminal's stats screen keeps its web
+counterpart; the nav no longer offers it.
 
 ## The terminal interface (TUI, UI-16)
 

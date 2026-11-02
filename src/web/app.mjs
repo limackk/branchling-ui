@@ -93,18 +93,21 @@ async function load() {
  * Which view is on screen is `?view=` in the URL. Stats is rendered here; any
  * other view is its own module in src/web/, listed below with ONE line, and is
  * imported only when it is on screen. It exports `start(section)`, or starts
- * itself on import as release.mjs does. A view not listed falls back to stats.
+ * itself on import as release.mjs does. No `view`, or one not listed, is the
+ * overview (UI-29); `?view=stats` still shows the stats view, which the
+ * overview folds in and the nav no longer links (docs/architecture.md).
  */
 const VIEW_MODULES = {
   decisions: "/decisions.mjs",
   health: "/health.mjs",
+  overview: "/overview.mjs",
   plan: "/plan.mjs",
   release: "/release.mjs",
   tasks: "/tasks.mjs",
 };
 
 const requested = new URLSearchParams(location.search).get("view");
-const current = Object.hasOwn(VIEW_MODULES, requested) ? requested : "stats";
+const current = requested === "stats" || Object.hasOwn(VIEW_MODULES, requested) ? requested : "overview";
 for (const section of document.querySelectorAll("[data-view]")) section.hidden = section.dataset.view !== current;
 for (const link of document.querySelectorAll("[data-view-link]")) {
   if (link.dataset.viewLink === current) link.setAttribute("aria-current", "page");
