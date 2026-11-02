@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "design-mockups",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4390",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "docs/design"
+      ],
+      "port": 4390
+    },
+    {
+      "name": "ui",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "bin/branchling-ui.mjs"
+      ],
+      "port": 4322
+    }
+  ]
+}

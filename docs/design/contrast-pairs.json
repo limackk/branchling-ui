@@ -1,0 +1,272 @@
+[
+ {
+  "name": "L text/canvas",
+  "fg": "#1b201e",
+  "bg": "#fafbfa",
+  "use": "text"
+ },
+ {
+  "name": "L muted/surface",
+  "fg": "#535d59",
+  "bg": "#ffffff",
+  "use": "text"
+ },
+ {
+  "name": "L muted/subtle",
+  "fg": "#535d59",
+  "bg": "#f4f6f5",
+  "use": "text"
+ },
+ {
+  "name": "L subtle/surface",
+  "fg": "#6b7671",
+  "bg": "#ffffff",
+  "use": "text"
+ },
+ {
+  "name": "L subtle/canvas",
+  "fg": "#6b7671",
+  "bg": "#fafbfa",
+  "use": "text"
+ },
+ {
+  "name": "L link/surface",
+  "fg": "#0f5654",
+  "bg": "#ffffff",
+  "use": "text"
+ },
+ {
+  "name": "L on-action/primary",
+  "fg": "#ffffff",
+  "bg": "#136a67",
+  "use": "text"
+ },
+ {
+  "name": "L on-action/primary-hover",
+  "fg": "#ffffff",
+  "bg": "#0f5654",
+  "use": "text"
+ },
+ {
+  "name": "L on-danger",
+  "fg": "#ffffff",
+  "bg": "#b42318",
+  "use": "text"
+ },
+ {
+  "name": "L disabled fg/bg",
+  "fg": "#5d6863",
+  "bg": "#e9edeb",
+  "use": "text"
+ },
+ {
+  "name": "L border-strong/surface",
+  "fg": "#6b7671",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "L focus/surface",
+  "fg": "#136a67",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "L focus/selected",
+  "fg": "#136a67",
+  "bg": "#e8f5f4",
+  "use": "ui"
+ },
+ {
+  "name": "L text/selected",
+  "fg": "#1b201e",
+  "bg": "#e8f5f4",
+  "use": "text"
+ },
+ {
+  "name": "L neutral role",
+  "fg": "#2a312e",
+  "bg": "#e9edeb",
+  "use": "text"
+ },
+ {
+  "name": "L progress role",
+  "fg": "#194c99",
+  "bg": "#eaf1fd",
+  "use": "text"
+ },
+ {
+  "name": "L attention role",
+  "fg": "#7a4700",
+  "bg": "#fdf3e1",
+  "use": "text"
+ },
+ {
+  "name": "L danger role",
+  "fg": "#8f1c13",
+  "bg": "#fdeceb",
+  "use": "text"
+ },
+ {
+  "name": "L success role",
+  "fg": "#17612f",
+  "bg": "#e9f6ec",
+  "use": "text"
+ },
+ {
+  "name": "L muted role",
+  "fg": "#535d59",
+  "bg": "#f4f6f5",
+  "use": "text"
+ },
+ {
+  "name": "L dot attention/surface",
+  "fg": "#9a5b00",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "L dot neutral/surface",
+  "fg": "#6b7671",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "L dot muted/surface",
+  "fg": "#848f8a",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "L dot success/surface",
+  "fg": "#1e7a3c",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "D text/canvas",
+  "fg": "#e7ecea",
+  "bg": "#0f1311",
+  "use": "text"
+ },
+ {
+  "name": "D muted/surface",
+  "fg": "#a7b1ad",
+  "bg": "#161b19",
+  "use": "text"
+ },
+ {
+  "name": "D muted/subtle",
+  "fg": "#a7b1ad",
+  "bg": "#232a27",
+  "use": "text"
+ },
+ {
+  "name": "D subtle/surface",
+  "fg": "#8d9793",
+  "bg": "#161b19",
+  "use": "text"
+ },
+ {
+  "name": "D subtle/raised",
+  "fg": "#8d9793",
+  "bg": "#1d2321",
+  "use": "text"
+ },
+ {
+  "name": "D link/surface",
+  "fg": "#9fd5d1",
+  "bg": "#161b19",
+  "use": "text"
+ },
+ {
+  "name": "D on-action/primary",
+  "fg": "#111513",
+  "bg": "#6bbab5",
+  "use": "text"
+ },
+ {
+  "name": "D on-danger",
+  "fg": "#111513",
+  "bg": "#f08b82",
+  "use": "text"
+ },
+ {
+  "name": "D disabled",
+  "fg": "#8a948f",
+  "bg": "#232a27",
+  "use": "text"
+ },
+ {
+  "name": "D border-strong/surface",
+  "fg": "#6f7a75",
+  "bg": "#161b19",
+  "use": "ui"
+ },
+ {
+  "name": "D border-strong/canvas",
+  "fg": "#6f7a75",
+  "bg": "#0f1311",
+  "use": "ui"
+ },
+ {
+  "name": "D focus/surface",
+  "fg": "#6bbab5",
+  "bg": "#161b19",
+  "use": "ui"
+ },
+ {
+  "name": "D text/selected",
+  "fg": "#e7ecea",
+  "bg": "#12302e",
+  "use": "text"
+ },
+ {
+  "name": "D neutral role",
+  "fg": "#d4dbd8",
+  "bg": "#252c29",
+  "use": "text"
+ },
+ {
+  "name": "D progress role",
+  "fg": "#a5c4f5",
+  "bg": "#142440",
+  "use": "text"
+ },
+ {
+  "name": "D attention role",
+  "fg": "#f0c879",
+  "bg": "#2e2210",
+  "use": "text"
+ },
+ {
+  "name": "D danger role",
+  "fg": "#f5a59e",
+  "bg": "#331614",
+  "use": "text"
+ },
+ {
+  "name": "D success role",
+  "fg": "#8fd6a1",
+  "bg": "#12291a",
+  "use": "text"
+ },
+ {
+  "name": "D muted role",
+  "fg": "#8f9995",
+  "bg": "#1a1f1d",
+  "use": "text"
+ },
+ {
+  "name": "D dot muted/surface",
+  "fg": "#5f6a65",
+  "bg": "#161b19",
+  "use": "ui"
+ },
+ {
+  "name": "D dot neutral/surface",
+  "fg": "#8d9793",
+  "bg": "#161b19",
+  "use": "ui"
+ }
+]

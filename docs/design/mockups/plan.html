@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="plan" data-crumb="Plan">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Plan</h1>
+      <p class="lede">Billing core is the active wave: 2 tasks may start now, 1 is in flight, 1 waits on a decision.</p>
+    </div>
+    <div class="actions">
+      <div class="segmented" role="group" aria-label="Show waves">
+        <button type="button" aria-pressed="false">All</button>
+        <button type="button" aria-pressed="true">From the active one</button>
+      </div>
+    </div>
+  </div>
+
+  <details class="card card-pad" style="margin-bottom:var(--space-6)">
+    <summary class="t-title" style="cursor:pointer">Why this order</summary>
+    <p class="prose t-dense muted" style="margin-top:var(--space-2)">Billing has to read real tax rates before any notification can quote an amount, so billing core goes first. Notifications follow on that base. Compliance waits for the legal answer on retention and is the only wave that ends on a person.</p>
+  </details>
+
+  <ol class="waves" aria-label="Waves in order">
+    <li class="wave" data-state="closed">
+      <div class="wave-rail" aria-hidden="true"><span class="dot"><svg class="icon"><use href="../icons.svg#check"/></svg></span><span class="line"></span></div>
+      <details class="card">
+        <summary class="card-head" style="cursor:pointer;list-style:none">
+          <h2>Wave 1 · Foundation</h2><span class="badge role-success">closed</span>
+          <span class="end wave-progress"><span class="meter" aria-hidden="true"><span style="width:100%"></span></span>6 of 6</span>
+        </summary>
+      </details>
+    </li>
+
+    <li class="wave" data-state="active" aria-current="step">
+      <div class="wave-rail" aria-hidden="true"><span class="dot">2</span><span class="line"></span></div>
+      <section class="card" aria-labelledby="w2">
+        <div class="card-head">
+          <h2 id="w2">Wave 2 · Billing core</h2><span class="badge role-progress">active</span>
+          <span class="end wave-progress"><span class="meter" aria-hidden="true"><span style="width:43%"></span></span>3 of 7 closed</span>
+        </div>
+        <div class="card-body plan-lanes">
+          <div class="plan-lane">
+            <h4><i data-icon="play"></i>May start now <span class="badge plain role-neutral">2</span></h4>
+            <a class="tcard" href="task.html" data-ready="true">
+              <span class="top"><span class="task-id">HB-38</span><span class="end"><span class="prio role-danger">P0</span></span></span>
+              <span class="title">Stripe test keys never reach the production config</span>
+              <span class="why">2h · either executor</span>
+            </a>
+            <a class="tcard" href="task.html" data-ready="true">
+              <span class="top"><span class="task-id">HB-35</span><span class="end"><span class="prio role-danger">P0</span></span></span>
+              <span class="title">Rate limits are configured per API key</span>
+              <span class="why">1d · <i data-icon="layers"></i>ships together with HB-39</span>
+            </a>
+          </div>
+          <div class="plan-lane">
+            <h4><i data-icon="clock"></i>In flight <span class="badge plain role-neutral">1</span></h4>
+            <a class="tcard" href="task.html">
+              <span class="top"><span class="task-id">HB-23</span><span class="end"><span class="avatar agent" title="agent:claude-1">C1</span><span class="prio role-attention">P1</span></span></span>
+              <span class="title">The billing service reads tax rates from the rates table</span>
+              <span class="why"><span class="badge plain role-progress">in_progress</span> taken 3 h ago</span>
+            </a>
+          </div>
+          <div class="plan-lane">
+            <h4><i data-icon="stop"></i>Waiting <span class="badge plain role-neutral">1</span></h4>
+            <a class="tcard" href="task.html" data-blocked="true">
+              <span class="top"><span class="task-id">HB-27</span><span class="end"><span class="prio role-attention">P1</span></span></span>
+              <span class="title">Refunds over 500 EUR need a second approver</span>
+              <span class="why"><i data-icon="decision"></i>on a decision, 4 days</span>
+            </a>
+          </div>
+        </div>
+        <div class="card-foot t-meta">Closed in this wave: <a class="task-id" href="#">HB-12</a> <a class="task-id" href="#">HB-18</a> <a class="task-id" href="#">HB-21</a></div>
+      </section>
+    </li>
+
+    <li class="wave" data-state="next">
+      <div class="wave-rail" aria-hidden="true"><span class="dot">3</span><span class="line"></span></div>
+      <section class="card" aria-labelledby="w3">
+        <div class="card-head">
+          <h2 id="w3">Wave 3 · Notifications</h2><span class="badge role-neutral">next</span>
+          <span class="end wave-progress"><span class="meter" aria-hidden="true"><span style="width:0"></span></span>0 of 3</span>
+        </div>
+        <div class="card-body plan-lanes">
+          <div class="plan-lane">
+            <h4><i data-icon="stop"></i>Waiting <span class="badge plain role-neutral">3</span></h4>
+            <a class="tcard" href="task.html" data-blocked="true"><span class="top"><span class="task-id">HB-31</span><span class="end"><span class="prio role-attention">P1</span></span></span><span class="title">Failed payments notify the account owner by email</span><span class="why"><i data-icon="arrow-right"></i>after HB-23</span></a>
+            <a class="tcard" href="task.html" data-blocked="true"><span class="top"><span class="task-id">HB-36</span><span class="end"><span class="prio role-neutral">P2</span></span></span><span class="title">Dunning emails stop after the third reminder</span><span class="why"><i data-icon="arrow-right"></i>after HB-31, HB-27</span></a>
+          </div>
+          <div class="plan-lane">
+            <h4><i data-icon="flag"></i>Ahead of the plan <span class="badge plain role-attention">1</span></h4>
+            <a class="tcard" href="task.html"><span class="top"><span class="task-id">HB-34</span><span class="end"><span class="avatar" title="human:maja">MN</span><span class="prio role-neutral">P2</span></span></span><span class="title">The admin audit log is searchable by actor</span><span class="why">in progress while wave 2 is open</span></a>
+          </div>
+        </div>
+      </section>
+    </li>
+
+    <li class="wave" data-state="later">
+      <div class="wave-rail" aria-hidden="true"><span class="dot">4</span></div>
+      <section class="card" aria-labelledby="w4">
+        <div class="card-head">
+          <h2 id="w4">Wave 4 · Compliance</h2>
+          <span class="badge plain role-attention"><i data-icon="user"></i>ends on a person</span>
+          <span class="end wave-progress">0 of 2</span>
+        </div>
+        <div class="card-body t-dense"><a class="task-id" href="#">HB-42</a> Closed accounts are removed after seven years · <a class="task-id" href="#">HB-29</a> Customers download a year of invoices as one ZIP</div>
+      </section>
+    </li>
+  </ol>
+
+  <section class="section card" aria-labelledby="unplanned">
+    <div class="card-head"><h2 id="unplanned">Not in any wave</h2><span class="badge plain role-neutral">2</span><span class="end t-meta">open tasks <code>plan.yaml</code> does not list</span></div>
+    <ul class="tlist">
+      <li><span class="task-id">HB-40</span><a class="task-link" href="task.html">Currency rounding follows ISO 4217 minor units</a><span class="prio role-muted">P3</span></li>
+      <li><span class="task-id">HB-44</span><a class="task-link" href="task.html">Invoice PDFs render in Polish and German</a><span class="prio role-neutral">P2</span></li>
+    </ul>
+    <div class="card-foot t-meta">Plans are written with <code>branchling plan move</code>; moving tasks between waves arrives with that command in the adapter.</div>
+  </section>
+</main>
+</body>
+</html>

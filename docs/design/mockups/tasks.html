@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="tasks" data-crumb="Tasks">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Tasks</h1>
+      <p class="lede">24 open of 38 · URL: <code>?view=tasks&amp;status=pending,blocked&amp;sort=priority</code></p>
+    </div>
+    <div class="actions">
+      <div class="segmented" role="group" aria-label="Show">
+        <button type="button" aria-pressed="true">Open</button>
+        <button type="button" aria-pressed="false">Archived</button>
+        <button type="button" aria-pressed="false">All</button>
+      </div>
+      <a class="btn btn-primary" href="flows.html#new"><i data-icon="plus"></i>New task</a>
+    </div>
+  </div>
+
+  <div class="filters" role="group" aria-label="Filters" style="margin-bottom:var(--space-4)">
+    <div class="search" style="flex:1 1 16rem;max-width:22rem">
+      <i data-icon="search"></i>
+      <label class="visually-hidden" for="tq">Filter by id or title</label>
+      <input id="tq" class="input input-search" type="search" placeholder="Filter by id or title">
+    </div>
+    <button class="chip" type="button" aria-pressed="true" aria-label="Status: pending, blocked. Change">Status: pending, blocked <i data-icon="chevron-down"></i></button>
+    <button class="chip" type="button" aria-pressed="false"><i data-icon="plus"></i>Priority</button>
+    <button class="chip" type="button" aria-pressed="false"><i data-icon="plus"></i>Owner</button>
+    <button class="chip" type="button" aria-pressed="false"><i data-icon="plus"></i>Release</button>
+    <button class="chip" type="button" aria-pressed="false"><i data-icon="plus"></i>Epic</button>
+    <button class="chip" type="button" aria-pressed="false"><i data-icon="plus"></i>Label</button>
+    <button class="btn btn-ghost btn-sm" type="button">Clear</button>
+    <span class="t-meta" style="margin-left:auto">Group by
+      <select class="select" style="width:auto;min-height:var(--control-height-sm);display:inline-block;margin-left:var(--space-1)" aria-label="Group by"><option>Status</option><option>Priority</option><option>Epic</option><option>Owner</option><option>None</option></select>
+    </span>
+  </div>
+
+  <div class="table-wrap hide-sm">
+    <table class="table">
+      <caption class="visually-hidden">Open tasks, filtered by status pending or blocked, sorted by priority</caption>
+      <thead>
+        <tr>
+          <th scope="col"><button type="button">Id</button></th>
+          <th scope="col">Title</th>
+          <th scope="col"><button type="button">Status</button></th>
+          <th scope="col"><button type="button" aria-sort="ascending">Priority <i data-icon="sort"></i></button></th>
+          <th scope="col">Owner</th>
+          <th scope="col">Waits on</th>
+          <th scope="col" class="num"><button type="button">Est.</button></th>
+          <th scope="col"><button type="button">Updated</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="group-row"><td colspan="8">blocked · 4</td></tr>
+        <tr aria-selected="true">
+          <td><a class="task-id" href="task.html">HB-27</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Refunds over 500 EUR need a second approver</a><div class="t-meta">Billing · release 2026.11</div></td>
+          <td><span class="badge role-attention">blocked</span></td>
+          <td><span class="prio role-attention">P1</span></td>
+          <td><span class="who"><span class="avatar agent">C2</span>agent:claude-2</span></td>
+          <td><a class="badge plain role-attention" href="decisions.html"><i data-icon="decision"></i>a decision</a></td>
+          <td class="num">1d</td>
+          <td class="t-meta">4 days ago</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-31</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Failed payments notify the account owner by email</a><div class="t-meta">Notifications</div></td>
+          <td><span class="badge role-attention">blocked</span></td>
+          <td><span class="prio role-attention">P1</span></td>
+          <td class="subtle">—</td>
+          <td><a class="task-id" href="task.html">HB-23</a> <span class="t-meta">in progress</span></td>
+          <td class="num">4h</td>
+          <td class="t-meta">yesterday</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-36</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Dunning emails stop after the third reminder</a><div class="t-meta">Notifications</div></td>
+          <td><span class="badge role-attention">blocked</span></td>
+          <td><span class="prio role-neutral">P2</span></td>
+          <td class="subtle">—</td>
+          <td><a class="task-id" href="task.html">HB-31</a></td>
+          <td class="num">2h</td>
+          <td class="t-meta">3 days ago</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-42</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Closed accounts are removed after seven years</a><div class="t-meta">Compliance · <span class="badge plain role-neutral">gdpr</span></div></td>
+          <td><span class="badge role-attention">blocked</span></td>
+          <td><span class="prio role-neutral">P2</span></td>
+          <td><span class="who"><span class="avatar">MN</span>human:maja</span></td>
+          <td><a class="badge plain role-attention" href="decisions.html"><i data-icon="decision"></i>a decision</a></td>
+          <td class="num subtle">—</td>
+          <td class="t-meta">1 day ago</td>
+        </tr>
+        <tr class="group-row"><td colspan="8">pending · 14</td></tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-38</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Stripe test keys never reach the production config</a><div class="t-meta">Billing · release 2026.11</div></td>
+          <td><span class="badge role-neutral">pending</span></td>
+          <td><span class="prio role-danger">P0</span></td>
+          <td class="subtle">—</td>
+          <td><span class="badge plain role-success"><i data-icon="check"></i>may start</span></td>
+          <td class="num">2h</td>
+          <td class="t-meta">today</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-35</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Rate limits are configured per API key</a><div class="t-meta">Billing · release 2026.11</div></td>
+          <td><span class="badge role-neutral">pending</span></td>
+          <td><span class="prio role-danger">P0</span></td>
+          <td class="subtle">—</td>
+          <td><span class="badge plain role-success"><i data-icon="check"></i>may start</span></td>
+          <td class="num">1d</td>
+          <td class="t-meta">2 days ago</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-29</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Customers download a year of invoices as one ZIP</a><div class="t-meta">Invoices</div></td>
+          <td><span class="badge role-neutral">pending</span></td>
+          <td><span class="prio role-neutral">P2</span></td>
+          <td class="subtle">—</td>
+          <td><span class="t-meta">wave 3</span></td>
+          <td class="num">6h</td>
+          <td class="t-meta">last week</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-44</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Invoice PDFs render in Polish and German</a><div class="t-meta">Invoices · <span class="badge plain role-danger"><i data-icon="alert"></i>status not in config</span></div></td>
+          <td><span class="badge role-neutral">review</span></td>
+          <td><span class="prio role-neutral">P2</span></td>
+          <td class="subtle">—</td>
+          <td><span class="t-meta">unplanned</span></td>
+          <td class="num">1d</td>
+          <td class="t-meta">today</td>
+        </tr>
+        <tr>
+          <td><a class="task-id" href="task.html">HB-40</a></td>
+          <td class="title-cell"><a class="task-link" href="task.html">Currency rounding follows ISO 4217 minor units</a><div class="t-meta">Billing</div></td>
+          <td><span class="badge role-neutral">pending</span></td>
+          <td><span class="prio role-muted">P3</span></td>
+          <td class="subtle">—</td>
+          <td><span class="t-meta">unplanned</span></td>
+          <td class="num">3h</td>
+          <td class="t-meta">2 weeks ago</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Phone: the same rows as a list; nothing is hidden, the columns fold into one meta line -->
+  <div class="card show-sm">
+    <ul class="tlist">
+      <li><span class="task-id">HB-27</span><a class="task-link" href="task.html">Refunds over 500 EUR need a second approver</a><span class="prio role-attention">P1</span>
+        <span class="meta"><span class="badge role-attention">blocked</span><span class="badge plain role-attention">a decision</span><span class="t-meta">4 days ago</span></span></li>
+      <li><span class="task-id">HB-31</span><a class="task-link" href="task.html">Failed payments notify the account owner by email</a><span class="prio role-attention">P1</span>
+        <span class="meta"><span class="badge role-attention">blocked</span><span class="t-meta">waits on HB-23</span></span></li>
+      <li><span class="task-id">HB-38</span><a class="task-link" href="task.html">Stripe test keys never reach the production config</a><span class="prio role-danger">P0</span>
+        <span class="meta"><span class="badge role-neutral">pending</span><span class="badge plain role-success">may start</span></span></li>
+      <li><span class="task-id">HB-35</span><a class="task-link" href="task.html">Rate limits are configured per API key</a><span class="prio role-danger">P0</span>
+        <span class="meta"><span class="badge role-neutral">pending</span><span class="badge plain role-success">may start</span></span></li>
+    </ul>
+  </div>
+
+  <p class="t-meta" style="margin-top:var(--space-3)">18 tasks match; the mockup shows the first 9. Status order and colours come from the backlog's vocabulary (UI-18); until then every status is shown neutral, in the order <code>stats</code> lists them.</p>
+</main>
+</body>
+</html>

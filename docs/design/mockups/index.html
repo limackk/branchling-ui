@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screens · branchling-ui</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .wrap { max-width: 64rem; margin: 0 auto; padding: var(--space-10) var(--space-4); }
+  .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: var(--space-3); margin-top: var(--space-8); padding: 0; list-style: none; }
+  .screens a { display: grid; gap: var(--space-2); height: 100%; padding: var(--space-4); text-decoration: none; color: inherit; }
+  .screens a:hover { background: var(--color-bg-subtle); }
+  .screens .n { font-family: var(--font-mono); font-size: var(--font-size-200); color: var(--color-action-primary); }
+</style>
+</head>
+<body>
+<main class="wrap" id="main">
+  <p class="t-overline">branchling-ui · mockups</p>
+  <h1 style="font-size:2rem;margin-top:var(--space-2)">Screens</h1>
+  <p class="lede muted" style="margin-top:var(--space-2);max-width:60ch">Every screen built only from the <a href="../design-system.html">Ledger design system</a>. Sample data is a fictional backlog, <strong>harbor</strong>. Use the moon/sun button in the top bar to switch schemes; narrow the window to see the phone layout.</p>
+  <ul class="screens">
+    <li class="card"><a href="overview.html"><span class="n">01</span><strong>Overview</strong><span class="t-meta">What needs a person, totals, in flight. <code>stats</code></span></a></li>
+    <li class="card"><a href="tasks.html"><span class="n">02</span><strong>Tasks</strong><span class="t-meta">Filter, sort, group; filters live in the URL. <code>query</code></span></a></li>
+    <li class="card"><a href="task.html"><span class="n">03</span><strong>Task panel</strong><span class="t-meta">Fields, computed facts, history, actions. <code>show</code> <code>log</code> <code>set</code></span></a></li>
+    <li class="card"><a href="plan.html"><span class="n">04</span><strong>Plan</strong><span class="t-meta">Waves, what may start now, unplanned, ahead of plan. <code>plan</code> — UI-3</span></a></li>
+    <li class="card"><a href="releases.html"><span class="n">05</span><strong>Releases</strong><span class="t-meta">Pipeline per target and stage; declare and plan. <code>deploy status</code> <code>declare</code> — UI-4, UI-8</span></a></li>
+    <li class="card"><a href="decisions.html"><span class="n">06</span><strong>Decisions</strong><span class="t-meta">Questions waiting on a person, answered here. <code>ask</code> <code>decide</code> — UI-5</span></a></li>
+    <li class="card"><a href="health.html"><span class="n">07</span><strong>Health</strong><span class="t-meta">Setup checks, release gate, other branches. <code>doctor</code> <code>check</code></span></a></li>
+    <li class="card"><a href="flows.html"><span class="n">08</span><strong>Write flows</strong><span class="t-meta">Edit, take, hand off, done, new, refused release. UI-6</span></a></li>
+    <li class="card"><a href="states.html"><span class="n">09</span><strong>View states</strong><span class="t-meta">Loading, empty, stale, live off, refusal, errors, not found.</span></a></li>
+  </ul>
+</main>
+</body>
+</html>

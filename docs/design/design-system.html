@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger design system</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+  /* Documentation-page layout only. */
+  .doc { display: grid; grid-template-columns: 13rem 1fr; min-height: 100vh; }
+  .toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: var(--space-6) var(--space-4); border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); }
+  .toc ol { list-style: none; padding: 0; margin: var(--space-4) 0 0; display: grid; gap: var(--space-0-5); }
+  .toc a { display: block; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); color: var(--color-text-muted); text-decoration: none; font-size: var(--font-size-300); }
+  .toc a:hover { background: var(--color-bg-hover); color: var(--color-text-default); }
+  .body { padding: var(--space-8) var(--space-8) var(--space-12); max-width: 72rem; min-width: 0; }
+  .body > section { padding-top: var(--space-10); scroll-margin-top: var(--space-4); }
+  .body > section > h2 { font-size: var(--font-size-600); margin-bottom: var(--space-2); }
+  .body > section > p.lead { color: var(--color-text-muted); max-width: var(--prose-max); margin-bottom: var(--space-6); }
+  .body h3 { font-size: var(--font-size-400); margin: var(--space-8) 0 var(--space-3); }
+  .specimen { padding: var(--space-5); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+  .specimen.col { flex-direction: column; align-items: stretch; }
+  .specimen.canvas { background: var(--color-bg-canvas); }
+  .note { font-size: var(--font-size-200); color: var(--color-text-muted); margin-top: var(--space-2); max-width: var(--prose-max); }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: var(--space-2); }
+  .sw { border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg-surface); font-size: var(--font-size-100); }
+  .sw i { display: block; height: 3rem; }
+  .sw span { display: block; padding: var(--space-1) var(--space-2); font-family: var(--font-mono); color: var(--color-text-muted); overflow-wrap: anywhere; }
+  .ramp { display: grid; grid-template-columns: repeat(13, 1fr); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--color-border-default); }
+  .ramp i { height: 2.5rem; }
+  .ramp-label { display: grid; grid-template-columns: repeat(13, 1fr); font-family: var(--font-mono); font-size: 0.625rem; color: var(--color-text-muted); margin-top: var(--space-1); text-align: center; }
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-3); counter-reset: p; }
+  .principles li { list-style: none; padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); counter-increment: p; }
+  .principles li::before { content: counter(p, decimal-leading-zero); font-family: var(--font-mono); font-size: var(--font-size-200); color: var(--color-action-primary); display: block; margin-bottom: var(--space-2); }
+  .principles strong { display: block; margin-bottom: var(--space-1); }
+  .principles ul, .principles { padding: 0; margin: 0; }
+  .typerow { display: grid; grid-template-columns: 11rem 1fr; gap: var(--space-4); align-items: baseline; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border-default); }
+  .typerow code { font-size: var(--font-size-100); color: var(--color-text-muted); }
+  .spacebar { display: grid; grid-template-columns: 5rem 1fr; gap: var(--space-3); align-items: center; font-family: var(--font-mono); font-size: var(--font-size-100); color: var(--color-text-muted); }
+  .spacebar i { display: block; height: 0.75rem; background: var(--color-action-primary); border-radius: 2px; }
+  .roles-table td, .roles-table th { white-space: nowrap; }
+  .dodont { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: var(--space-3); }
+  .dodont > div { padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid; }
+  .do { border-color: var(--role-success-dot) !important; }
+  .dont { border-color: var(--role-danger-dot) !important; }
+  .dodont strong { display: flex; gap: var(--space-1); align-items: center; margin-bottom: var(--space-2); }
+  @media (max-width: 56rem) { .doc { grid-template-columns: 1fr; } .toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--color-border-default); } .toc ol { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); } .body { padding: var(--space-4); } .typerow { grid-template-columns: 1fr; gap: var(--space-1); } }
+</style>
+<script type="module">
+  const root = document.documentElement;
+  try { const saved = localStorage.getItem("theme"); if (saved) root.dataset.theme = saved; } catch {}
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-set-theme]");
+    if (!b) return;
+    const v = b.dataset.setTheme;
+    if (v === "system") delete root.dataset.theme; else root.dataset.theme = v;
+    try { v === "system" ? localStorage.removeItem("theme") : localStorage.setItem("theme", v); } catch {}
+    for (const x of document.querySelectorAll("[data-set-theme]")) x.setAttribute("aria-pressed", String(x === b));
+  });
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="doc">
+  <nav class="toc" aria-label="Contents">
+    <a class="brand" href="#main" style="padding:0"><svg class="icon brand-mark" aria-hidden="true"><use href="icons.svg#brand"/></svg>Ledger</a>
+    <p class="t-caption" style="margin-top:var(--space-1)">branchling-ui design system · v0.1</p>
+    <div class="segmented" role="group" aria-label="Colour scheme" style="margin-top:var(--space-4)">
+      <button type="button" data-set-theme="system" aria-pressed="true">System</button>
+      <button type="button" data-set-theme="light" aria-pressed="false">Light</button>
+      <button type="button" data-set-theme="dark" aria-pressed="false">Dark</button>
+    </div>
+    <ol>
+      <li><a href="#principles">Principles</a></li>
+      <li><a href="#colour">Colour</a></li>
+      <li><a href="#roles">Status roles</a></li>
+      <li><a href="#type">Typography</a></li>
+      <li><a href="#space">Space &amp; layout</a></li>
+      <li><a href="#shape">Shape, depth, motion</a></li>
+      <li><a href="#icons">Icons</a></li>
+      <li><a href="#actions">Buttons</a></li>
+      <li><a href="#forms">Forms</a></li>
+      <li><a href="#data">Data display</a></li>
+      <li><a href="#domain">Backlog components</a></li>
+      <li><a href="#overlays">Overlays</a></li>
+      <li><a href="#states">View states</a></li>
+      <li><a href="#a11y">Accessibility</a></li>
+      <li><a href="mockups/index.html">Screens →</a></li>
+    </ol>
+  </nav>
+
+  <main id="main" class="body" tabindex="-1">
+    <header>
+      <p class="t-overline">branchling-ui</p>
+      <h1 style="font-size:2.25rem;letter-spacing:-0.02em;margin-top:var(--space-2)">Ledger</h1>
+      <p class="lede" style="font-size:var(--font-size-500);color:var(--color-text-muted);max-width:60ch;margin-top:var(--space-3)">A calm, dense interface for a backlog that lives in markdown and is driven by a CLI. It reads like a well-kept ledger: every number traceable, every change signed and explained.</p>
+      <p class="note">Source of truth: <code>docs/design/tokens.css</code>, <code>tokens.json</code>, <code>components.css</code>. Zero dependencies, system fonts, no build step — the same constraints as the app (docs/architecture.md).</p>
+    </header>
+
+    <section id="principles" aria-labelledby="principles-h">
+      <h2 id="principles-h">Principles</h2>
+      <p class="lead">They settle arguments about details. When two good options compete, the one that serves a principle higher on this list wins.</p>
+      <ol class="principles">
+        <li><strong>branchling said it, we show it</strong>Counts, refusals and errors are shown as the CLI gave them. A refusal never looks like an empty list; nothing is derived from guessing at names.</li>
+        <li><strong>Every write names its command</strong>A dialog that changes the backlog shows the exact <code>branchling</code> command it will run and asks for the reason the command requires.</li>
+        <li><strong>What needs a person comes first</strong>Questions waiting on someone, tasks that may start now and failing checks are one glance from anywhere.</li>
+        <li><strong>Label first, colour second</strong>Every status and priority has its text on screen. Colour is a role layered on top, and neutral until the vocabulary arrives from the CLI (UI-18).</li>
+        <li><strong>Dense, never cramped</strong>Fifty rows must scan without fatigue: tabular numbers, mono ids, one accent, quiet borders, generous line height in prose.</li>
+      </ol>
+    </section>
+
+    <section id="colour" aria-labelledby="colour-h">
+      <h2 id="colour-h">Colour</h2>
+      <p class="lead">Neutrals tinted toward moss, one teal ink reserved for what can be clicked, and five roles for meaning. Components use semantic tokens only; light and dark are one <code>light-dark()</code> declaration each.</p>
+      <h3>Primitives</h3>
+      <div class="ramp" aria-hidden="true">
+        <i style="background:var(--n-0)"></i><i style="background:var(--n-25)"></i><i style="background:var(--n-50)"></i><i style="background:var(--n-100)"></i><i style="background:var(--n-200)"></i><i style="background:var(--n-300)"></i><i style="background:var(--n-400)"></i><i style="background:var(--n-500)"></i><i style="background:var(--n-600)"></i><i style="background:var(--n-700)"></i><i style="background:var(--n-800)"></i><i style="background:var(--n-900)"></i><i style="background:var(--n-950)"></i>
+      </div>
+      <div class="ramp-label"><span>0</span><span>25</span><span>50</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><span>600</span><span>700</span><span>800</span><span>900</span><span>950</span></div>
+      <div class="ramp" style="grid-template-columns:repeat(10,1fr);margin-top:var(--space-4)" aria-hidden="true">
+        <i style="background:var(--teal-50)"></i><i style="background:var(--teal-100)"></i><i style="background:var(--teal-200)"></i><i style="background:var(--teal-300)"></i><i style="background:var(--teal-400)"></i><i style="background:var(--teal-500)"></i><i style="background:var(--teal-600)"></i><i style="background:var(--teal-700)"></i><i style="background:var(--teal-800)"></i><i style="background:var(--teal-900)"></i>
+      </div>
+      <div class="ramp-label" style="grid-template-columns:repeat(10,1fr)"><span>teal 50</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500</span><span>600</span><span>700</span><span>800</span><span>900</span></div>
+
+      <h3>Semantic</h3>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--color-bg-canvas)"></i><span>bg-canvas</span></div>
+        <div class="sw"><i style="background:var(--color-bg-surface)"></i><span>bg-surface</span></div>
+        <div class="sw"><i style="background:var(--color-bg-subtle)"></i><span>bg-subtle</span></div>
+        <div class="sw"><i style="background:var(--color-bg-hover)"></i><span>bg-hover</span></div>
+        <div class="sw"><i style="background:var(--color-bg-selected)"></i><span>bg-selected</span></div>
+        <div class="sw"><i style="background:var(--color-bg-inverse)"></i><span>bg-inverse</span></div>
+        <div class="sw"><i style="background:var(--color-text-default)"></i><span>text-default</span></div>
+        <div class="sw"><i style="background:var(--color-text-muted)"></i><span>text-muted</span></div>
+        <div class="sw"><i style="background:var(--color-text-subtle)"></i><span>text-subtle</span></div>
+        <div class="sw"><i style="background:var(--color-text-link)"></i><span>text-link</span></div>
+        <div class="sw"><i style="background:var(--color-border-default)"></i><span>border-default</span></div>
+        <div class="sw"><i style="background:var(--color-border-strong)"></i><span>border-strong</span></div>
+        <div class="sw"><i style="background:var(--color-action-primary)"></i><span>action-primary</span></div>
+        <div class="sw"><i style="background:var(--color-action-primary-hover)"></i><span>…-hover</span></div>
+        <div class="sw"><i style="background:var(--color-action-danger)"></i><span>action-danger</span></div>
+        <div class="sw"><i style="background:var(--color-border-focus)"></i><span>border-focus</span></div>
+      </div>
+      <p class="note">45 text/background and UI pairs are checked in both schemes by <code>contrast-pairs.json</code>; all meet WCAG 2.2 AA (text ≥ 4.5:1, borders, dots and focus ≥ 3:1). <code>border-default</code> is a divider only; any border that marks a control uses <code>border-strong</code>.</p>
+    </section>
+
+    <section id="roles" aria-labelledby="roles-h">
+      <h2 id="roles-h">Status and priority roles</h2>
+      <p class="lead">A role says what a value means to the reader, not which value it is. The view model maps a status or priority to a role; the page maps a role to colour. Until UI-18 brings the vocabulary, every value maps to <code>neutral</code>.</p>
+      <div class="table-wrap">
+        <table class="table roles-table">
+          <caption class="visually-hidden">Roles, their meaning and how they look</caption>
+          <thead><tr><th scope="col">Role</th><th scope="col">Means</th><th scope="col">Status pill</th><th scope="col">Priority tag</th><th scope="col">Likely mapping once UI-18 lands</th></tr></thead>
+          <tbody>
+            <tr><td><code>neutral</code></td><td>nothing to note</td><td><span class="badge role-neutral">pending</span></td><td><span class="prio role-neutral">P2</span></td><td class="muted">open, not started · normal priority · <strong>everything today</strong></td></tr>
+            <tr><td><code>progress</code></td><td>somebody holds it</td><td><span class="badge role-progress">in_progress</span></td><td>—</td><td class="muted">a status that is not terminal and has an owner</td></tr>
+            <tr><td><code>attention</code></td><td>waits on someone</td><td><span class="badge role-attention">blocked</span></td><td><span class="prio role-attention">P1</span></td><td class="muted">a reason-required status · high priority</td></tr>
+            <tr><td><code>danger</code></td><td>act now</td><td><span class="badge role-danger">failing</span></td><td><span class="prio role-danger">P0</span></td><td class="muted">top priority · failed checks</td></tr>
+            <tr><td><code>success</code></td><td>finished well</td><td><span class="badge role-success">done</span></td><td>—</td><td class="muted">archived and not cancelled</td></tr>
+            <tr><td><code>muted</code></td><td>out of the way</td><td><span class="badge role-muted">cancelled</span></td><td><span class="prio role-muted">P3</span></td><td class="muted">archived without finishing · lowest priority</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Shapes back up colour: a status is a round pill with a dot, a priority is a square mono tag, <code>muted</code> has a hollow dot and <code>progress</code> a ringed one, so the meaning survives greyscale and colour blindness.</p>
+    </section>
+
+    <section id="type" aria-labelledby="type-h">
+      <h2 id="type-h">Typography</h2>
+      <p class="lead">The system UI font, because the app may not load anything from outside (CSP <code>default-src 'self'</code>) and it renders every script. Mono for what you would type: ids, SHAs, refs, commands.</p>
+      <div>
+        <div class="typerow"><code>t-stat · 28/600</code><span class="t-stat">146</span></div>
+        <div class="typerow"><code>t-page · 22/620</code><span class="t-page">Decisions</span></div>
+        <div class="typerow"><code>t-section · 18/620</code><span class="t-section">Wave 2 · Billing core</span></div>
+        <div class="typerow"><code>t-title · 16/620</code><span class="t-title">Refunds over 500 EUR need a second approver</span></div>
+        <div class="typerow"><code>t-body · 16/400</code><span class="t-body">Should the second approver be any admin, or only someone with the finance role?</span></div>
+        <div class="typerow"><code>t-dense · 14/400</code><span class="t-dense">Table cells, controls and the task panel use the dense size.</span></div>
+        <div class="typerow"><code>t-meta · 13/400</code><span class="t-meta">asked by agent:claude-2 · 4 days ago</span></div>
+        <div class="typerow"><code>t-overline · 12/620</code><span class="t-overline">May start now</span></div>
+        <div class="typerow"><code>mono · 13</code><span><span class="task-id">HB-27</span> <span class="sha">a41c9e2</span> <code>origin/main</code></span></div>
+      </div>
+    </section>
+
+    <section id="space" aria-labelledby="space-h">
+      <h2 id="space-h">Space and layout</h2>
+      <p class="lead">A 4 px grid. Controls are 28, 36 or 44 px high (44 on touch-first places). Sidebar 240 px, content up to 1280 px, task panel 544 px; below 1024 px the sidebar becomes a drawer, below 640 px tables fold into lists.</p>
+      <div class="stack" style="max-width:32rem">
+        <div class="spacebar"><span>space-1 · 4</span><i style="width:4px"></i></div>
+        <div class="spacebar"><span>space-2 · 8</span><i style="width:8px"></i></div>
+        <div class="spacebar"><span>space-3 · 12</span><i style="width:12px"></i></div>
+        <div class="spacebar"><span>space-4 · 16</span><i style="width:16px"></i></div>
+        <div class="spacebar"><span>space-6 · 24</span><i style="width:24px"></i></div>
+        <div class="spacebar"><span>space-8 · 32</span><i style="width:32px"></i></div>
+        <div class="spacebar"><span>space-12 · 48</span><i style="width:48px"></i></div>
+      </div>
+    </section>
+
+    <section id="shape" aria-labelledby="shape-h">
+      <h2 id="shape-h">Shape, depth, motion</h2>
+      <p class="lead">Radius 4 for tags, 6 for controls, 10 for cards. Three shadows, used only for things that float; in dark mode depth comes from lighter surfaces. Motion is 120–320 ms on transform and opacity, and off under <code>prefers-reduced-motion</code>.</p>
+      <div class="specimen canvas">
+        <div class="card card-pad" style="box-shadow:var(--shadow-1)">shadow-1 · raised</div>
+        <div class="card card-pad" style="box-shadow:var(--shadow-2)">shadow-2 · menu</div>
+        <div class="card card-pad" style="box-shadow:var(--shadow-3)">shadow-3 · dialog</div>
+      </div>
+    </section>
+
+    <section id="icons" aria-labelledby="icons-h">
+      <h2 id="icons-h">Icons</h2>
+      <p class="lead">One sprite (<code>icons.svg</code>), 24 px grid, 1.75 stroke, drawn for this product so nothing is fetched. Always next to a label, or with an <code>aria-label</code> on an icon-only button.</p>
+      <div class="specimen" id="icon-grid"></div>
+      <script type="module">
+        const names = ["brand","overview","tasks","plan","pipeline","decision","health","search","filter","plus","x","check","chevron-right","chevron-down","arrow-right","sort","alert","stop","info","clock","refresh","branch","commit","user","bot","handoff","play","undo","pen","copy","external","sun","moon","menu","more","lock","layers","flag","unplug","doc","terminal","release"];
+        document.getElementById("icon-grid").innerHTML = names.map(n => `<span title="${n}" style="display:grid;justify-items:center;gap:4px;width:5.5rem;font-size:11px;color:var(--color-text-muted)"><svg class="icon icon-lg" style="color:var(--color-text-default)" aria-hidden="true"><use href="icons.svg#${n}"/></svg>${n}</span>`).join("");
+      </script>
+    </section>
+
+    <section id="actions" aria-labelledby="actions-h">
+      <h2 id="actions-h">Buttons</h2>
+      <p class="lead">One primary button per view or dialog: the write the reader came to make. Teal is never used for decoration, so it always means “this does something”.</p>
+      <div class="specimen">
+        <button class="btn btn-primary" type="button">Record decision</button>
+        <button class="btn btn-secondary" type="button"><svg class="icon" aria-hidden="true"><use href="icons.svg#handoff"/></svg>Hand off</button>
+        <button class="btn btn-ghost" type="button">Cancel</button>
+        <button class="btn btn-danger" type="button">Cancel task</button>
+        <button class="btn btn-primary" type="button" disabled>Disabled</button>
+        <button class="btn btn-primary" type="button" aria-busy="true"><span class="spinner" aria-hidden="true"></span>Running</button>
+        <button class="btn btn-secondary btn-icon" type="button" aria-label="More actions"><svg class="icon" aria-hidden="true"><use href="icons.svg#more"/></svg></button>
+      </div>
+      <div class="specimen" style="margin-top:var(--space-2)">
+        <button class="btn btn-primary btn-sm" type="button">Small 28</button>
+        <button class="btn btn-primary" type="button">Medium 36</button>
+        <button class="btn btn-primary btn-lg" type="button">Large 44</button>
+        <span class="t-meta">Focus: tab to any button — 2 px teal ring, 2 px offset.</span>
+      </div>
+      <div class="dodont" style="margin-top:var(--space-4)">
+        <div class="do"><strong><svg class="icon" aria-hidden="true"><use href="icons.svg#check"/></svg>Do</strong><p class="t-dense">Name the button with the verb and the object: “Take HB-38”, “Record decision”, “Declare release”.</p></div>
+        <div class="dont"><strong><svg class="icon" aria-hidden="true"><use href="icons.svg#x"/></svg>Don’t</strong><p class="t-dense">Use “OK”, “Submit” or “Confirm”. The reader should know which command runs without reading the dialog twice.</p></div>
+      </div>
+    </section>
+
+    <section id="forms" aria-labelledby="forms-h">
+      <h2 id="forms-h">Forms</h2>
+      <p class="lead">Labels above fields, hints below, errors in words with an icon and <code>aria-invalid</code>. A reason field appears exactly when the command requires one.</p>
+      <div class="grid grid-2">
+        <div class="specimen col">
+          <div class="field"><label for="f1">Title</label><input id="f1" class="input" value="Invoices show the reverse-charge note" aria-describedby="f1h"><span id="f1h" class="hint">Say what will be true when it is done.</span></div>
+          <div class="field"><label for="f2">Why</label><textarea id="f2" class="textarea" aria-invalid="true" aria-describedby="f2e"></textarea><span id="f2e" class="error"><svg class="icon" aria-hidden="true"><use href="icons.svg#alert"/></svg>A handoff needs a reason.</span></div>
+          <div class="field"><label for="f3">Priority</label><select id="f3" class="select"><option>P1</option></select></div>
+          <div class="field"><label for="f4">Disabled</label><input id="f4" class="input" value="owned by take" disabled></div>
+        </div>
+        <div class="specimen col">
+          <fieldset class="choices"><legend class="t-dense" style="margin-bottom:var(--space-2);font-weight:var(--font-weight-medium)">Decision menu (radio cards)</legend>
+            <label class="choice"><input type="radio" name="dc" checked><span><span class="row"><span class="n">1</span><strong>Finance role only</strong><span class="badge plain role-progress">recommended</span></span><span class="t-meta">Matches the control document.</span></span></label>
+            <label class="choice"><input type="radio" name="dc"><span><span class="row"><span class="n">2</span><strong>Any admin</strong></span><span class="t-meta">Faster on weekends.</span></span></label>
+          </fieldset>
+          <div class="row"><label class="check"><input type="checkbox" checked>Plan for 2026.12</label><label class="check"><input type="checkbox">Dry run</label></div>
+          <div class="segmented" role="group" aria-label="Show"><button type="button" aria-pressed="true">Open</button><button type="button" aria-pressed="false">Archived</button><button type="button" aria-pressed="false">All</button></div>
+          <div class="filters"><button class="chip" type="button" aria-pressed="true">Status: blocked <svg class="icon" aria-hidden="true"><use href="icons.svg#chevron-down"/></svg></button><button class="chip" type="button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="icons.svg#plus"/></svg>Owner</button></div>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="true" type="button">Details</button><button role="tab" aria-selected="false" type="button">Body</button><button role="tab" aria-selected="false" type="button">History</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="data" aria-labelledby="data-h">
+      <h2 id="data-h">Data display</h2>
+      <p class="lead">Stats, distribution bars and tables. Numbers are tabular; a count that depends on the vocabulary is taken from the envelope, never computed from status names.</p>
+      <dl class="stats">
+        <div class="stat"><dt>Open</dt><dd class="t-stat">24</dd><span class="delta">of 38 tasks</span></div>
+        <div class="stat"><dt>Blocked</dt><dd class="t-stat">6</dd><span class="delta">3 on a decision</span></div>
+        <div class="stat"><dt>Open hours</dt><dd class="t-stat">146</dd><span class="delta">2 without estimate</span></div>
+      </dl>
+      <div class="card card-pad" style="margin-top:var(--space-3)">
+        <ul class="dist">
+          <li><span class="badge role-neutral">pending</span><span class="bar" aria-hidden="true"><span style="width:58%"></span></span><span class="n">14</span></li>
+          <li><span class="badge role-attention">blocked</span><span class="bar" aria-hidden="true"><span style="width:25%;--dot:var(--role-attention-dot)"></span></span><span class="n">6</span></li>
+        </ul>
+      </div>
+      <div class="table-wrap" style="margin-top:var(--space-3)">
+        <table class="table"><caption class="visually-hidden">Example task table</caption>
+          <thead><tr><th scope="col">Id</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col" class="num">Est.</th></tr></thead>
+          <tbody>
+            <tr><td><a class="task-id" href="#">HB-38</a></td><td><a class="task-link" href="#">Stripe test keys never reach the production config</a></td><td><span class="badge role-neutral">pending</span></td><td><span class="prio role-danger">P0</span></td><td class="num">2h</td></tr>
+            <tr aria-selected="true"><td><a class="task-id" href="#">HB-27</a></td><td><a class="task-link" href="#">Refunds over 500 EUR need a second approver</a></td><td><span class="badge role-attention">blocked</span></td><td><span class="prio role-attention">P1</span></td><td class="num">1d</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="domain" aria-labelledby="domain-h">
+      <h2 id="domain-h">Backlog components</h2>
+      <p class="lead">The pieces only this product has.</p>
+      <h3>Task id, owner, SHA</h3>
+      <div class="specimen"><a class="task-id" href="#">HB-27</a><span class="who"><span class="avatar">MN</span>human:maja</span><span class="who"><span class="avatar agent">C2</span>agent:claude-2</span><span class="sha">a41c9e2</span></div>
+      <p class="note">People get a round avatar, agents a square one — the history must make plain who acted.</p>
+      <h3>Task card (plan, pipeline)</h3>
+      <div class="specimen canvas" style="align-items:start">
+        <a class="tcard" href="#" data-ready="true" style="width:17rem"><span class="top"><span class="task-id">HB-38</span><span class="end"><span class="prio role-danger">P0</span></span></span><span class="title">Stripe test keys never reach the production config</span><span class="why">may start now · 2h</span></a>
+        <a class="tcard" href="#" data-blocked="true" style="width:17rem;margin-top:0"><span class="top"><span class="task-id">HB-27</span><span class="end"><span class="prio role-attention">P1</span></span></span><span class="title">Refunds over 500 EUR need a second approver</span><span class="why"><svg class="icon" aria-hidden="true"><use href="icons.svg#decision"/></svg>on a decision, 4 days</span></a>
+      </div>
+      <h3>Command preview</h3>
+      <div class="cmd"><code>branchling set HB-27 priority <span class="arg">P2</span> --reason <span class="arg">"Audit moved to January"</span></code></div>
+      <p class="note">Updates as the form changes. It is the promise of principle 2, and it teaches the CLI to the people who use the UI.</p>
+      <h3>Freshness indicator</h3>
+      <div class="specimen"><span class="fresh" data-state="live">Live</span><span class="fresh" data-state="stale">Updating… shown from 12:04</span><span class="fresh" data-state="off">Live updates off</span></div>
+      <h3>Field list with inline edit</h3>
+      <div class="specimen col" style="max-width:32rem">
+        <dl class="kv">
+          <dt>Status</dt><dd><span class="badge role-attention">blocked</span><span class="owned">changed by take, done, handoff, ask</span></dd>
+          <dt>Priority</dt><dd><button class="editable" type="button" aria-label="Priority P1. Edit"><span class="prio role-attention">P1</span><svg class="icon pen" aria-hidden="true"><use href="icons.svg#pen"/></svg></button></dd>
+        </dl>
+      </div>
+      <p class="note">Fields <code>set</code> refuses (status, owner) are not editable and say which commands change them.</p>
+      <h3>History timeline</h3>
+      <div class="specimen col" style="max-width:36rem">
+        <ol class="timeline">
+          <li><span class="mark"><svg class="icon" aria-hidden="true"><use href="icons.svg#pen"/></svg></span><div><p class="what"><strong>human:maja</strong> set priority <span class="prio role-neutral">P2</span> → <span class="prio role-attention">P1</span></p><p class="t-meta">28 Oct, 09:03</p><p class="reason">Finance audit in November depends on it.</p></div></li>
+          <li><span class="mark"><svg class="icon" aria-hidden="true"><use href="icons.svg#play"/></svg></span><div><p class="what"><strong>agent:claude-2</strong> took the task</p><p class="t-meta">27 Oct, 11:40</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="overlays" aria-labelledby="overlays-h">
+      <h2 id="overlays-h">Overlays</h2>
+      <p class="lead">The task panel slides in from the right over the list it came from (its id is in the URL). Dialogs are for one write each. Toasts confirm a write that succeeded and link to the result; failures are never toasts.</p>
+      <div class="specimen canvas" style="align-items:start">
+        <section class="dialog" style="position:static;width:24rem" aria-label="Dialog example">
+          <div class="dialog-head"><h4 class="t-section">Take HB-38?</h4></div>
+          <div class="dialog-body"><p class="t-dense">It will be reserved for you and set in progress.</p><div class="cmd"><code>branchling take HB-38</code></div></div>
+          <div class="dialog-foot"><button class="btn btn-ghost" type="button">Cancel</button><button class="btn btn-primary" type="button">Take it</button></div>
+        </section>
+        <div class="toast"><svg class="icon" aria-hidden="true"><use href="icons.svg#check"/></svg><span>Decision recorded on <strong>HB-12</strong>.</span><button class="btn btn-ghost btn-sm" type="button">View</button></div>
+      </div>
+    </section>
+
+    <section id="states" aria-labelledby="states-h">
+      <h2 id="states-h">View states</h2>
+      <p class="lead">Loading, empty, error, refusal and stale, as in the ui-web skill. A refusal is amber and reads as an answer; an error is red and reads as a fault; stale is blue and keeps the data on screen.</p>
+      <div class="grid grid-2">
+        <div class="state state-refusal" role="note"><div class="state-head"><svg class="icon" aria-hidden="true"><use href="icons.svg#stop"/></svg>branchling declined the request</div><p class="detail">no plan.yaml in this backlog</p></div>
+        <div class="state state-error" role="note"><div class="state-head"><svg class="icon" aria-hidden="true"><use href="icons.svg#alert"/></svg>The installed branchling is not a supported version</div><p class="detail">found 0.1.4; supports 0.2.0 – 0.3.x</p><button class="btn btn-secondary btn-sm" type="button">Try again</button></div>
+        <div class="banner state-stale" role="note"><span class="spinner" aria-hidden="true"></span>Showing the answer from 12:04. A fresh read is on its way.</div>
+        <div class="state state-empty"><p class="t-title" style="color:var(--color-text-default)">No task matches these filters</p><button class="btn btn-secondary btn-sm" type="button">Clear filters</button></div>
+      </div>
+      <p class="note"><a href="mockups/states.html">All states on one screen →</a></p>
+    </section>
+
+    <section id="a11y" aria-labelledby="a11y-h">
+      <h2 id="a11y-h">Accessibility</h2>
+      <p class="lead">WCAG 2.2 AA is the floor, in both schemes.</p>
+      <ul class="prose t-dense">
+        <li>Contrast checked by script for every pair (text 4.5:1, UI 3:1).</li>
+        <li>Real <code>button</code> and <code>a href</code> only; tables with <code>th scope</code>; one <code>h1</code>; a skip link first.</li>
+        <li>Focus ring on everything focusable; the sticky top bar never covers it (<code>scroll-padding-top</code>).</li>
+        <li>Targets at least 24 × 24 px; touch-first places use 44 px controls.</li>
+        <li>The task panel and dialogs trap focus, close with Esc and return focus to what opened them.</li>
+        <li>Live regions: results <code>aria-live="polite"</code>, errors and refusals <code>role="alert"</code>, loading <code>aria-busy</code>.</li>
+        <li>Keyboard: <kbd>/</kbd> find, <kbd>j</kbd>/<kbd>k</kbd> move in lists, <kbd>Enter</kbd> open, <kbd>Esc</kbd> close, <kbd>g</kbd> then <kbd>d</kbd> to Decisions.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+</body>
+</html>

@@ -12,7 +12,9 @@
  * command; when it lands, these functions take the vocabulary as an argument.
  */
 
-export const ROLES = ["neutral"];
+/** The roles a surface must be able to show (src/web/styles.css styles all
+ *  of them). Only "neutral" is handed out until UI-18. */
+export const ROLES = ["neutral", "progress", "attention", "danger", "success", "muted"];
 
 export function statusRole(_status) {
   return "neutral";

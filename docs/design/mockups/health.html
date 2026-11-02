@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Health · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="health" data-crumb="Health">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">Health</h1>
+      <p class="lede">Is the backlog set up correctly, and would a release pass its gate?</p>
+    </div>
+    <div class="actions"><button class="btn btn-secondary" type="button"><i data-icon="refresh"></i>Run again</button></div>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Checks" style="margin-bottom:var(--space-6)">
+    <button role="tab" aria-selected="true" type="button">Setup <span class="badge plain role-danger">1</span></button>
+    <button role="tab" aria-selected="false" type="button">Release gate</button>
+    <button role="tab" aria-selected="false" type="button">Other branches <span class="badge plain role-attention">4</span></button>
+  </div>
+
+  <section class="card" aria-labelledby="doc-h">
+    <div class="card-head"><h2 id="doc-h">Setup checks</h2><span class="end t-meta"><code>branchling doctor</code> · ran 12:04</span></div>
+    <div class="table-wrap" style="border:0;border-radius:0">
+      <table class="table">
+        <caption class="visually-hidden">Setup checks and their results</caption>
+        <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Detail</th></tr></thead>
+        <tbody>
+          <tr><td>vocabulary</td><td><span class="badge role-danger">fails</span></td><td>HB-44 has status <code>review</code>, which <code>statuses:</code> does not list. <a href="task.html">Open HB-44</a></td></tr>
+          <tr><td>hooks</td><td><span class="badge role-attention">warning</span></td><td>The Git gates are not installed. <span class="t-meta">Run <code>branchling hooks install</code> in a terminal.</span></td></tr>
+          <tr><td>configuration</td><td><span class="badge role-success">passes</span></td><td class="muted">config.yaml reads cleanly</td></tr>
+          <tr><td>tree</td><td><span class="badge role-success">passes</span></td><td class="muted">38 task files, ids unique</td></tr>
+          <tr><td>git</td><td><span class="badge role-success">passes</span></td><td class="muted">origin/main reachable</td></tr>
+          <tr><td>views</td><td><span class="badge role-success">passes</span></td><td class="muted">INDEX and boards match the tasks</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section card" aria-labelledby="div-h">
+    <div class="card-head"><h2 id="div-h">Changed on other branches</h2><span class="end t-meta">from <code>show</code>, 3 worktrees scanned</span></div>
+    <ul class="tlist">
+      <li><span class="task-id">HB-27</span><a class="task-link" href="task.html">Refunds over 500 EUR need a second approver</a><span class="badge plain role-attention">divergent</span>
+        <span class="meta t-meta"><i data-icon="branch"></i><code>hb-27-second-approver</code> · status <span class="badge role-progress">in_progress</span> there</span></li>
+      <li><span class="task-id">HB-23</span><a class="task-link" href="task.html">The billing service reads tax rates from the rates table</a><span class="badge plain role-attention">divergent</span>
+        <span class="meta t-meta"><i data-icon="branch"></i><code>hb-23-rates</code> · body rewritten there</span></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

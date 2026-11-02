@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HB-27 · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="tasks" data-crumb="Tasks">
+<main>
+  <div class="page-head"><div><h1 class="t-page">Tasks</h1><p class="lede">URL: <code>?view=tasks&amp;task=HB-27</code> — the panel opens over the list it came from, and Back closes it.</p></div></div>
+  <div class="stack" aria-hidden="true" style="opacity:.5">
+    <span class="skeleton" style="width:60%"></span><span class="skeleton" style="width:80%"></span><span class="skeleton" style="width:70%"></span><span class="skeleton" style="width:75%"></span>
+  </div>
+</main>
+
+<div class="drawer-layer">
+  <div class="drawer-scrim" aria-hidden="true"></div>
+  <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="task-title">
+    <header class="drawer-head">
+      <div class="row">
+        <span class="row"><span class="task-id" style="font-size:var(--font-size-300)">HB-27</span><button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Copy id HB-27"><i data-icon="copy"></i></button></span>
+        <span class="row">
+          <a class="btn btn-ghost btn-sm" href="#">Open as page <i data-icon="external"></i></a>
+          <button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Close task panel"><i data-icon="x"></i></button>
+        </span>
+      </div>
+      <h2 id="task-title" class="t-section">Refunds over 500 EUR need a second approver</h2>
+      <div class="row">
+        <span class="badge role-attention">blocked</span>
+        <span class="prio role-attention">P1</span>
+        <span class="who"><span class="avatar agent">C2</span>agent:claude-2</span>
+        <span class="t-meta">· release 2026.11 · board main</span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Task">
+        <button role="tab" aria-selected="true" type="button">Details</button>
+        <button role="tab" aria-selected="false" type="button">Body</button>
+        <button role="tab" aria-selected="false" type="button">History <span class="badge plain role-neutral">9</span></button>
+      </div>
+    </header>
+
+    <div class="drawer-body">
+      <div class="state state-refusal" role="note">
+        <div class="state-head"><i data-icon="decision"></i>Waiting for a decision · 4 days</div>
+        <p>Should the second approver be any admin, or only someone with the finance role?</p>
+        <p class="t-meta" style="color:inherit">Asked by agent:claude-2 on 29 Oct, 14:12</p>
+        <a class="btn btn-primary btn-sm" href="decisions.html">Answer the question</a>
+      </div>
+
+      <section aria-labelledby="fields">
+        <div class="section-head"><h3 id="fields" class="t-title">Fields</h3><span class="t-meta">edits run <code>branchling set</code></span></div>
+        <dl class="kv">
+          <dt>Status</dt>
+          <dd><span class="badge role-attention">blocked</span><span class="owned">changed by take, done, handoff, ask</span></dd>
+          <dt>Priority</dt>
+          <dd><button class="editable" type="button" aria-label="Priority P1. Edit"><span class="prio role-attention">P1</span><i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Owner</dt>
+          <dd><span class="who"><span class="avatar agent">C2</span>agent:claude-2</span><span class="owned">changed by take, handoff, release</span></dd>
+          <dt>Release</dt>
+          <dd><button class="editable" type="button" aria-label="Release 2026.11. Edit">2026.11<i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Epic</dt>
+          <dd><button class="editable" type="button" aria-label="Epic Billing. Edit">Billing<i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Estimate</dt>
+          <dd><button class="editable" type="button" aria-label="Estimate 1 day, confidence medium. Edit">1d <span class="t-meta">· medium confidence</span><i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Blocked by</dt>
+          <dd><button class="editable" type="button" aria-label="Blocked by: none. Edit"><span class="subtle">none</span><i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Blocks</dt>
+          <dd><a class="task-id" href="#">HB-36</a></dd>
+          <dt>Executor</dt>
+          <dd><button class="editable" type="button" aria-label="Executor: either. Edit"><span class="subtle">either</span><i data-icon="pen" class="pen"></i></button></dd>
+          <dt>Labels</dt>
+          <dd><button class="editable" type="button" aria-label="Labels: payments, risk. Edit"><span class="badge plain role-neutral">payments</span><span class="badge plain role-neutral">risk</span><i data-icon="pen" class="pen"></i></button></dd>
+        </dl>
+      </section>
+
+      <section aria-labelledby="computed">
+        <div class="section-head"><h3 id="computed" class="t-title">What branchling computed</h3><span class="t-meta"><code>show</code></span></div>
+        <div class="stack t-dense">
+          <div class="row"><i data-icon="branch"></i><span>Also changed on <code>ui-27-second-approver</code></span><span class="badge plain role-attention">divergent</span></div>
+          <div class="row"><i data-icon="release"></i><span>Not deployed yet · target <strong>api</strong></span></div>
+          <div class="row subtle"><i data-icon="doc"></i><code>tasks/HB-27-refunds-over-500-eur-need-a-second-approver.md</code></div>
+        </div>
+      </section>
+
+      <section aria-labelledby="hist">
+        <div class="section-head"><h3 id="hist" class="t-title">Latest</h3><a class="t-meta" href="#">Full history</a></div>
+        <ol class="timeline">
+          <li><span class="mark"><i data-icon="decision"></i></span><div><p class="what"><strong>agent:claude-2</strong> asked a question and set <span class="badge role-attention">blocked</span></p><p class="t-meta">29 Oct, 14:12</p><p class="reason">The spec says “an approver”; the finance team’s doc says “finance only”. Cannot pick without a person.</p></div></li>
+          <li><span class="mark"><i data-icon="play"></i></span><div><p class="what"><strong>agent:claude-2</strong> took the task</p><p class="t-meta">29 Oct, 11:40</p></div></li>
+          <li><span class="mark"><i data-icon="pen"></i></span><div><p class="what"><strong>human:maja</strong> set priority <span class="prio role-neutral">P2</span> → <span class="prio role-attention">P1</span></p><p class="t-meta">28 Oct, 09:03</p><p class="reason">Finance audit in November depends on it.</p></div></li>
+        </ol>
+      </section>
+    </div>
+
+    <footer class="drawer-foot">
+      <a class="btn btn-primary" href="decisions.html">Answer the question</a>
+      <a class="btn btn-secondary" href="flows.html#handoff"><i data-icon="handoff"></i>Hand off</a>
+      <a class="btn btn-secondary" href="flows.html#release"><i data-icon="undo"></i>Return to queue</a>
+      <button class="btn btn-ghost btn-icon" type="button" aria-label="More actions"><i data-icon="more"></i></button>
+    </footer>
+  </section>
+</div>
+</body>
+</html>

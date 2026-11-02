@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>View states · harbor</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+<script type="module" src="shell.js"></script>
+</head>
+<body data-page="tasks" data-crumb="View states" data-fresh="stale">
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="t-page">View states</h1>
+      <p class="lede">Every view has these besides “ready”. Titles and details come from <code>src/view-model/states.mjs</code>, so the terminal says the same thing. The top bar here shows the stale indicator.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="align-items:start">
+    <section class="stack" aria-labelledby="s1">
+      <h2 id="s1" class="t-overline">loading · before the first answer</h2>
+      <div class="card card-pad stack" aria-busy="true" role="status">
+        <span class="visually-hidden">Loading tasks…</span>
+        <span class="skeleton" style="width:40%"></span><span class="skeleton" style="width:90%"></span><span class="skeleton" style="width:75%"></span><span class="skeleton" style="width:82%"></span>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s2">
+      <h2 id="s2" class="t-overline">empty · a valid answer with no rows</h2>
+      <div class="state state-empty">
+        <span class="glyph"><i data-icon="tasks" class="icon-lg"></i></span>
+        <p class="t-title" style="color:var(--color-text-default)">No task matches these filters</p>
+        <p>18 open tasks are hidden by <strong>Status: done</strong>.</p>
+        <button class="btn btn-secondary btn-sm" type="button">Clear filters</button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s3">
+      <h2 id="s3" class="t-overline">stale · a remembered answer, fresh one on its way</h2>
+      <div class="banner state-stale" role="status"><span class="spinner" aria-hidden="true"></span><span>Showing the answer from 12:04. A fresh read is on its way.</span></div>
+      <div class="card card-pad t-meta">…the view's data, unchanged…</div>
+    </section>
+
+    <section class="stack" aria-labelledby="s4">
+      <h2 id="s4" class="t-overline">live updates off · watch stream down (UI-7)</h2>
+      <div class="banner state-live-off" role="status"><i data-icon="unplug"></i><span>Live updates stopped. What you see may be out of date.</span><span class="end"><button class="btn btn-secondary btn-sm" type="button">Reconnect</button></span></div>
+    </section>
+
+    <section class="stack" aria-labelledby="s5">
+      <h2 id="s5" class="t-overline">refusal · branchling declined</h2>
+      <div class="state state-refusal" role="alert">
+        <div class="state-head"><i data-icon="stop"></i>branchling declined the request</div>
+        <p class="detail">no plan.yaml in this backlog: write one with `branchling plan move` or `branchling seed`</p>
+        <p class="t-meta" style="color:inherit">Refusal kind: <code>no-plan</code>. This is an answer, not a fault.</p>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s6">
+      <h2 id="s6" class="t-overline">error · contract mismatch (502)</h2>
+      <div class="state state-error" role="alert">
+        <div class="state-head"><i data-icon="alert"></i>The installed branchling is not a supported version</div>
+        <p class="detail">found branchling 0.1.4; this interface supports 0.2.0 – 0.3.x (schema 1)</p>
+        <button class="btn btn-secondary btn-sm" type="button"><i data-icon="refresh"></i>Try again</button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s7">
+      <h2 id="s7" class="t-overline">error · server unreachable</h2>
+      <div class="state state-error" role="alert">
+        <div class="state-head"><i data-icon="unplug"></i>The local server cannot be reached</div>
+        <p>It may have been stopped. Start it again with <code>branchling-ui</code> in the backlog’s repository, then try again.</p>
+        <p class="detail">TypeError: Failed to fetch</p>
+        <button class="btn btn-secondary btn-sm" type="button"><i data-icon="refresh"></i>Try again</button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s8">
+      <h2 id="s8" class="t-overline">error · usage error (500)</h2>
+      <div class="state state-error" role="alert">
+        <div class="state-head"><i data-icon="alert"></i>The interface called branchling incorrectly</div>
+        <p>This is a bug in branchling-ui, not in your backlog.</p>
+        <p class="detail">unknown flag --waves for `plan`</p>
+        <button class="btn btn-secondary btn-sm" type="button"><i data-icon="copy"></i>Copy details for a bug report</button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s9">
+      <h2 id="s9" class="t-overline">not found · unknown task in the URL</h2>
+      <div class="state state-empty">
+        <span class="glyph"><i data-icon="search" class="icon-lg"></i></span>
+        <p class="t-title" style="color:var(--color-text-default)">There is no task HB-99 in this backlog</p>
+        <p>It may have been renumbered or belong to another backlog.</p>
+        <a class="btn btn-secondary btn-sm" href="tasks.html">Back to tasks</a>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="s10">
+      <h2 id="s10" class="t-overline">empty · release view with no deploy targets</h2>
+      <div class="state state-empty">
+        <span class="glyph"><i data-icon="pipeline" class="icon-lg"></i></span>
+        <p class="t-title" style="color:var(--color-text-default)">This project declares no deploy targets</p>
+        <p>The pipeline shows what waits for each stage once a target is declared in config.yaml.</p>
+        <div class="cmd" style="text-align:left"><code>branchling declare deploy_targets api --stage staging=origin/staging --reason "…"</code></div>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>
