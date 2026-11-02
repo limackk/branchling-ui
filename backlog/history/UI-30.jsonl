@@ -1,0 +1,2 @@
+{"id":"01M6EYTWE7C6E8NVRD0ZM0DZXE","ts":"2026-11-02T20:22:26.503Z","task":"UI-30","field":"__created__","from":"","to":"The task panel takes, releases and hands off a task","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6EYV5N9G6WJF7WJ959M0Q1C","ts":"2026-11-02T20:22:35.945Z","task":"UI-30","field":"blocked_by","from":[],"to":["UI-27"],"actor":"agent:claude","source":"set","reason":"The actions live in the task panel"}
