@@ -98,7 +98,7 @@ estimates: [30m, 2h, 1d, 1w]       # [free] suggestions in the viewer
 #   local:<nick>  declared locally, unverified
 #   agent:<name>  an automated write (a hook, CI)
 #   user:<id>     an authenticated account
-actors: [local:me, agent:claude]
+actors: [local:me, agent:claude, agent:codex]
 
 title_max_length: 60               # [free]
 

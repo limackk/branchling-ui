@@ -1,0 +1,4 @@
+{"id":"01M6E64AE3PCAXKM2HWBD97Z65","ts":"2026-11-02T13:10:41.347Z","task":"UI-12","field":"__created__","from":"","to":"Claude and Codex share one agent setup","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E68HYTN2QVKNGZWVS0A4SR","ts":"2026-11-02T13:13:00.122Z","task":"UI-12","field":"status","from":"pending","to":"in_progress","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E68HYT7RPS5ERXZJHYS1XZ","ts":"2026-11-02T13:13:00.122Z","task":"UI-12","field":"owner","from":"unassigned","to":"agent:claude","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E6A30RAK4DAB2GGZCNNZHJ","ts":"2026-11-02T13:13:50.360Z","task":"UI-12","field":"status","from":"in_progress","to":"done","actor":"agent:claude","source":"done","reason":"proven","contractCapability":{"verdict":"undetermined","statement":"whether the run executed a file this task changed was not determined","changedFilesExecuted":[]}}

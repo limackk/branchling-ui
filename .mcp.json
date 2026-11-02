@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "branchling": {
+      "command": "npx",
+      "args": [
+        "--no-install",
+        "branchling",
+        "mcp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "B=\"${BRANCHLING_BIN:-$(git rev-parse --show-toplevel)/node_modules/.bin/branchling}\"; [ -x \"$B\" ] || B=branchling; \"$B\" regen-hook"
+          }
+        ]
+      }
+    ]
+  }
+}

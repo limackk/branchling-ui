@@ -1,0 +1,60 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "B=\"${BRANCHLING_BIN:-$(git rev-parse --show-toplevel)/node_modules/.bin/branchling}\"; [ -x \"$B\" ] || B=branchling; \"$B\" regen-hook"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(node --test test/:*)",
+      "Bash(branchling query:*)",
+      "Bash(npx branchling query:*)",
+      "Bash(branchling stats:*)",
+      "Bash(npx branchling stats:*)",
+      "Bash(branchling plan:*)",
+      "Bash(npx branchling plan:*)",
+      "Bash(branchling show:*)",
+      "Bash(npx branchling show:*)",
+      "Bash(branchling log:*)",
+      "Bash(npx branchling log:*)",
+      "Bash(branchling check:*)",
+      "Bash(npx branchling check:*)",
+      "Bash(branchling doctor:*)",
+      "Bash(npx branchling doctor:*)",
+      "Bash(branchling where:*)",
+      "Bash(npx branchling where:*)",
+      "Bash(branchling board:*)",
+      "Bash(npx branchling board:*)",
+      "Bash(branchling next-id:*)",
+      "Bash(npx branchling next-id:*)",
+      "Bash(branchling instructions:*)",
+      "Bash(npx branchling instructions:*)",
+      "Bash(branchling new:*)",
+      "Bash(npx branchling new:*)",
+      "Bash(branchling build:*)",
+      "Bash(npx branchling build:*)",
+      "Bash(branchling pr-summary:*)",
+      "Bash(npx branchling pr-summary:*)",
+      "Bash(branchling audit:*)",
+      "Bash(npx branchling audit:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git worktree list:*)"
+    ]
+  }
+}
