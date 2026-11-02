@@ -97,6 +97,7 @@ async function load() {
  */
 const VIEW_MODULES = {
   decisions: "/decisions.mjs",
+  health: "/health.mjs",
   plan: "/plan.mjs",
   release: "/release.mjs",
   tasks: "/tasks.mjs",

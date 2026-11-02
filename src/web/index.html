@@ -26,6 +26,7 @@
     <a href="?view=plan" data-view-link="plan"><svg class="icon" aria-hidden="true"><use href="/icons.svg#plan"/></svg><span>Plan</span></a>
     <a href="?view=release" data-view-link="release"><svg class="icon" aria-hidden="true"><use href="/icons.svg#pipeline"/></svg><span>Release</span></a>
     <a href="?view=decisions" data-view-link="decisions"><svg class="icon" aria-hidden="true"><use href="/icons.svg#decision"/></svg><span>Decisions</span></a>
+    <a href="?view=health" data-view-link="health"><svg class="icon" aria-hidden="true"><use href="/icons.svg#health"/></svg><span>Health</span></a>
   </nav>
 </header>
 <main id="main" class="page" tabindex="-1">
@@ -53,6 +54,10 @@
     <div id="decisions">
       <p class="state state-loading">Loading the questions waiting on a decision…</p>
     </div>
+  </section>
+  <section aria-labelledby="health-title" data-view="health" hidden>
+    <h2 id="health-title">Health</h2>
+    <div id="health"></div>
   </section>
 </main>
 </div>

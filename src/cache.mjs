@@ -102,7 +102,7 @@
  * Errors (refusals, usage errors, contract mismatches) are never cached: the
  * entry is dropped when the spawn rejects. Identical reads made while one is
  * in flight under the same fingerprint share that one spawn. `version` passes
- * through uncached. Every other method (`raw` and any future write) passes
+ * through uncached, and so do `doctor` and `check`. Every other method (`raw` and any future write) passes
  * through and bumps a local generation before and after it runs, so a write
  * made through this object can never be answered around.
  */
@@ -118,8 +118,16 @@ export const RACY_MS = 2000;
 /** The adapter methods whose answers are cached. */
 export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus"];
 
-/** Methods that pass through without invalidating: they do not touch a backlog. */
-const PASSTHROUGH_READS = ["version"];
+/**
+ * Methods that pass through without invalidating: they do not change a backlog.
+ * `doctor` and `check` (UI-28) are reads, so treating them as writes would
+ * throw away every other view's cached answer on each health read. They are
+ * not cached either: they judge more than the fingerprint sees (git hooks,
+ * AGENTS.md and docs/ at the repository root, skills in the user's home), so
+ * a hit could be stale. Running both over a fixture was checked to leave
+ * every file under the backlog directory unchanged (branchling 0.2.0).
+ */
+const PASSTHROUGH_READS = ["version", "doctor", "check"];
 
 function git(args, cwd) {
   return new Promise(resolvePromise => {

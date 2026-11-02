@@ -13,9 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  createAdapter, run, quoteWindowsArg, cmdLineForBatch,
+  createAdapter, run, quoteWindowsArg, cmdLineForBatch, VERDICT_KINDS,
   BranchlingRefusal, BranchlingUsageError, ContractMismatch,
 } from "../src/adapter.mjs";
+import { BROKEN_GUARDS, buildBrokenBacklog, buildHealthyBacklog } from "./fixtures/health-backlog.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
@@ -119,4 +120,103 @@ test("every cmd.exe metacharacter in an argument is escaped twice", () => {
   assert.equal(line, 'C:\\npm\\branchling.cmd ^^^"a^^^&b^^^"');
   // Nothing in the argument is left for cmd.exe to act on after two passes.
   assert.doesNotMatch(line.split(" ")[1], /(?<!\^)[&|<>]/);
+});
+
+/* ---------- doctor and check: verdicts, not refusals (UI-28) ---------- */
+
+let healthy;
+let broken;
+
+before(async () => {
+  [healthy, broken] = await Promise.all([
+    buildHealthyBacklog(join(root, "healthy")),
+    buildBrokenBacklog(join(root, "broken")),
+  ]);
+});
+
+const on = fixture => createAdapter({ bin: BIN, dir: fixture.dir, cwd: fixture.root });
+
+/** A fake branchling that prints `envelope` and exits with `code`, whatever it is asked. */
+function fakeBin(name, envelope, code) {
+  const file = join(root, process.platform === "win32" ? `${name}.cmd` : name);
+  if (process.platform === "win32") writeFileSync(file, `@echo ${envelope}\r\n@exit /b ${code}\r\n`);
+  else writeFileSync(file, `#!/bin/sh\necho '${envelope}'\nexit ${code}\n`);
+  chmodSync(file, 0o755);
+  return file;
+}
+
+test("doctor and check pass on a healthy backlog, exit 0, with the keys the view reads", async () => {
+  const doctor = await on(healthy).doctor();
+  assert.equal(doctor.kind, "doctor");
+  assert.equal(doctor.ok, true);
+  assert.equal(typeof doctor.root, "string");
+  assert.equal(typeof doctor.next, "string");
+  assert.ok(doctor.checks.length > 0);
+  for (const key of ["id", "title", "status", "detail", "fix"]) assert.ok(key in doctor.checks[0], `a doctor check has ${key}`);
+  assert.ok(!doctor.checks.some(c => c.status === "error"), "no setup check is an error");
+
+  const check = await on(healthy).check();
+  assert.equal(check.kind, "check");
+  assert.equal(check.ok, true);
+  assert.deepEqual(check.failed, []);
+  for (const key of ["name", "severity", "ok", "exit", "output"]) assert.ok(key in check.guards[0], `a guard has ${key}`);
+  // Guards that judge branchling's own source are not run on another backlog.
+  assert.ok(check.guards.some(g => g.skipped === true), "some guard is reported as not run");
+});
+
+test("a broken backlog's failing doctor is returned as data, not thrown", async () => {
+  // branchling exits 1 here with a normal envelope; json() would call that a refusal.
+  const { code } = await run(BIN, ["doctor", "--dir", broken.dir, "--json"], { cwd: broken.root });
+  assert.equal(code, 1, "positive control: the real exit is non-zero");
+  const doctor = await on(broken).doctor();
+  assert.equal(doctor.ok, false);
+  assert.equal(doctor.refusalKind, undefined);
+  assert.equal(doctor.checks.find(c => c.id === "vocabulary").status, "error");
+});
+
+test("a broken backlog's failing check is returned with the failed guards named", async () => {
+  const { code } = await run(BIN, ["check", "--dir", broken.dir, "--json"], { cwd: broken.root });
+  assert.equal(code, 1, "positive control: the real exit is non-zero");
+  const check = await on(broken).check();
+  assert.equal(check.ok, false);
+  assert.deepEqual(check.failed, BROKEN_GUARDS);
+  for (const name of BROKEN_GUARDS) assert.equal(check.guards.find(g => g.name === name).ok, false, name);
+  assert.equal(check.guards.find(g => g.name === "id-collisions").ok, true, "positive control: an unbroken guard passes");
+});
+
+test("doctor where there is no backlog is a failing verdict naming it, not an error", async () => {
+  const doctor = await createAdapter({ bin: BIN, dir: join(root, "no-such-backlog"), cwd: root }).doctor();
+  assert.equal(doctor.ok, false);
+  assert.equal(doctor.root, null);
+  assert.deepEqual(doctor.checks.map(c => [c.id, c.status]), [["backlog", "error"]]);
+});
+
+test("check where there is no backlog prints no envelope: a usage error (an upstream gap)", async () => {
+  await assert.rejects(createAdapter({ bin: BIN, dir: join(root, "no-such-backlog"), cwd: root }).check(), BranchlingUsageError);
+  // Positive control: the same call on a backlog answers.
+  assert.equal((await on(healthy).check()).kind, "check");
+});
+
+test("only doctor and check may answer a non-zero exit with data", async () => {
+  assert.deepEqual(Object.keys(VERDICT_KINDS).sort(), ["check", "doctor"]);
+  // Every other call keeps the rule: a non-zero exit is a refusal.
+  const stats = fakeBin("fake-stats-exit-1", '{"schemaVersion": 1, "kind": "stats", "ok": false}', 1);
+  await assert.rejects(createAdapter({ bin: stats }).stats(), BranchlingRefusal);
+});
+
+test("a verdict whose ok disagrees with its exit code is a contract mismatch", async () => {
+  const okButFailed = fakeBin("fake-check-ok-exit-1", '{"schemaVersion": 1, "kind": "check", "ok": true, "failed": [], "guards": []}', 1);
+  await assert.rejects(createAdapter({ bin: okButFailed }).check(), ContractMismatch);
+  const failedButZero = fakeBin("fake-doctor-fail-exit-0", '{"schemaVersion": 1, "kind": "doctor", "ok": false, "checks": []}', 0);
+  await assert.rejects(createAdapter({ bin: failedButZero }).doctor(), ContractMismatch);
+  const noneNamed = fakeBin("fake-check-fail-unnamed", '{"schemaVersion": 1, "kind": "check", "ok": false, "failed": [], "guards": []}', 1);
+  await assert.rejects(createAdapter({ bin: noneNamed }).check(), ContractMismatch);
+  // Positive control: the agreeing shape is accepted from the same kind of fake.
+  const agreeing = fakeBin("fake-check-fail-named", '{"schemaVersion": 1, "kind": "check", "ok": false, "failed": ["refs"], "guards": []}', 1);
+  assert.deepEqual((await createAdapter({ bin: agreeing }).check()).failed, ["refs"]);
+});
+
+test("a doctor or check refusal still throws", async () => {
+  const refused = fakeBin("fake-check-refusal", '{"schemaVersion": 1, "kind": "check", "ok": false, "failed": ["refs"], "guards": [], "refusalKind": "no-backlog", "refusal": "no"}', 1);
+  await assert.rejects(createAdapter({ bin: refused }).check(), err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "no-backlog");
 });

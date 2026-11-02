@@ -272,14 +272,57 @@ export function parseDecideOutput(text, code) {
   throw new ContractMismatch(`decide output has an unexpected shape (exit ${code}): ` + text.slice(0, 200));
 }
 
+/**
+ * The kinds whose non-zero exit can be an ANSWER rather than a refusal, and
+ * the exit each one may answer a failing verdict with.
+ *
+ * WHY. Every other command exits non-zero only to refuse, so `json()` throws
+ * BranchlingRefusal for any non-zero exit. `doctor` and `check` are verdicts:
+ * a broken backlog makes them exit non-zero WITH a normal envelope
+ * (`ok: false`, no `refusalKind`), because CI reads the exit code. For a view
+ * that failing verdict is the data it exists to show. So these two kinds,
+ * and only these, accept it (measured on branchling 0.2.0):
+ *
+ *   doctor  exit 1 with `ok: false`: some check has status `error` (also when
+ *           `--dir` is not a backlog: `root: null` and one `backlog` check)
+ *   check   exit = the worst guard's exit (>= 1) with `ok: false` and the
+ *           failing guards' names in `failed`
+ *
+ * `ok` must agree with the exit code either way: `ok: true` with a non-zero
+ * exit, or `ok: false` with exit 0, is a shape this package does not know and
+ * fails as a ContractMismatch rather than being guessed at. A refusal
+ * (`refusalKind` set) still throws.
+ */
+export const VERDICT_KINDS = Object.freeze({
+  doctor: (envelope, code) => code === 1,
+  check: (envelope, code) => code >= 1 && Array.isArray(envelope.failed) && envelope.failed.length > 0,
+});
+
+/** A `doctor` or `check` envelope checked against its exit code (see VERDICT_KINDS). */
+export function acceptVerdict(envelope, code) {
+  const failingExit = VERDICT_KINDS[envelope.kind];
+  if (!failingExit) throw new ContractMismatch(`"${envelope.kind}" is not a verdict kind`);
+  if (envelope.refusalKind) throw new BranchlingRefusal(envelope, code);
+  if (typeof envelope.ok !== "boolean") throw new ContractMismatch(`${envelope.kind} envelope has no boolean ok`);
+  if (envelope.ok === true && code === 0) return envelope;
+  if (envelope.ok === false && code !== 0 && failingExit(envelope, code)) return envelope;
+  throw new ContractMismatch(`${envelope.kind} answered ok: ${envelope.ok} with exit ${code}`);
+}
+
 export function createAdapter({ dir, bin, cwd } = {}) {
   const withDir = args => (dir ? [...args, "--dir", dir] : args);
 
+  /**
+   * `opts.verdict`: the command is one of VERDICT_KINDS, whose failing answer
+   * exits non-zero with a normal envelope. Every other call keeps the rule
+   * that a non-zero exit is a refusal.
+   */
   async function json(args, expectedKind, opts = {}) {
     const full = withDir([...args, "--json"]);
     const { code, stdout, stderr } = await run(bin, full, { cwd, input: opts.input });
     if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
     const envelope = parseEnvelope(stdout, expectedKind);
+    if (opts.verdict) return acceptVerdict(envelope, code);
     if (code !== 0 || envelope.refusalKind) throw new BranchlingRefusal(envelope, code);
     return envelope;
   }
@@ -304,6 +347,19 @@ export function createAdapter({ dir, bin, cwd } = {}) {
     },
 
     stats: () => json(["stats"], "stats"),
+    /**
+     * `doctor`: the setup checks (`ok`, `root`, `next`, `checks[]` of `id`,
+     * `title`, `status`, `detail`, `fix`). A failing verdict is returned, not
+     * thrown (VERDICT_KINDS).
+     */
+    doctor: () => json(["doctor"], "doctor", { verdict: true }),
+    /**
+     * Bare `check`: the release gate (`ok`, `root`, `failed`, `guards[]` of
+     * `name`, `severity`, `ok`, `exit`, `output`, and `skipped` for a guard
+     * not run). A failing verdict is returned, not thrown. No selector is
+     * passed: the bare command is the verdict a release gets.
+     */
+    check: () => json(["check"], "check", { verdict: true }),
     plan: () => json(["plan"], "plan"),
     show: id => json(["show", id], "task-show"),
     /** `log <ID>`; `{ decisions: true }` adds `--decisions` (what is decided and what is still open). */

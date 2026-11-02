@@ -839,3 +839,30 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 .tasks-selection { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-bg-surface); border: 2px solid var(--color-action-primary); border-radius: var(--radius-lg); }
 .tasks-selection p { margin: 0; }
 .tasks-selection .panel-close { margin-top: 0; }
+
+/* ---------- the health view (UI-28), after mockups/health.html ----------
+   A result is its word in a role pill (fails, warning, note, passes, not
+   run): branchling's own verdict, so it earns a role where statuses do not,
+   and the colour repeats the word, never replaces it. Lists, not the
+   mockup's table: a guard's output is several lines and must read at 375 px. */
+.health-head { margin-bottom: var(--space-3); }
+.health-headline { font-weight: var(--font-weight-medium); margin: 0 0 var(--space-4); }
+.health-headline[hidden] { display: none; }
+.health-section + .health-section { margin-top: var(--space-6); }
+.page .health-section h3 { margin: 0; font-size: var(--font-size-400); }
+.health-section .card-body { padding: 0; }
+.health-section .card-body > p, .health-section .card-body > .state { margin: var(--space-4); }
+.health-list li { grid-template-columns: 5.5rem minmax(0, 1fr); align-items: start; }
+.health-result { justify-self: start; }
+.health-name { font-weight: var(--font-weight-medium); overflow-wrap: anywhere; }
+.health-detail { grid-column: 2 / -1; display: grid; gap: var(--space-1); min-width: 0; }
+.health-detail p { margin: 0; overflow-wrap: anywhere; }
+.health-output { margin: 0; font-family: var(--font-mono); font-size: var(--font-size-200); line-height: var(--line-height-dense); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--color-text-default); }
+.health-elsewhere { grid-column: 2 / -1; list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.health-elsewhere li { display: flex; gap: var(--space-1); align-items: center; padding: 0; border: 0; }
+.health-detail code, .health-next code { overflow-wrap: anywhere; white-space: pre-wrap; }
+.health-section .card-body > .health-next { margin-top: 0; }
+@media (max-width: 40rem) {
+  .health-list li { grid-template-columns: minmax(0, 1fr); }
+  .health-detail, .health-elsewhere { grid-column: 1 / -1; }
+}

@@ -18,6 +18,7 @@
  */
 
 import decisions from "./decisions.mjs";
+import health from "./health.mjs";
 import plan from "./plan.mjs";
 import release from "./release.mjs";
 import stats from "./stats.mjs";
@@ -25,6 +26,7 @@ import tasks from "./tasks.mjs";
 
 export const views = [
   decisions,
+  health,
   plan,
   release,
   stats,
