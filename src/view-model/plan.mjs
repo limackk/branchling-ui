@@ -41,8 +41,8 @@ const label = key => String(key).replace(/_/g, " ");
 
 /**
  * The headings and sentences of the plan view, decided once so every surface
- * says the same thing (the web page's own copies of these are the same words;
- * the terminal interface reads them from here).
+ * says the same thing: the web page (src/web/plan.mjs) and the terminal
+ * interface both render them from here and carry no copies of their own.
  */
 export const PLAN_TEXT = {
   title: "Plan",
@@ -50,6 +50,7 @@ export const PLAN_TEXT = {
   stale: "Showing the last known plan; a fresh read is on its way.",
   emptyNoPlan: "This backlog has no execution plan. That is fine: the order is an optional decision.",
   emptyNoWaves: "The plan exists but schedules no waves yet.",
+  // A placeholder in a command is a bare upper-case word (ID, NAME), as in DECISIONS_TEXT's YOUR ANSWER: no `<`, which the model forbids, and it reads the same in a browser and a terminal.
   emptyHint: "A plan is plan.yaml next to the tasks: an ordered list of waves, each a named batch of task ids. Once it has a wave, `branchling plan add ID --wave \"NAME\"` schedules more.",
   asOf: "As of",
   rationale: "Why this order",

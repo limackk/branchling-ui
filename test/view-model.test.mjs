@@ -314,3 +314,62 @@ test("release rows carry the notes the web page lists beside them, and a release
   assert.equal(model.release.countsText, "3 planned · 1 shipped (counted, not listed) · 0 dropped");
   assert.deepEqual(model.release.sections[0].tasks[0].notes, ["pending", "P1"]);
 });
+
+/** A web page module's source, for the "no copies of its own" checks. */
+function webSource(name) {
+  return readFileSync(new URL(`../src/web/${name}`, import.meta.url), "utf8");
+}
+
+/** Every string of `text` that appears in `source` as a quoted literal of its own. */
+function ownCopies(source, text) {
+  const found = [];
+  for (const [key, sentence] of Object.entries(text)) {
+    for (const q of ['"', "'", "`"]) if (source.includes(`${q}${sentence}${q}`)) found.push(key);
+  }
+  return found;
+}
+
+test("the web plan page takes its sentences from PLAN_TEXT, not its own copies", () => {
+  const page = webSource("plan.mjs");
+  // Positive controls: this is the page module, it imports the shared text,
+  // and the check would catch a copy (the sentence is quoted in the model).
+  assert.match(page, /function renderPlan\(/);
+  assert.match(page, /import \{[^}]*\bPLAN_TEXT\b[^}]*\} from "\/view-model\/plan\.mjs"/);
+  assert.deepEqual(ownCopies(readFileSync(new URL("../src/view-model/plan.mjs", import.meta.url), "utf8"), { footnote: PLAN_TEXT.footnote }), ["footnote"]);
+  // The title is the static page's heading, pinned to PLAN_TEXT below.
+  for (const key of Object.keys(PLAN_TEXT).filter(k => k !== "title")) {
+    assert.ok(page.includes(`PLAN_TEXT.${key}`), `plan.mjs renders PLAN_TEXT.${key}`);
+  }
+  assert.deepEqual(ownCopies(page, PLAN_TEXT), [], "plan.mjs carries its own copy of these PLAN_TEXT keys");
+  // The fixed parts of the model's task notes (taskNotes): the page lists task.notes.
+  for (const fixed of ['"in flight"', '"overtaken"', '"not in this backlog"', "`waits on ${", "`after ${", "`unblocks ${", "`Wave ${", "`Done as one"]) {
+    assert.ok(!page.includes(fixed), `plan.mjs carries its own ${fixed}`);
+  }
+});
+
+test("the web release page takes its sentences from RELEASE_TEXT, not its own copies", () => {
+  const page = webSource("release.mjs");
+  assert.match(page, /function renderRelease\(/);
+  assert.match(page, /import \{[^}]*\bRELEASE_TEXT\b[^}]*\} from "\/view-model\/release\.mjs"/);
+  for (const key of Object.keys(RELEASE_TEXT).filter(k => k !== "title")) {
+    assert.ok(page.includes(`RELEASE_TEXT.${key}`), `release.mjs renders RELEASE_TEXT.${key}`);
+  }
+  assert.deepEqual(ownCopies(page, RELEASE_TEXT), [], "release.mjs carries its own copy of these RELEASE_TEXT keys");
+  // The row notes and the counts sentence are the model's (notes, countsText).
+  for (const fixed of ["`Release ${", " planned · ", "shipped (", '"unknown"']) {
+    assert.ok(!page.includes(fixed), `release.mjs carries its own ${fixed}`);
+  }
+});
+
+test("the static page's plan and release placeholders match PLAN_TEXT and RELEASE_TEXT", () => {
+  const html = webSource("index.html");
+  assert.equal(html.match(/<h2 id="plan-title">([^<]*)<\/h2>/)[1], PLAN_TEXT.title);
+  assert.equal(html.match(/<div id="plan"[^>]*>\s*<p class="state state-loading">([^<]*)<\/p>/)[1], PLAN_TEXT.loading);
+  assert.equal(html.match(/<h2 id="release-title">([^<]*)<\/h2>/)[1], RELEASE_TEXT.title);
+  assert.equal(html.match(/<div id="release"[^>]*>\s*<p class="state state-loading">([^<]*)<\/p>/)[1], RELEASE_TEXT.loading);
+});
+
+test("PLAN_TEXT shows a command's placeholders as bare upper-case words on both surfaces", () => {
+  assert.ok(PLAN_TEXT.emptyHint.includes('`branchling plan add ID --wave "NAME"`'));
+  for (const name of ["plan.mjs", "release.mjs"]) assert.doesNotMatch(webSource(name), /plan add <|--wave \\?"</);
+});

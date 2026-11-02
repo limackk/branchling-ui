@@ -9,7 +9,7 @@
  * link shows the same screen.
  */
 
-import { releaseModel } from "/view-model/release.mjs";
+import { RELEASE_TEXT, releaseModel } from "/view-model/release.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 
 function el(tag, props = {}, children = []) {
@@ -46,7 +46,7 @@ const knownTargets = new Set();
 function renderState(model, retry) {
   const box = el("div", { class: `state state-${model.state}`, role: model.state === "loading" ? "status" : "alert" });
   if (model.state === "loading") {
-    box.append(el("p", { text: "Loading the release pipeline…" }));
+    box.append(el("p", { text: RELEASE_TEXT.loading }));
     return box;
   }
   box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
@@ -136,7 +136,7 @@ function syncControls(current) {
 
 function refsTable(model) {
   const rows = [el("tr", {}, [
-    el("th", { scope: "row", text: "trunk" }),
+    el("th", { scope: "row", text: RELEASE_TEXT.trunk }),
     el("td", { text: model.trunk.spec }),
     el("td", { class: "sha", text: model.trunk.shaLabel }),
     el("td", { text: model.trunk.sourceText || "" }),
@@ -150,7 +150,7 @@ function refsTable(model) {
     ]));
   }
   return el("table", { class: "release-refs" }, [
-    el("caption", { text: "Computed from these refs" }),
+    el("caption", { text: RELEASE_TEXT.refs }),
     el("thead", {}, [el("tr", {}, [
       el("th", { scope: "col", text: "Stage" }),
       el("th", { scope: "col", text: "Ref" }),
@@ -162,12 +162,10 @@ function refsTable(model) {
 }
 
 function taskItem(task) {
-  const meta = [task.statusLabel + (task.closed ? ` ${task.closed}` : ""), task.waitedLabel];
-  if (task.unknown) meta.push("unknown");
   return el("li", {}, [
     el("span", { class: "task-id", text: task.id }), " ",
     el("span", { text: task.title }), " ",
-    el("span", { class: "task-meta", text: meta.join(" · ") }),
+    el("span", { class: "task-meta", text: task.notes.join(" · ") }),
   ]);
 }
 
@@ -192,8 +190,8 @@ function laneNode(lane) {
 
 function releaseNode(rel) {
   const parts = [
-    el("h3", { text: `Release ${rel.name}` }),
-    el("p", { text: `${rel.planned} planned · ${rel.shipped} shipped (${rel.shippedNote}) · ${rel.dropped} dropped` }),
+    el("h3", { text: `${RELEASE_TEXT.release} ${rel.name}` }),
+    el("p", { text: rel.countsText }),
   ];
   if (rel.currentText) parts.push(el("p", { class: "bucket-note", text: rel.currentText }));
   if (rel.shippedAtText) parts.push(el("p", { class: rel.shippedAt && !rel.shippedAt.resolved ? "bucket-note unknown" : "bucket-note", text: rel.shippedAtText }));
@@ -206,7 +204,7 @@ function releaseNode(rel) {
       parts.push(el("ul", { class: "bucket-tasks" }, sec.tasks.map(task => el("li", {}, [
         el("span", { class: "task-id", text: task.id }), " ",
         el("span", { text: task.title }), " ",
-        el("span", { class: "task-meta", text: [task.statusLabel, task.priority, ...task.details].filter(Boolean).join(" · ") }),
+        el("span", { class: "task-meta", text: task.notes.join(" · ") }),
       ]))));
     }
   }
@@ -216,7 +214,7 @@ function releaseNode(rel) {
 function renderRelease(model) {
   const parts = [];
   if (model.freshness.stale) {
-    parts.push(el("p", { class: "state state-stale", role: "status", text: "Showing the last known release pipeline; a fresh read is on its way." }));
+    parts.push(el("p", { class: "state state-stale", role: "status", text: RELEASE_TEXT.stale }));
   }
   if (model.state === "empty") {
     parts.push(el("div", { class: "state state-empty" }, [

@@ -11,7 +11,7 @@
  * what the plan has been overtaken by, and how much is outside it.
  */
 
-import { planModel } from "/view-model/plan.mjs";
+import { PLAN_TEXT, planModel } from "/view-model/plan.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 
 function el(tag, props = {}, children = []) {
@@ -63,10 +63,10 @@ function shapeError(view, err) {
   return fromApiError(view, { error: { type: "contract-mismatch", message: err.message } });
 }
 
-function renderState(model, retry, what) {
+function renderState(model, retry, loadingText) {
   const box = el("div", { class: `state state-${model.state}`, role: model.state === "loading" ? "status" : "alert" });
   if (model.state === "loading") {
-    box.append(el("p", { text: `Loading ${what}…` }));
+    box.append(el("p", { text: loadingText }));
     return box;
   }
   box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
@@ -81,20 +81,12 @@ function renderState(model, retry, what) {
 
 /* ---------- the plan ---------- */
 
-function edgeText(edge) {
-  if (edge.open === true) return `waits on ${edge.id}`;
-  if (edge.open === false) return `after ${edge.id} (closed)`;
-  return `after ${edge.id}`;
-}
+/** Where a task is listed, said as the terminal says it (`wave N`). */
+const inWave = t => [`${PLAN_TEXT.wave.toLowerCase()} ${t.waveNumber}`];
 
 function taskItem(task, extra = []) {
-  const notes = [];
-  if (task.inFlight) notes.push("in flight");
-  if (task.overtaken) notes.push("overtaken");
-  if (task.known === false) notes.push("not in this backlog");
-  for (const edge of task.waitsOn) notes.push(edgeText(edge));
-  if (task.unblocks.length) notes.push(`unblocks ${task.unblocks.join(", ")}`);
-  notes.push(...extra);
+  // The model's notes (taskNotes), so the page and the terminal list the same ones.
+  const notes = [...task.notes, ...extra];
   return el("li", { class: "task" }, [
     el("a", { class: "task-id", href: taskHref(task.id), "data-task": task.id, text: task.id }),
     task.title ? el("span", { class: "task-title", text: task.title }) : null,
@@ -124,17 +116,17 @@ function renderWave(wave) {
   fill.style.width = wave.total ? `${Math.round((wave.closed / wave.total) * 100)}%` : "0";
   const head = el("summary", { class: "card-head wave-head" }, [
     icon("chevron-right", "icon wave-chevron"),
-    el("span", { class: "wave-number", text: `Wave ${wave.number}` }),
+    el("span", { class: "wave-number", text: `${PLAN_TEXT.wave} ${wave.number}` }),
     el("span", { class: "wave-name", text: wave.name }),
     el("span", { class: `badge role-neutral wave-state wave-state-${wave.state}`, text: wave.stateLabel }),
     el("span", { class: "end wave-progress" }, [el("span", { class: "meter", "aria-hidden": "true" }, [fill]), el("span", { text: wave.progressLabel })]),
   ]);
   const body = [];
   if (wave.groups.length) {
-    for (const group of wave.groups) body.push(el("p", { class: "quiet", text: `Done as one: ${group.join(", ")}` }));
+    for (const group of wave.groups) body.push(el("p", { class: "quiet", text: `${PLAN_TEXT.together}: ${group.join(", ")}` }));
   }
-  if (wave.endsOnHuman) body.push(el("p", { class: "quiet", text: "This wave ends on a person: an unattended run cannot close it on its own." }));
-  body.push(taskList(wave.tasks, "This wave schedules no tasks."));
+  if (wave.endsOnHuman) body.push(el("p", { class: "quiet", text: PLAN_TEXT.endsOnHuman }));
+  body.push(taskList(wave.tasks, PLAN_TEXT.noTasksInWave));
   const rail = el("div", { class: "wave-rail", "aria-hidden": "true" }, [
     el("span", { class: "dot" }, [wave.state === "closed" ? icon("check") : document.createTextNode(String(wave.number))]),
     el("span", { class: "line" }),
@@ -148,14 +140,12 @@ function renderWave(wave) {
 function renderPlan(model) {
   const parts = [];
   if (model.freshness.stale) {
-    parts.push(el("p", { class: "state state-stale", role: "status", text: "Showing the last known plan; a fresh read is on its way." }));
+    parts.push(el("p", { class: "state state-stale", role: "status", text: PLAN_TEXT.stale }));
   }
   if (model.state === "empty") {
     parts.push(el("div", { class: "state state-empty" }, [
-      el("p", { text: model.emptyReason === "no-plan"
-        ? "This backlog has no execution plan. That is fine: the order is an optional decision."
-        : "The plan exists but schedules no waves yet." }),
-      el("p", { text: "A plan is plan.yaml next to the tasks: an ordered list of waves, each a named batch of task ids. Once it has a wave, `branchling plan add <ID> --wave \"<name>\"` schedules more." }),
+      el("p", { text: model.emptyReason === "no-plan" ? PLAN_TEXT.emptyNoPlan : PLAN_TEXT.emptyNoWaves }),
+      el("p", { text: PLAN_TEXT.emptyHint }),
     ]));
     return parts;
   }
@@ -163,49 +153,49 @@ function renderPlan(model) {
   parts.push(el("p", { class: "plan-summary", text: model.summary.parts.join(" · ") }));
   if (model.freshness.fetchedAt) {
     const at = new Date(model.freshness.fetchedAt);
-    parts.push(el("p", { class: "quiet" }, [document.createTextNode("As of "), el("time", { datetime: model.freshness.fetchedAt, text: at.toLocaleString() })]));
+    parts.push(el("p", { class: "quiet" }, [document.createTextNode(`${PLAN_TEXT.asOf} `), el("time", { datetime: model.freshness.fetchedAt, text: at.toLocaleString() })]));
   }
   if (model.rationale) {
     parts.push(el("figure", { class: "card card-pad plan-rationale" }, [
-      el("figcaption", { text: "Why this order" }),
+      el("figcaption", { text: PLAN_TEXT.rationale }),
       el("blockquote", {}, [el("p", { text: model.rationale })]),
     ]));
   }
   if (!model.dependenciesKnown) {
-    parts.push(el("p", { class: "state state-stale", role: "status", text: "Titles and dependencies could not be read; tasks are shown by id." }));
+    parts.push(el("p", { class: "state state-stale", role: "status", text: PLAN_TEXT.dependenciesUnknown }));
   }
 
-  parts.push(region("plan-inflight", `In flight (${model.inFlight.length})`, [
-    taskList(model.inFlight, "Nothing in the plan is in flight.", t => [`wave ${t.waveNumber}`]),
+  parts.push(region("plan-inflight", `${PLAN_TEXT.inFlight} (${model.inFlight.length})`, [
+    taskList(model.inFlight, PLAN_TEXT.noneInFlight, inWave),
   ]));
 
   const startable = model.mayStartNow.length
     ? el("ul", { class: "tasks" }, model.mayStartNow.map(item => {
-      if (!item.together) return taskItem(item.tasks[0], item.waitsOnHuman ? ["waits on a person"] : []);
+      if (!item.together) return taskItem(item.tasks[0], item.waitsOnHuman ? [PLAN_TEXT.waitsOnHuman] : []);
       return el("li", { class: "group" }, [
-        el("p", { class: "quiet", text: `Done as one${item.waitsOnHuman ? " · waits on a person" : ""}` }),
+        el("p", { class: "quiet", text: [PLAN_TEXT.together, ...(item.waitsOnHuman ? [PLAN_TEXT.waitsOnHuman] : [])].join(" · ") }),
         el("ul", { class: "tasks" }, item.tasks.map(t => taskItem(t))),
       ]);
     }))
-    : el("p", { class: "quiet", text: model.summary.finished ? "Every wave is closed; the plan is finished." : "Nothing in the active wave may start now." });
-  parts.push(region("plan-next", "May start now", [startable]));
+    : el("p", { class: "quiet", text: model.summary.finished ? PLAN_TEXT.finished : PLAN_TEXT.noneStartable });
+  parts.push(region("plan-next", PLAN_TEXT.mayStartNow, [startable]));
 
-  parts.push(region("plan-waves", `Waves (${model.waves.length})`, [
+  parts.push(region("plan-waves", `${PLAN_TEXT.waves} (${model.waves.length})`, [
     el("ol", { class: "waves" }, model.waves.map(renderWave)),
   ], { bare: true }));
 
   if (model.overtaken.length) {
-    parts.push(region("plan-overtaken", `Overtaken (${model.overtaken.length})`, [
-      el("p", { class: "quiet", text: "Closed in a wave after the active one: the order may want reshuffling." }),
-      taskList(model.overtaken, "", t => [`wave ${t.waveNumber}`]),
+    parts.push(region("plan-overtaken", `${PLAN_TEXT.overtaken} (${model.overtaken.length})`, [
+      el("p", { class: "quiet", text: PLAN_TEXT.overtakenNote }),
+      taskList(model.overtaken, "", inWave),
     ]));
   }
 
-  parts.push(region("plan-unplanned", `Unplanned (${model.unplanned.count})`, [
+  parts.push(region("plan-unplanned", `${PLAN_TEXT.unplanned} (${model.unplanned.count})`, [
     el("p", { class: "plan-measure", text: model.unplanned.sentence }),
-    taskList(model.unplanned.tasks, "Every open task is in the plan."),
+    taskList(model.unplanned.tasks, PLAN_TEXT.allPlanned),
   ]));
-  parts.push(el("p", { class: "quiet", text: "The plan orders; it does not block. Status stays the only truth about what has happened." }));
+  parts.push(el("p", { class: "quiet", text: PLAN_TEXT.footnote }));
   return parts;
 }
 
@@ -216,7 +206,7 @@ export function start(section) {
   const target = section.querySelector("#plan");
   async function load() {
     target.setAttribute("aria-busy", "true");
-    target.replaceChildren(renderState(loadingState("plan"), null, "the plan"));
+    target.replaceChildren(renderState(loadingState("plan"), null, PLAN_TEXT.loading));
     const [plan, tasks] = await Promise.all([getJson("/api/plan"), getJson("/api/plan/tasks")]);
     let model;
     if (!plan.ok) model = failureModel("plan", plan);
@@ -229,7 +219,7 @@ export function start(section) {
       }
     }
     if (model.root) document.getElementById("root").textContent = model.root;
-    target.replaceChildren(...(model.state === "ready" || model.state === "empty" ? renderPlan(model) : [renderState(model, load, "the plan")]));
+    target.replaceChildren(...(model.state === "ready" || model.state === "empty" ? renderPlan(model) : [renderState(model, load, PLAN_TEXT.loading)]));
     target.setAttribute("aria-busy", "false");
   }
 
