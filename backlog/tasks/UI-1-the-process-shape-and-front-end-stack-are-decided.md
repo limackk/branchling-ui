@@ -8,8 +8,8 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P1
-status: pending
-owner: unassigned
+status: done
+owner: agent:loop-a
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
@@ -55,7 +55,7 @@ One `branchling` call costs about 500 ms (measured for UI-2). A single stats pag
 
 ## Acceptance criteria
 
-- [ ] The server starts on 127.0.0.1, serves the page, and its stats endpoint returns the adapter's stats envelope for a fixture backlog. [proof: server-smoke]
-- [ ] The server refuses a request with a foreign `Host` header. [proof: server-guard]
-- [ ] The stats view model is plain data built from a stats envelope, with no markup or escape codes in it. [proof: view-model]
-- [ ] The web conventions are a skill and the shared view model is recorded in docs/architecture.md. [proof: web-skill]
+- [x] The server starts on 127.0.0.1, serves the page, and its stats endpoint returns the adapter's stats envelope for a fixture backlog. [proof: server-smoke]
+- [x] The server refuses a request with a foreign `Host` header. [proof: server-guard]
+- [x] The stats view model is plain data built from a stats envelope, with no markup or escape codes in it. [proof: view-model]
+- [x] The web conventions are a skill and the shared view model is recorded in docs/architecture.md. [proof: web-skill]

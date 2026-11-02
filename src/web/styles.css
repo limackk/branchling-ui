@@ -1,0 +1,90 @@
+/* Design tokens. Light by default, dark under prefers-color-scheme. Views use
+   only these custom properties, never a literal colour. Contrast of every
+   text/background pair meets WCAG 2.2 AA (4.5:1 for text, 3:1 for borders). */
+:root {
+  --bg: #ffffff;
+  --surface: #f5f6f8;
+  --text: #1b1f24;
+  --text-muted: #4b5563;
+  --border: #8a94a3;
+  --focus: #1d4ed8;
+  --accent: #1d4ed8;
+
+  /* Colour roles. Every status and priority is "neutral" until UI-18 brings
+     the vocabulary from the CLI; new roles are added here and in
+     src/view-model/roles.mjs together. */
+  --role-neutral-bg: #e8eaee;
+  --role-neutral-fg: #1b1f24;
+
+  --state-error-bg: #fdecec;
+  --state-error-fg: #8a1c1c;
+  --state-refusal-bg: #fff4e0;
+  --state-refusal-fg: #6b4300;
+  --state-stale-bg: #eef2ff;
+  --state-stale-fg: #283a8c;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --radius: 6px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --surface: #1b2027;
+    --text: #e6e9ee;
+    --text-muted: #a9b1bd;
+    --border: #6b7584;
+    --focus: #8ab4ff;
+    --accent: #8ab4ff;
+    --role-neutral-bg: #2a313b;
+    --role-neutral-fg: #e6e9ee;
+    --state-error-bg: #3a1717;
+    --state-error-fg: #ffc9c9;
+    --state-refusal-bg: #3a2a0c;
+    --state-refusal-fg: #ffdca3;
+    --state-stale-bg: #1d2547;
+    --state-stale-fg: #c9d4ff;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: var(--space-3); top: var(--space-3); background: var(--bg); padding: var(--space-2); }
+
+.bar { padding: var(--space-3); border-bottom: 1px solid var(--border); }
+.bar h1 { margin: 0; font-size: 1.25rem; }
+.root { margin: 0; color: var(--text-muted); font-size: 0.875rem; overflow-wrap: anywhere; }
+main { padding: var(--space-3); max-width: 60rem; }
+h2 { font-size: 1.125rem; }
+h3 { font-size: 1rem; margin-top: var(--space-4); }
+
+.totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: var(--space-2); padding: 0; margin: 0; }
+.totals div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); }
+.totals dt { color: var(--text-muted); font-size: 0.875rem; }
+.totals dd { margin: 0; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+
+table { border-collapse: collapse; min-width: 16rem; }
+th, td { text-align: left; padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.role { display: inline-block; padding: 0 var(--space-2); border-radius: var(--radius); }
+.role-neutral { background: var(--role-neutral-bg); color: var(--role-neutral-fg); }
+
+.state { padding: var(--space-3); border-radius: var(--radius); background: var(--surface); }
+.state h3 { margin: 0 0 var(--space-1); }
+.state p { margin: 0; }
+.state-error { background: var(--state-error-bg); color: var(--state-error-fg); }
+.state-refusal { background: var(--state-refusal-bg); color: var(--state-refusal-fg); }
+.state-stale { background: var(--state-stale-bg); color: var(--state-stale-fg); margin-bottom: var(--space-3); }
+
+button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-3); cursor: pointer; margin-top: var(--space-2); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

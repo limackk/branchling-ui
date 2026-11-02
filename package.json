@@ -10,6 +10,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "start": "node bin/branchling-ui.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
