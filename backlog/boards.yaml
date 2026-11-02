@@ -1,0 +1,14 @@
+# Boards — the backlog PARTITION. A CLOSED vocabulary: every task has exactly
+# one `board:`, and an unknown slug fails the build.
+#
+# A board is WHICH CONTEXT the work belongs to; an epic is WHAT is being
+# delivered and is free text inside a board. They do not replace one another.
+
+default: main
+
+boards:
+  - slug: main
+    name: "Main"
+    description: >-
+      The default board. A task with no `board:` that matches no routing rule
+      lands here.

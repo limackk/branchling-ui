@@ -1,0 +1,145 @@
+# The backlog configuration — this project's vocabularies.
+# The code knows the SHAPE of a field, this file knows the VALUES. An unknown key
+# fails the build.
+#
+# Next to every key stands the COST of changing it, because it is not the same:
+#   [free]       change it whenever you like, nothing in the tree has to agree
+#   [tree]       existing tasks may hold values outside the new vocabulary;
+#                after changing it run `branchling doctor`, which will say which
+#   [migration]  changing it is not enough on its own, see the comment at the key
+
+project_name: "branchling-ui"          # [free]
+
+# [migration] The task number prefix. Changing this line WITHOUT renumbering the
+# tree makes the tool unable to see its own tasks — the command for that is
+# `branchling migrate-prefix --to <NEW>` (with `--dry-run` first).
+# On an EMPTY backlog the change is free: correct this line and you are done.
+task_id_prefix: UI
+
+# [tree] The task statuses. The order matters — it is the sort order of the
+# views. Changing this list? Correct the two below TOGETHER with it: both must
+# contain only values from here, otherwise the build fails.
+statuses: [pending, in_progress, blocked, done, cancelled]
+# Which statuses fall out of the INDEX into archive/ and stop counting as queue.
+archived_statuses: [done, cancelled]
+dashboard_open_statuses: [pending, in_progress, blocked]
+
+# [tree] Statuses nobody may ENTER without saying why — writing commands refuse
+# rather than ask. It is also what an unattended dispatcher will not hand out:
+# entering one of these was somebody's decision, and an agent must not undo it
+# silently. Declared here rather than left out, because with the key absent it
+# resolves to `archived_statuses` and `blocked` would then be dispatched to
+# agents by default, which is not what the documentation says and not what
+# `branchling run` can work with — it parks a task it could not finish in this
+# very status. Two values are reserved and are never typed by hand:
+# `unknown` (a change the tool observed rather than made) and `proven`
+# (a verification run).
+reason_required_statuses: [blocked, cancelled]
+
+priorities: [P0, P1, P2, P3]       # [tree]
+
+# [tree] How hard `branchling check` judges a task whose acceptance criteria do not
+# name the `verification:` entry that proves them (`[proof: <id>]`):
+#   off      say nothing
+#   warn     report, but do not fail — the setting for a backlog written before
+#            the mechanism existed, while it is being linked up
+#   require  fail; a criterion nobody can prove is a checkbox that can lie
+# A BROKEN link — a criterion naming an id that does not exist — fails under all
+# three: only someone already using the mechanism can write one.
+criteria_links: warn
+
+# `report` records and audits whether a Node test executed a file the task
+# changed, but never blocks a closing. `require` opts into refusing a closing
+# unless that narrow coverage signal is present; foreign and manual proofs are
+# undetermined and therefore refused under that policy.
+contract_capability: report
+
+# [free] Additional executable names a task contract may invoke when their
+# subcommands overlap this tool's command table. These ADD to the generic
+# defaults (git, npm, cargo, docker and peers); do not restate the defaults just
+# to admit one project-specific program. Bare program names only, never paths.
+contract_programs: []
+
+# [free] Verification entries `done` appends to EVERY task's own contract, in
+# the shape of a task's `verification:` entries (`- id:` then `bash:` or
+# `manual:`). For the repository-wide guard a module's own tests do not run.
+# An id here that a task's own entry also uses refuses that closing.
+closing_contract: []
+types: [task]                      # [tree]
+
+# [tree] Labels. `labels_closed: true` turns a typo into a build error instead
+# of a new, silent label — and it applies to tasks that ALREADY exist too, so
+# switch it on after checking what is in the tree.
+labels: []
+labels_closed: false
+
+# [tree] WHO MAY take a task, as opposed to `owner:` — who holds it NOW — and
+# the history's `actor` — who wrote the change. Commented out because an empty
+# vocabulary is an ANSWER: this project does not use roles, and then a task
+# carrying a non-empty `role:` fails the build rather than inventing a role no
+# dispatcher serves. Lowercase slugs.
+# roles: [analyst, developer, reviewer]
+
+# [tree] The releases a task may be PLANNED for (`release:`). Commented out
+# for the same reason as roles: an empty list means this project plans no
+# releases. The ORDER is chronological, oldest first: the CURRENT release is the
+# first one not yet fully shipped, and only its open top-priority tasks block
+# the last stage. Append the next release; do not reorder the shipped ones.
+# A shipped release may name the ref that marks it, so the scope report can
+# say what it carried: `{ name: 1.0, ref: v1.0 }` beside a plain name.
+# releases: [1.0, 1.1]
+
+# [free] with respect to the tree — a task may have any owner; but `branchling new
+# --owner X` checks this list, so a new owner has to be added here.
+owners: [unassigned]
+estimates: [30m, 2h, 1d, 1w]       # [free] suggestions in the viewer
+
+# [free] The history actors — the namespace is mandatory:
+#   local:<nick>  declared locally, unverified
+#   agent:<name>  an automated write (a hook, CI)
+#   user:<id>     an authenticated account
+actors: [local:me, agent:claude]
+
+title_max_length: 60               # [free]
+
+# [free] Which status means "somebody is working on this" — the one `branchling take`
+# and `branchling next` write. Commented out because the default vocabulary above
+# already has that word; a project that RENAMES its statuses has to say which one
+# this is, or those two commands refuse rather than pick one for you.
+# in_progress_status: in_progress
+
+# [free] Where `branchling run` parks a task whose WORK is finished and whose
+# `verification:` ends in a `manual:` entry only a person can vouch for. Both the
+# status and the name are yours; add the word to `statuses:` above first.
+# Commented out because there is no default for it — with no value, such a task
+# is parked wherever a failing one goes, which says the work failed. A dispatcher
+# never hands this status out.
+# awaiting_vouch_status: awaiting_vouch
+
+# [free] How long a task reservation is honoured, in minutes. A session that is
+# killed leaves its lock behind; after this long the next caller takes it over
+# and says so. The reservation is local to one machine — see `branchling take --help`.
+lock_ttl_minutes: 120
+
+# [free] After how many days without a change an `in_progress` task is judged
+# ABANDONED, so that `branchling next` hands it out again — to a new owner, with the
+# takeover written to the history. `0` means never, and that is the default:
+# the evidence is `updated:`, which has a day's resolution and is written by
+# commands rather than by working, so a window switched on carelessly reassigns
+# live work. Switch it on for a queue that actually runs unattended. A held lock
+# still wins — a running session is proof its task is not abandoned.
+abandoned_after_days: 0
+
+# [free] Whether reading state (`branchling query`, `branchling stats`, the viewer)
+# also consults OTHER local branches and worktrees. Data travels with the branch,
+# so a task started on `feature/x` is still `pending` on `main` — with this
+# off, that is what a listing reports, with no sign the answer came from one
+# checkout. Nothing is ever resolved silently: a disagreement is shown with both
+# statuses and the branch each came from. Local refs only — no `git fetch`, ever.
+cross_branch_state: true
+
+# [free] How far back a branch's last commit may be for that scan to read it, in
+# days; 0 means no window. Dead branches accumulate, and the scan is paid for on
+# every listing. A branch CHECKED OUT in a worktree is always read whatever its
+# age — somebody is standing in it.
+active_branch_days: 30

@@ -1,0 +1,6 @@
+# The history log merges by the UNION OF LINES, not by a three-way comparison.
+# It is append-only, so two branches append at the end of the same file — to git
+# that is a conflict, although semantically there is no dispute. Duplicates are
+# removed by the dedup on `id` at read time; without that, this rule would do
+# harm.
+history/*.jsonl merge=union

@@ -1,0 +1,16 @@
+# The views are GENERATED from tasks/*.md — we do not version them.
+#
+# The reason is not aesthetic: INDEX.yaml and archive/done.yaml are sorted
+# aggregates of EVERY task, so each branch rewrites the same file and two
+# branches conflict even when they share no task at all.
+#
+# Recreate them with: branchling build
+INDEX.yaml
+NOW.yaml
+archive/done.yaml
+boards/*/INDEX.yaml
+boards/*/NOW.yaml
+viewer.html
+
+# The local reference point for reconciliation — NOT a source of truth.
+history/.snapshot.json

@@ -1,0 +1,15 @@
+{
+  "name": "branchling-ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A visual interface for branchling backlogs, built only on the branchling CLI contract.",
+  "license": "MIT",
+  "author": "Kamil Kwiatkowski",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
