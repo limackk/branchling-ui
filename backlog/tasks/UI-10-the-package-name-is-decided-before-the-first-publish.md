@@ -23,6 +23,8 @@ related_docs: []                   # paths relative to the repository root
 verification:
   - id: name-decided
     manual: "package.json carries the decided name and docs/architecture.md records why."
+  - id: release-skill
+    bash: "test -f .agents/skills/ui-release/SKILL.md && test -L .claude/skills/ui-release"
 ---
 
 ## Goal
@@ -37,7 +39,9 @@ The npm organisation `branchling` exists; branchling itself is published unscope
 
 1. Decide the name with the reasoning written in docs/architecture.md.
 2. Update package.json and README.md, and add the release procedure.
+3. Write the release procedure as `.agents/skills/ui-release/SKILL.md` (symlinked from `.claude/skills`), adapted from branchling upstream's publication gate: the tarball carries the package and not this repository's backlog, the name is free on npm, and the supported branchling range names a published release (UI-14).
 
 ## Acceptance criteria
 
 - [ ] package.json carries the decided name and docs/architecture.md records why. [proof: name-decided]
+- [ ] The publication gate is a skill. [proof: release-skill]

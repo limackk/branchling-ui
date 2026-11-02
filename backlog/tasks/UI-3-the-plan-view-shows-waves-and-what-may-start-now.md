@@ -23,6 +23,8 @@ related_docs: []                   # paths relative to the repository root
 verification:
   - id: plan-view
     bash: "node --test test/plan-view.test.mjs"
+  - id: verify-skill
+    bash: "test -f .agents/skills/ui-verify/SKILL.md && test -L .claude/skills/ui-verify"
 ---
 
 ## Goal
@@ -38,7 +40,9 @@ branchling's own viewer has an Execution tab whose shortcomings are described in
 1. Render the `plan` envelope: waves in order, the active wave highlighted, blocked_by edges.
 2. Show unplanned tasks and tasks the plan has been overtaken by.
 3. Link each task to a detail panel fed by `show`.
+4. Write `.agents/skills/ui-verify/SKILL.md` (symlinked from `.claude/skills`): the definition of done for any view, proven on this first one. Run it on a fixture backlog; screenshot it in light and dark at 375px and desktop width; check the terminal interface (UI-16), when it exists, at 80 columns, under NO_COLOR and with output redirected; run an automated accessibility audit.
 
 ## Acceptance criteria
 
 - [ ] For a fixture backlog with a two-wave plan, the rendered model lists both waves in order, marks the active one, and lists an unplanned fixture task. [proof: plan-view]
+- [ ] The definition of done for a view is a skill. [proof: verify-skill]

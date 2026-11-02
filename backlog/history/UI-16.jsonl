@@ -1,0 +1,2 @@
+{"id":"01M6E7H6YFXB5X46TM1RR474K1","ts":"2026-11-02T13:35:12.335Z","task":"UI-16","field":"__created__","from":"","to":"An interactive terminal interface is decided and started","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E7HRSF0RTRTN75KZ6YYTN6","ts":"2026-11-02T13:35:30.607Z","task":"UI-16","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","blocked_by","created"],"actor":"agent:claude","source":"manual","reason":"unknown"}

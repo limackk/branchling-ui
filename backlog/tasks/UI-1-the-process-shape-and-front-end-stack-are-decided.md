@@ -18,11 +18,13 @@ confidence: medium                 # how much you trust the estimate
 created: 2026-11-02
 updated: 2026-11-02
 blocked_by: []                     # ids of tasks that MUST be closed before this one starts
-blocks: []                         # ids this task will unblock
+blocks: [UI-16]                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: server-smoke
     bash: "node --test test/server.test.mjs"
+  - id: web-skill
+    bash: "test -f .agents/skills/ui-web/SKILL.md && test -L .claude/skills/ui-web && grep -qi 'view model' docs/architecture.md"
 ---
 
 ## Goal
@@ -38,7 +40,10 @@ The adapter (src/adapter.mjs) exists; nothing renders yet. Open questions: a loc
 1. Compare at least two options against the constraints, including startup cost and the zero-dependency precedent branchling's own viewer sets.
 2. Write the decision, the options rejected and why, into docs/architecture.md.
 3. Add the minimal server skeleton the decision implies, serving one page that shows `stats` through the adapter.
+4. Define the view model both surfaces render: plain data computed from adapter envelopes, with no HTML or ANSI in it, so the web interface and the terminal interface (UI-16) cannot drift.
+5. Write `.agents/skills/ui-web/SKILL.md` (symlinked from `.claude/skills`) for the decided conventions: design tokens for light and dark, status and priority colours derived from config.yaml, the loading, empty, error, refusal and stale states every view has, view state in the URL, WCAG 2.2 AA and keyboard use.
 
 ## Acceptance criteria
 
 - [ ] The server starts on 127.0.0.1, serves the page, and its stats endpoint returns the adapter's stats envelope for a fixture backlog. [proof: server-smoke]
+- [ ] The web conventions are a skill and the shared view model is recorded in docs/architecture.md. [proof: web-skill]

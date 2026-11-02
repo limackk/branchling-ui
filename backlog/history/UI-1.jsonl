@@ -1,1 +1,2 @@
 {"id":"01M6E5M5JES3VXJ50VPQ861XEE","ts":"2026-11-02T13:01:52.078Z","task":"UI-1","field":"__created__","from":"","to":"The process shape and front-end stack are decided","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E7HRGGDDQC61X570Q1C2M8","ts":"2026-11-02T13:35:30.320Z","task":"UI-1","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","blocks","created"],"actor":"agent:claude","source":"manual","reason":"unknown"}
