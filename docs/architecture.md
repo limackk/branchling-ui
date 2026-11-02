@@ -67,6 +67,10 @@ src/view-model/<view>.mjs    the shared view model, pure functions
 src/view-model/states.mjs    loading, error, refusal and unreachable states
 src/view-model/roles.mjs     status and priority colour roles
 src/web/                     the page: index.html, app.mjs, styles.css
+bin/branchling-ui-tui.mjs    starts the terminal interface (TUI) for one backlog
+src/tui/terminal.mjs         colour and screen capabilities, the full-screen lifecycle
+src/tui/render.mjs           a view model as lines of text, a pure function
+src/tui/app.mjs              the TUI loop: fetch, redraw, keys, signals
 ```
 
 ## The view registry
@@ -187,3 +191,90 @@ it never implements its own check. The handler then calls an adapter method
 that runs a branchling command; it never writes a file. If UI-5 needs
 short-lived tokens as `branchling serve` has, the change belongs in
 `src/server.mjs`, for every route at once.
+
+## The terminal interface (TUI, UI-16)
+
+The maintainer decided on 2026-11-02 that the terminal surface is an
+interactive full-screen TUI, in the style of lazygit or k9s, not only
+formatted command output. It holds to every rule above: the adapter is the
+only door, nothing writes a task file, it works on any repository's backlog,
+and it renders the shared view model, so a count or a refusal reads the same
+in the terminal as on the page.
+
+### Options compared
+
+| | No dependency: `node:readline`, raw mode, ANSI escapes (chosen) | Ink (React for terminals) | A lower-level library (blessed, neo-blessed, terminal-kit) |
+|---|---|---|---|
+| Runtime dependencies | none | `ink` and `react`, the Yoga layout engine, and their transitive packages | blessed: one package, unmaintained for years; neo-blessed is a fork with little activity; terminal-kit: several packages |
+| Windows support | Windows Terminal and the Windows 10+ console host take the same VT sequences; Node gives raw mode and a `resize` event on stdout on every platform | good, through the same Node primitives | blessed reads terminfo and has known gaps on the Windows console; terminal-kit does not promise Windows support |
+| Startup cost | Node starts in well under 100 ms; the first `stats` call (~500 ms) dominates | React, the reconciler and Yoga load before the first frame | blessed parses terminfo at start; both are heavier than writing the screen ourselves |
+| Adapter as the only door | yes: the TUI calls adapter methods and nothing else | yes | yes |
+| Renders the shared view model | yes, a pure function from model to lines | yes, but through components and a second state layer around the model | yes, but through widgets that keep their own state |
+| Testability | the renderer is a pure function; the loop takes fake streams and a fake process, so tests assert on bytes written and on raw mode | `ink-testing-library`, another dependency | needs a real or emulated terminal; widget state is hard to reach |
+| Restore on every exit path | ours to write, and tested | Ink restores on its own exit, not on every crash path without help | blessed restores on its own exit; a crash path still needs our handlers |
+| Precedent | branchling has no runtime dependency | none | none |
+
+**Rejected: Ink.** It breaks the zero-dependency rule enforced in CI and
+brings a React runtime, a reconciler and a layout engine to draw
+a few tables. Its component model would also put a second state layer on top
+of the view model, which is the one place decisions are meant to live.
+
+**Rejected: a lower-level library.** It breaks the same rule, and the
+candidates are either unmaintained (blessed) or partial on Windows
+(terminal-kit), which is part of the CI matrix. What they give, cursor
+addressing and a key reader, is a few dozen lines on top of Node's raw mode.
+
+### What the decision costs
+
+- No widgets, no layout engine: each screen is a pure function from a model
+  to lines, written by hand (`src/tui/render.mjs`).
+- Width is counted in code points. A double-width character (CJK, most
+  emoji) counts as one column, so a line holding one can overrun by a
+  column. Backlog keys are usually ASCII; a width table is a later change if
+  that stops being true.
+- Terminals without VT sequences (the pre-2018 Windows console host) are not
+  supported for the full screen. They still get the printed screen through
+  `TERM=dumb` or a pipe.
+
+### The keyboard model
+
+Single keys, no modifiers, always shown on the last row of the screen as a
+key map (`q quit  r refresh`). `q` quits; Ctrl-C quits too, because raw mode
+delivers it as a key, not as SIGINT; `r` reads again. An escape sequence
+(arrows, function keys) is ignored until a screen needs it. A new key goes
+into `KEYS` in `src/tui/render.mjs`, so it cannot be bound without appearing
+in the key map.
+
+### The terminal rules
+
+- **Colour per stream.** Off when `NO_COLOR` is set to any non-empty value,
+  when `TERM=dumb`, or when that stream is not a TTY; stdout and stderr are
+  checked separately.
+- **NO_COLOR is about colour only.** On a terminal with `NO_COLOR` set, the
+  TUI still takes the alternate screen and hides the cursor; it writes no SGR
+  code.
+- **The full screen needs a terminal.** When stdin or stdout is not a TTY,
+  or `TERM=dumb`, the TUI prints the screen once, without the key map, and
+  exits with 0 for data and 1 for an error or a refusal. Raw mode is never
+  touched then.
+- **The 16 ANSI colours only** (SGR 30 to 37, 90 to 97, bold, dim), so the
+  user's theme decides what they look like. Statuses and priorities are
+  styled by role, from `ROLE_STYLE`, never by name; every role is `neutral`
+  until UI-18 brings the vocabulary from config.yaml through the CLI. A label
+  is always shown; colour is never the only signal.
+- **Restored on every exit path.** Alternate screen and hidden cursor on
+  start; on quit, Ctrl-C, SIGINT, SIGTERM, SIGHUP, an uncaught exception, an
+  unhandled rejection and process exit, the TUI leaves the alternate screen,
+  shows the cursor and ends raw mode. Restoring is idempotent.
+- **Resize** redraws from stdout's `resize` event, which Node emits on
+  Windows as well; nothing relies on SIGWINCH.
+- **Text from the backlog is data.** C0 and C1 control characters, ESC
+  included, are replaced before anything reaches the terminal.
+- **States.** Loading, empty, error, refusal and stale come from
+  `src/view-model/`, as on the page. On `r` the last stats stay on screen,
+  marked stale, until the new read answers.
+
+The TUI calls the adapter directly, so it maps the adapter's errors with
+`fromAdapterError` in `src/view-model/states.mjs`, which gives the same state
+and title the server's JSON error gives the page. It does not use UI-2's cache
+yet; wrapping the adapter it is given is enough when it should.

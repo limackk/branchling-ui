@@ -18,6 +18,20 @@ import { priorityRole, statusRole } from "./roles.mjs";
  * That holds until UI-18 brings the vocabulary from the CLI.
  */
 
+/**
+ * The sentences and headings of the stats view, decided once so the web page
+ * and the terminal say the same thing in the same situation.
+ */
+export const STATS_TEXT = {
+  title: "Stats",
+  loading: "Loading stats…",
+  empty: "This backlog has no tasks yet.",
+  stale: "Showing the last known stats; a fresh read is on its way.",
+  byStatus: "By status",
+  byPriority: "By priority",
+  countHeading: "Tasks",
+};
+
 function rows(counts, role) {
   return Object.entries(counts || {}).map(([key, count]) => ({
     key,

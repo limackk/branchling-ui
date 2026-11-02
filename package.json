@@ -11,6 +11,7 @@
   },
   "scripts": {
     "start": "node bin/branchling-ui.mjs",
+    "tui": "node bin/branchling-ui-tui.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {

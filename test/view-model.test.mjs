@@ -8,8 +8,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 
-import { statsModel } from "../src/view-model/stats.mjs";
-import { fromApiError, loadingState, unreachableState } from "../src/view-model/states.mjs";
+import { STATS_TEXT, statsModel } from "../src/view-model/stats.mjs";
+import { fromAdapterError, fromApiError, loadingState, unreachableState } from "../src/view-model/states.mjs";
+import { BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
 import { priorityRole, statusRole } from "../src/view-model/roles.mjs";
 
 function envelope(overrides = {}) {
@@ -144,4 +145,38 @@ test("a refusal body becomes the refusal state, other failures the error state",
   assert.deepEqual(loadingState("stats"), { view: "stats", state: "loading" });
   assert.equal(unreachableState("stats", "ECONNREFUSED").errorType, "unreachable");
   for (const model of [refusal, mismatch, unknown]) assert.ok(isPlainData(model));
+});
+
+test("an adapter error becomes the same state the API error would", () => {
+  // The terminal calls the adapter directly; the web page gets the server's
+  // JSON body. Both must land on the same state and title.
+  const envelope = { schemaVersion: 1, kind: "stats", refusalKind: "held", refusal: "Held by someone else" };
+  const refusal = fromAdapterError("stats", new BranchlingRefusal(envelope, 1));
+  assert.equal(refusal.state, "refusal");
+  assert.equal(refusal.refusalKind, "held");
+  assert.equal(refusal.detail, "Held by someone else");
+  assert.equal(refusal.title, fromApiError("stats", { error: { type: "refusal", message: "x" } }).title);
+
+  const mismatch = fromAdapterError("stats", new ContractMismatch("schemaVersion 99"));
+  assert.equal(mismatch.state, "error");
+  assert.equal(mismatch.errorType, "contract-mismatch");
+  assert.equal(mismatch.title, fromApiError("stats", { error: { type: "contract-mismatch" } }).title);
+
+  const usage = fromAdapterError("stats", new BranchlingUsageError(["stats"], 2, "no backlog"));
+  assert.equal(usage.errorType, "usage-error");
+
+  const other = fromAdapterError("stats", new Error("spawn branchling ENOENT"));
+  assert.equal(other.state, "error");
+  assert.equal(other.errorType, "internal");
+  assert.equal(other.detail, "spawn branchling ENOENT");
+  for (const model of [refusal, mismatch, usage, other]) assert.ok(isPlainData(model));
+});
+
+test("the stats sentences are plain text shared by both surfaces", () => {
+  assert.ok(isPlainData(STATS_TEXT));
+  for (const s of strings(STATS_TEXT)) {
+    assert.ok(s.length > 0);
+    assert.doesNotMatch(s, /<[a-z/!]/i);
+    assert.doesNotMatch(s, /\x1b/);
+  }
 });

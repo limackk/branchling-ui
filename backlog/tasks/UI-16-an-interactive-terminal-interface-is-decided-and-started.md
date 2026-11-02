@@ -8,8 +8,8 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P1
-status: pending
-owner: unassigned
+status: done
+owner: agent:loop-b
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
@@ -44,5 +44,5 @@ The maintainer decided on 2026-11-02 that the terminal surface is an interactive
 
 ## Acceptance criteria
 
-- [ ] The stats screen renders at 80 columns, emits no ANSI codes under NO_COLOR, and restores the terminal after an exception. [proof: tui-tests]
-- [ ] The terminal conventions are a skill and the decision is recorded. [proof: tui-skill]
+- [x] The stats screen renders at 80 columns, emits no ANSI codes under NO_COLOR, and restores the terminal after an exception. [proof: tui-tests]
+- [x] The terminal conventions are a skill and the decision is recorded. [proof: tui-skill]

@@ -44,3 +44,26 @@ export function fromApiError(view, body, status) {
 export function unreachableState(view, message) {
   return { view, state: "error", title: "The local server cannot be reached", detail: String(message || ""), errorType: "unreachable", httpStatus: null };
 }
+
+/**
+ * An error thrown by the adapter itself, for a surface that calls it directly
+ * (the terminal interface) instead of through the server's API. It is judged
+ * by `err.name`, not `instanceof`, so this module still imports nothing; the
+ * mapping is the server's `errorBody` one, so both surfaces show the same
+ * title for the same failure.
+ *
+ * @param {string} view
+ * @param {{ name?: string, message?: string, envelope?: { refusalKind?: string|null } }} err
+ */
+export function fromAdapterError(view, err) {
+  const types = {
+    BranchlingRefusal: "refusal",
+    ContractMismatch: "contract-mismatch",
+    BranchlingUsageError: "usage-error",
+  };
+  const type = (err && types[err.name]) || "internal";
+  const message = String((err && err.message) || err || "");
+  const error = { type, message };
+  if (type === "refusal") error.refusalKind = (err.envelope && err.envelope.refusalKind) ?? null;
+  return fromApiError(view, { error });
+}
