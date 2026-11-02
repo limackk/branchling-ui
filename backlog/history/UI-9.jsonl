@@ -1,1 +1,2 @@
 {"id":"01M6E5MAZF93YFFKQH0FXA3M26","ts":"2026-11-02T13:01:57.615Z","task":"UI-9","field":"__created__","from":"","to":"Contract tests run against both ends of the range","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6EAGQPYCQ2ED95J6435EB85","ts":"2026-11-02T14:27:22.462Z","task":"UI-9","field":"blocked_by","from":[],"to":["UI-14"],"actor":"agent:claude","source":"set","reason":"The low end of SUPPORTED_RANGE is npm 0.2.0, which cannot run the suite until UI-14 raises it"}
