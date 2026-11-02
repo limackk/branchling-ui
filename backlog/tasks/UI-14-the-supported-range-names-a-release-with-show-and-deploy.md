@@ -23,6 +23,8 @@ related_docs: []                   # paths relative to the repository root
 verification:
   - id: pinned-suite
     bash: "npm ci && npm test"
+  - id: registry-pin
+    bash: "node -e \"const v = require('./package.json').devDependencies.branchling; if (!/^[~^]?\\d/.test(v)) { console.error('pinned to ' + v); process.exit(1) }\""
 ---
 
 ## Goal
@@ -31,7 +33,7 @@ SUPPORTED_RANGE names only branchling releases that actually have every command 
 
 ## Context
 
-Found while doing UI-11. With branchling pinned from npm, `npm test` fails: the published 0.2.0 has no `show` and no `deploy` command, which the adapter wraps (`show`, `deployStatus`). The suite had passed only because the global `branchling` was a linked checkout of the upstream repository 41 commits past v0.2.0 that still reports `0.2.0`. So SUPPORTED_RANGE `[0.2.0, 0.3.0)` promises a release that cannot serve this package. Moving the range is a deliberate change with tests (AGENTS.md). The likely fix is an upstream release carrying `show` and `deploy`, then raising `min` to it and the pin with it; until then the devDependency can point at an upstream commit instead of a registry release. Which of the two is the maintainer's call.
+Found while doing UI-11. With branchling pinned from npm, `npm test` fails: the published 0.2.0 has no `show` and no `deploy` command, which the adapter wraps (`show`, `deployStatus`). The suite had passed only because the global `branchling` was a linked checkout of the upstream repository 41 commits past v0.2.0 that still reports `0.2.0`. So SUPPORTED_RANGE `[0.2.0, 0.3.0)` promises a release that cannot serve this package. Moving the range is a deliberate change with tests (AGENTS.md). The likely fix is an upstream release carrying `show` and `deploy`, then raising `min` to it and the pin with it; until then the devDependency can point at an upstream commit instead of a registry release. The maintainer chose the commit pin first: UI-11 pins upstream 7d76538. That makes the tests reproducible but leaves this task open, because the range still promises a registry release that has neither command. What remains is a published release with both, the range minimum raised to it, and the pin moved from the commit to that release.
 
 ## Steps
 
@@ -42,3 +44,4 @@ Found while doing UI-11. With branchling pinned from npm, `npm test` fails: the 
 ## Acceptance criteria
 
 - [ ] The contract tests pass against the executable package-lock.json pins, not against whatever is on PATH. [proof: pinned-suite]
+- [ ] The devDependency is a registry release, not a commit. [proof: registry-pin]

@@ -1,0 +1,59 @@
+# The contract tests and the backlog guards, on every push and pull request.
+#
+# A green run here is the only version of "the tests pass" that somebody who
+# does not trust the author can read. It is also the only place the suite runs
+# on a FRESH CLONE: no global `branchling`, no generated views, no state left by
+# a previous session.
+#
+# THE EXECUTABLE UNDER TEST IS THE PINNED DEVDEPENDENCY. `npm ci` installs the
+# build package-lock.json names (an upstream commit until UI-14 lands a
+# release), and `npm test` puts node_modules/.bin first on PATH, so the
+# adapter spawns exactly that one. Testing both ends of
+# SUPPORTED_RANGE is UI-9, not this file.
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The matrix matches `engines` in package.json: `>=18` with CI on one
+    # version would be an unverified declaration.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ["18", "20", "22"]
+        include:
+          - os: windows-latest
+            node: "22"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # A devDependency is fine; a runtime one would ship to every consumer.
+      - name: refuse a runtime dependency that crept in
+        shell: bash
+        run: |
+          node -e '
+            const deps = Object.keys(require("./package.json").dependencies || {});
+            if (deps.length) { console.error("runtime dependencies appeared: " + deps.join(", ")); process.exit(1); }
+          '
+
+      - name: tests
+        run: npm test
+
+      # The guards judge the backlog as a SET: a change that passes its own
+      # test can still leave a dangling reference or an id collision.
+      - name: backlog guards
+        run: npx --no-install branchling check

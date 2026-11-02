@@ -1,1 +1,2 @@
 {"id":"01M6E683P881XHJQ62BAXSW87E","ts":"2026-11-02T13:12:45.512Z","task":"UI-14","field":"__created__","from":"","to":"The supported range names a release with show and deploy","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E727XMTBM3M5HKY2TCRVG6","ts":"2026-11-02T13:27:01.812Z","task":"UI-14","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","created"],"actor":"agent:claude","source":"manual","reason":"unknown"}

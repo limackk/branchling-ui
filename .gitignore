@@ -1,1 +1,11 @@
 node_modules/
+*.tgz
+.DS_Store
+
+# Per-person agent configuration. The shared halves (.claude/settings.json,
+# .codex/hooks.json, .mcp.json, AGENTS.md) are versioned; these are each
+# contributor's own and must not ride into a pull request.
+.claude/settings.local.json
+CLAUDE.local.md
+.env
+.env.*

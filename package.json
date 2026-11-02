@@ -11,5 +11,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "branchling": "github:limackk/branchling#7d76538197ab7e1bd14e8c098264a9b797db09e7"
   }
 }

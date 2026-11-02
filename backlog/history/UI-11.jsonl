@@ -2,3 +2,5 @@
 {"id":"01M6E64CEFCPHSQ3ZQ5CDW98QC","ts":"2026-11-02T13:10:43.407Z","task":"UI-11","field":"status","from":"pending","to":"in_progress","actor":"agent:claude","source":"take","reason":"unknown"}
 {"id":"01M6E64CEFGR32KC8V1MSHWVMA","ts":"2026-11-02T13:10:43.407Z","task":"UI-11","field":"owner","from":"unassigned","to":"agent:claude","actor":"agent:claude","source":"take","reason":"unknown"}
 {"id":"01M6E68H90MBQT21MEN6E57FCX","ts":"2026-11-02T13:12:59.424Z","task":"UI-11","field":"blocked_by","from":[],"to":["UI-14"],"actor":"agent:claude","source":"manual","reason":"unknown"}
+{"id":"01M6E7278P3J1ZBVNAJM1HA79K","ts":"2026-11-02T13:27:01.142Z","task":"UI-11","field":"blocked_by","from":["UI-14"],"to":[],"actor":"agent:claude","source":"manual","reason":"unknown"}
+{"id":"01M6E74T7SXD6CKEGKM89CCTJ7","ts":"2026-11-02T13:28:26.105Z","task":"UI-11","field":"status","from":"in_progress","to":"done","actor":"agent:claude","source":"done","reason":"proven","contractCapability":{"verdict":"undetermined","statement":"whether the run executed a file this task changed was not determined","changedFilesExecuted":[]}}

@@ -8,7 +8,7 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P1
-status: in_progress
+status: done
 owner: agent:claude
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
@@ -17,7 +17,7 @@ estimate: 2h
 confidence: medium                 # how much you trust the estimate
 created: 2026-11-02
 updated: 2026-11-02
-blocked_by: [UI-14]                     # ids of tasks that MUST be closed before this one starts
+blocked_by: []                     # ids of tasks that MUST be closed before this one starts
 blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
@@ -37,7 +37,7 @@ A fresh clone tests against the branchling release this package pins, on every s
 
 ## Context
 
-The contract tests spawned whatever `branchling` happened to be on PATH, so two contributors could test against different releases and both see green. There was no CI, so an outside reviewer had no run to read. branchling is published on npm (0.2.0), so it becomes a devDependency inside SUPPORTED_RANGE: `npm test` puts node_modules/.bin first on PATH, and the adapter still spawns an executable rather than importing a module, so the CLI-contract rule is untouched. Runtime dependencies stay at zero. Testing the minimum and the maximum of the range is UI-9 and is not done here. The .gitignore also gains the per-user agent files (Claude local settings and memory) so a contributor's own configuration cannot ride into a pull request.
+The contract tests spawned whatever `branchling` happened to be on PATH, so two contributors could test against different releases and both see green. There was no CI, so an outside reviewer had no run to read. branchling becomes a devDependency. The published 0.2.0 lacks `show` and `deploy` (UI-14), so the pin is the upstream commit 7d76538 on GitHub, the first pushed one carrying both, and it still reports 0.2.0, inside SUPPORTED_RANGE. A public GitHub dependency installs over https in CI, without an SSH key: `npm test` puts node_modules/.bin first on PATH, and the adapter still spawns an executable rather than importing a module, so the CLI-contract rule is untouched. Runtime dependencies stay at zero. Testing the minimum and the maximum of the range is UI-9 and is not done here. The .gitignore also gains the per-user agent files (Claude local settings and memory) so a contributor's own configuration cannot ride into a pull request.
 
 ## Steps
 
@@ -48,7 +48,7 @@ The contract tests spawned whatever `branchling` happened to be on PATH, so two 
 
 ## Acceptance criteria
 
-- [ ] branchling is a pinned devDependency and the package has no runtime dependencies. [proof: pinned-bin]
-- [ ] The lockfile, the Node version file and the CI workflow are tracked. [proof: lockfile]
-- [ ] Per-user agent files are ignored. [proof: local-ignored]
-- [ ] The contract tests pass against the pinned executable. [proof: suite]
+- [x] branchling is a pinned devDependency and the package has no runtime dependencies. [proof: pinned-bin]
+- [x] The lockfile, the Node version file and the CI workflow are tracked. [proof: lockfile]
+- [x] Per-user agent files are ignored. [proof: local-ignored]
+- [x] The contract tests pass against the pinned executable. [proof: suite]

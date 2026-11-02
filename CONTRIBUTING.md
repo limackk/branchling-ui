@@ -14,16 +14,17 @@ Node 18 or newer.
 ```bash
 git clone https://github.com/limackk/branchling-ui.git
 cd branchling-ui
-npm ci       # installs the pinned branchling release, nothing else
+npm ci       # installs the pinned branchling build, nothing else
 npm test     # the contract tests
 npx branchling check   # the backlog guards
 ```
 
 `branchling` is a **devDependency**, not something you install globally first.
 `npm test` puts `node_modules/.bin` ahead of your PATH, so the tests run
-against the release `package-lock.json` names, the same one CI runs. To test
-against another build (an upstream checkout, say), point `BRANCHLING_BIN` at
-its executable.
+against the build `package-lock.json` names, the same one CI runs. Until
+upstream publishes a release with every command the adapter calls (UI-14),
+that build is an upstream commit. To test against another build (an
+upstream checkout, say), point `BRANCHLING_BIN` at its executable.
 
 CI runs the tests and the guards on Node 18, 20 and 22, on Linux and macOS,
 and on Windows with Node 22.
