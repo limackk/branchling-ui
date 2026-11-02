@@ -1,0 +1,2 @@
+{"id":"01M6EYTVNM9HD7CQ5BYQCNKGTX","ts":"2026-11-02T20:22:25.716Z","task":"UI-27","field":"__created__","from":"","to":"The task panel shows one task and its history","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6EYV57G6Z6ZEH0VZG73BRDF","ts":"2026-11-02T20:22:35.504Z","task":"UI-27","field":"blocked_by","from":[],"to":["UI-26"],"actor":"agent:claude","source":"set","reason":"The panel opens from the tasks list"}
