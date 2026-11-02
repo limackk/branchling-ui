@@ -1,0 +1,4 @@
+{"id":"01M6E63JEYWE756SMZ1R6TN50E","ts":"2026-11-02T13:10:16.798Z","task":"UI-11","field":"__created__","from":"","to":"A fresh clone tests against the pinned branchling","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E64CEFCPHSQ3ZQ5CDW98QC","ts":"2026-11-02T13:10:43.407Z","task":"UI-11","field":"status","from":"pending","to":"in_progress","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E64CEFGR32KC8V1MSHWVMA","ts":"2026-11-02T13:10:43.407Z","task":"UI-11","field":"owner","from":"unassigned","to":"agent:claude","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E68H90MBQT21MEN6E57FCX","ts":"2026-11-02T13:12:59.424Z","task":"UI-11","field":"blocked_by","from":[],"to":["UI-14"],"actor":"agent:claude","source":"manual","reason":"unknown"}
