@@ -1,2 +1,3 @@
 {"id":"01M6E5MBJTEVGFZWVRP7QGM4GF","ts":"2026-11-02T13:01:58.234Z","task":"UI-10","field":"__created__","from":"","to":"The package name is decided before the first publish","actor":"agent:claude","source":"new","reason":"unknown"}
 {"id":"01M6E7HRPEGMZZDAJ8C3MP73YK","ts":"2026-11-02T13:35:30.510Z","task":"UI-10","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","created"],"actor":"agent:claude","source":"manual","reason":"unknown"}
+{"id":"01M6EAGR8VVPACFA3GQXTTW5ZT","ts":"2026-11-02T14:27:23.035Z","task":"UI-10","field":"executor","from":"","to":"human","actor":"agent:claude","source":"set","reason":"The package name is the maintainer's decision"}
