@@ -1,0 +1,4 @@
+{"id":"01M6E7H6MEV8VTF7XC69BRD0A1","ts":"2026-11-02T13:35:12.014Z","task":"UI-15","field":"__created__","from":"","to":"Agents find how a CLI capability enters the adapter","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6E7J1Q9EMGVRDZEY8JVVV25","ts":"2026-11-02T13:35:39.753Z","task":"UI-15","field":"status","from":"pending","to":"in_progress","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E7J1Q9ZS3X9QFHCXBASVHW","ts":"2026-11-02T13:35:39.753Z","task":"UI-15","field":"owner","from":"unassigned","to":"agent:claude","actor":"agent:claude","source":"take","reason":"unknown"}
+{"id":"01M6E7MF4DTP51YBCX9W3QW8DF","ts":"2026-11-02T13:36:59.021Z","task":"UI-15","field":"status","from":"in_progress","to":"done","actor":"agent:claude","source":"done","reason":"proven","contractCapability":{"verdict":"undetermined","statement":"whether the run executed a file this task changed was not determined","changedFilesExecuted":[]}}

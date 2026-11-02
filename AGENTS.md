@@ -21,6 +21,8 @@ a CONSUMER of branchling, never a part of it.
   track the dependency in this backlog. The `TL-` ids above are tasks there.
 - `SUPPORTED_SCHEMA_VERSIONS` and `SUPPORTED_RANGE` in the adapter are the
   compatibility promise. Moving either is a deliberate change with tests.
+- The procedure for adding a call, the error types and the contract tests is
+  the `ui-adapter` skill in `.agents/skills/`.
 
 ## Tests
 
