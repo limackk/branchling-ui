@@ -1,1 +1,2 @@
 {"id":"01M6E5M9H4S2T2VV5A7P0NCSBY","ts":"2026-11-02T13:01:56.132Z","task":"UI-7","field":"__created__","from":"","to":"Open views refresh from the branchling watch stream","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6EAH0PB2EPMZ0N65C314BV5","ts":"2026-11-02T14:27:31.659Z","task":"UI-7","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","blocked_by","created"],"actor":"agent:claude","source":"manual","reason":"Needs `branchling watch --json` (TL-524), which no upstream commit has yet"}
