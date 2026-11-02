@@ -99,6 +99,7 @@ const VIEW_MODULES = {
   decisions: "/decisions.mjs",
   plan: "/plan.mjs",
   release: "/release.mjs",
+  tasks: "/tasks.mjs",
 };
 
 const requested = new URLSearchParams(location.search).get("view");

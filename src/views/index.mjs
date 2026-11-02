@@ -21,10 +21,12 @@ import decisions from "./decisions.mjs";
 import plan from "./plan.mjs";
 import release from "./release.mjs";
 import stats from "./stats.mjs";
+import tasks from "./tasks.mjs";
 
 export const views = [
   decisions,
   plan,
   release,
   stats,
+  tasks,
 ];

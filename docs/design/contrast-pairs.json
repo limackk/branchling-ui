@@ -84,6 +84,12 @@
   "use": "text"
  },
  {
+  "name": "L link/selected",
+  "fg": "#0f5654",
+  "bg": "#e8f5f4",
+  "use": "text"
+ },
+ {
   "name": "L neutral role",
   "fg": "#2a312e",
   "bg": "#e9edeb",
@@ -218,6 +224,12 @@
  {
   "name": "D text/selected",
   "fg": "#e7ecea",
+  "bg": "#12302e",
+  "use": "text"
+ },
+ {
+  "name": "D link/selected",
+  "fg": "#9fd5d1",
   "bg": "#12302e",
   "use": "text"
  },

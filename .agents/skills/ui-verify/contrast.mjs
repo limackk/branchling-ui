@@ -86,7 +86,8 @@ const PAIRS = [
   // the sidebar navigation
   ["color-text-default", "color-bg-hover", TEXT, "a view link under the pointer"],
   ["color-text-default", "color-bg-selected", TEXT, "the current view (aria-current), a selected radio card"],
-  ["color-text-muted", "color-bg-selected", TEXT, "muted text in a selected radio card"],
+  ["color-text-muted", "color-bg-selected", TEXT, "muted text in a selected radio card, a selected task row's meta"],
+  ["color-text-link", "color-bg-selected", TEXT, "the id link of a selected task row (UI-26)"],
   // buttons
   ["color-text-on-action", "color-action-primary", TEXT, "a submit button"],
   ["color-text-on-action", "color-action-primary-hover", TEXT, "a submit button under the pointer"],

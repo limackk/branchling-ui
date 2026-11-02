@@ -20,7 +20,7 @@ The sprite is referenced by `<use href>`, which browsers do not load over
 | `tokens.json` | the same tokens in W3C DTCG format; the dark value is in `$extensions["org.branchling.dark"]` |
 | `components.css` | every component, using semantic tokens only |
 | `icons.svg` | one icon sprite drawn for the product, so nothing is fetched |
-| `contrast-pairs.json` | the 45 colour pairs checked, both schemes |
+| `contrast-pairs.json` | the 47 colour pairs checked, both schemes |
 | `design-system.html` | the living documentation of all of the above |
 | `mockups/` | nine screens on a fictional backlog, `harbor`; `shell.js` is a mockup-only shell |
 
@@ -124,7 +124,7 @@ Tokens added in the app's work, here first: `--state-recorded-bg/-fg/-border`
 
 ## Accessibility check
 
-- Contrast: `contrast-pairs.json`, 45 of 45 pairs pass AA (script from the
+- Contrast: `contrast-pairs.json`, 47 of 47 pairs pass AA (script from the
   ux-ui-designer skill). For the app, `.agents/skills/ui-verify/contrast.mjs`
   reads the tokens from `src/web/styles.css` and checks every pair the views
   use, in both schemes.

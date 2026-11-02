@@ -22,6 +22,7 @@
   </div>
   <nav class="nav" aria-label="Views">
     <a href="?view=stats" data-view-link="stats"><svg class="icon" aria-hidden="true"><use href="/icons.svg#overview"/></svg><span>Stats</span></a>
+    <a href="?view=tasks" data-view-link="tasks"><svg class="icon" aria-hidden="true"><use href="/icons.svg#tasks"/></svg><span>Tasks</span></a>
     <a href="?view=plan" data-view-link="plan"><svg class="icon" aria-hidden="true"><use href="/icons.svg#plan"/></svg><span>Plan</span></a>
     <a href="?view=release" data-view-link="release"><svg class="icon" aria-hidden="true"><use href="/icons.svg#pipeline"/></svg><span>Release</span></a>
     <a href="?view=decisions" data-view-link="decisions"><svg class="icon" aria-hidden="true"><use href="/icons.svg#decision"/></svg><span>Decisions</span></a>
@@ -34,6 +35,7 @@
       <p class="state state-loading">Loading stats…</p>
     </div>
   </section>
+  <section aria-labelledby="tasks-title" data-view="tasks" hidden><h2 id="tasks-title">Tasks</h2><div id="tasks"><p class="state state-loading">Loading the tasks…</p></div></section>
   <section aria-labelledby="plan-title" data-view="plan" hidden>
     <h2 id="plan-title">Plan</h2>
     <div id="plan" aria-live="polite" aria-busy="true">
