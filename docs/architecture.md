@@ -305,7 +305,12 @@ in the key map.
 
 The TUI calls the adapter directly, so it maps the adapter's errors with
 `fromAdapterError` in `src/view-model/states.mjs`, which gives the same state
-and title the server's JSON error gives the page. It does not use UI-2's cache
-yet. When it should, it takes the cache through the same join as the server
-(`servedFromCache(cache).forRequest().adapter`, one scope per refresh), since a
-bare cache resolves to `{ envelope, answeredAt, fromCache }`, not to envelopes.
+and title the server's JSON error gives the page. Since UI-20 the entry wraps
+the adapter through `prepareAdapter` (`src/tui/start.mjs`) in UI-2's cache,
+using the same join as the server: `servedFromCache(cache).forRequest()`, one
+scope per refresh, since a bare cache resolves to `{ envelope, answeredAt,
+fromCache }`, not to envelopes. It checks the branchling version first; an
+unsupported version is a warning on stderr, as in the web entry, printed
+before the alternate screen is taken. The scope's `answeredAt()` becomes the
+model's `fetchedAt`; "stale" on screen still means only that a refresh is in
+flight, since a cache hit is never stale.

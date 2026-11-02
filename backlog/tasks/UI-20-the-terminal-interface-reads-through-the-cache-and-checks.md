@@ -8,8 +8,8 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P2
-status: pending
-owner: unassigned
+status: done
+owner: agent:loop-a
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
@@ -42,4 +42,4 @@ UI-16 started the TUI with a bare createAdapter(...) and no adapter.version() ch
 
 ## Acceptance criteria
 
-- [ ] the TUI entry reads through the cache and its tests pass [proof: tui-cache]
+- [x] the TUI entry reads through the cache and its tests pass [proof: tui-cache]

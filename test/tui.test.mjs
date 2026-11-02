@@ -4,16 +4,18 @@
  * the tests assert on the exact bytes written and on the raw-mode state; the
  * last tests feed the REAL branchling executable, over a fixture backlog in a
  * temporary directory, through the adapter and the view model into the
- * renderer and through the entry point.
+ * renderer and through the entry point, and check the startup wiring
+ * (UI-20): the version warning and the read cache around the adapter.
  */
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { BranchlingRefusal, createAdapter, run } from "../src/adapter.mjs";
@@ -22,6 +24,8 @@ import { fromAdapterError, loadingState } from "../src/view-model/states.mjs";
 import { KEYS, renderScreen } from "../src/tui/render.mjs";
 import { ESC, canDriveScreen, colourEnabled } from "../src/tui/terminal.mjs";
 import { runTui } from "../src/tui/app.mjs";
+import { prepareAdapter } from "../src/tui/start.mjs";
+import { createCache, createFileChanges } from "../src/cache.mjs";
 
 const SGR_RE = /\x1b\[[0-9;]*m/;
 const ANY_CSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -308,6 +312,50 @@ test("a refusal from the adapter is shown as a refusal on the full screen", asyn
   assert.equal(await s.done, 0);
 });
 
+test("through the cache's join each refresh takes one scope, and its answeredAt() becomes the model's fetchedAt", async () => {
+  const models = [];
+  const render = (model, ...rest) => { models.push(model); return renderScreen(model, ...rest); };
+  let scopes = 0;
+  const served = {
+    forRequest() {
+      scopes++;
+      let read = false;
+      return { adapter: { stats: async () => { read = true; return envelope(); } }, answeredAt: () => (read ? 0 : null) };
+    },
+  };
+  const s = session({ adapter: served, render });
+  await tick();
+  assert.equal(scopes, 1, "one scope for the first read");
+  const ready = models.at(-1);
+  assert.equal(ready.state, "ready");
+  assert.equal(ready.freshness.fetchedAt, "1970-01-01T00:00:00.000Z");
+  assert.equal(ready.freshness.stale, false, "a cache hit is never stale");
+  s.stdin.emit("data", "r");
+  assert.equal(scopes, 2, "a fresh scope per refresh");
+  assert.equal(models.at(-1).freshness.stale, true, "in flight, the last answer is shown stale");
+  assert.equal(models.at(-1).freshness.fetchedAt, "1970-01-01T00:00:00.000Z", "with the time it reflects");
+  await tick();
+  s.stdin.emit("data", "q");
+  assert.equal(await s.done, 0);
+
+  // A scope that made no cached read has no time: null, not the epoch.
+  const timeless = session({ adapter: { forRequest: () => ({ adapter: { stats: async () => envelope() }, answeredAt: () => null }) }, render });
+  await tick();
+  assert.equal(models.at(-1).state, "ready");
+  assert.equal(models.at(-1).freshness.fetchedAt, null);
+  timeless.stdin.emit("data", "q");
+  await timeless.done;
+
+  // Positive control: a bare adapter's envelope has no answer time.
+  const bare = [];
+  const b = session({ adapter: okAdapter(), render: (model, ...rest) => { bare.push(model); return renderScreen(model, ...rest); } });
+  await tick();
+  assert.equal(bare.at(-1).state, "ready");
+  assert.equal(bare.at(-1).freshness.fetchedAt, null);
+  b.stdin.emit("data", "q");
+  await b.done;
+});
+
 // --- against the real executable ----------------------------------------------
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
@@ -320,18 +368,25 @@ async function branchling(args, opts) {
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 
-before(async () => {
-  root = mkdtempSync(join(tmpdir(), "branchling-ui-tui-"));
-  dir = join(root, "backlog");
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
-  await branchling(["init", "--dir", dir, "--no-example", "--no-nudge"]);
+const FIXTURE_BODY = JSON.stringify({
+  goal: "A fixture task exists.",
+  verification: [{ id: "noop", bash: "true", proves: "The fixture can be closed." }],
+});
+
+/** A git repository holding a backlog with two tasks, made by branchling itself. */
+async function makeFixture(prefix) {
+  const top = mkdtempSync(join(tmpdir(), prefix));
+  const backlog = join(top, "backlog");
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: top });
+  await branchling(["init", "--dir", backlog, "--no-example", "--no-nudge"], { cwd: top });
   for (const [title, priority] of [["First fixture task", "P1"], ["Second fixture task", "P2"]]) {
-    const body = JSON.stringify({
-      goal: "A fixture task exists.",
-      verification: [{ id: "noop", bash: "true", proves: "The fixture can be closed." }],
-    });
-    await branchling(["new", "--title", title, "--priority", priority, "--dir", dir], { input: body });
+    await branchling(["new", "--title", title, "--priority", priority, "--dir", backlog], { cwd: top, input: FIXTURE_BODY });
   }
+  return { top, backlog };
+}
+
+before(async () => {
+  ({ top: root, backlog: dir } = await makeFixture("branchling-ui-tui-"));
 });
 
 after(() => {
@@ -381,4 +436,129 @@ test("the entry point prints the screen once, without escape codes, when piped",
   });
   assert.equal(missing.code, 1);
   assert.ok(missing.stdout.includes("The interface called branchling incorrectly"), missing.stdout);
+});
+
+// --- startup wiring (UI-20) ---------------------------------------------------
+
+/** An executable that answers --version with `version` and nothing else. */
+function fakeBin(where, version) {
+  const file = join(where, process.platform === "win32" ? "fake-branchling.cmd" : "fake-branchling");
+  if (process.platform === "win32") writeFileSync(file, `@if "%1"=="--version" (echo branchling ${version}) else (exit /b 1)\r\n`);
+  else writeFileSync(file, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "branchling ${version}"; exit 0; fi\nexit 1\n`);
+  chmodSync(file, 0o755);
+  return file;
+}
+
+test("an unsupported branchling is warned about at startup, like the web entry, before the screen", async () => {
+  const where = mkdtempSync(join(tmpdir(), "branchling-ui-tui-fake-"));
+  try {
+    const fake = fakeBin(where, "9.9.9");
+    const warnings = [];
+    const prepared = await prepareAdapter({ adapter: createAdapter({ bin: fake, dir, cwd: root }), dir, cwd: root, warn: m => warnings.push(m) });
+    assert.equal(prepared.version, "9.9.9");
+    assert.equal(prepared.supported, false);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /branchling 9\.9\.9 is outside the supported range/);
+
+    // Positive control: the pinned executable is in range and gives no warning.
+    const quiet = [];
+    const real = await prepareAdapter({ adapter: createAdapter({ bin: BIN, dir, cwd: root }), dir, cwd: root, warn: m => quiet.push(m) });
+    assert.equal(real.supported, true);
+    assert.deepEqual(quiet, []);
+
+    // Through the entry point: the warning is on stderr, the screen on stdout,
+    // and the fake's failing stats read is an error screen and a failing exit.
+    const { stdout, stderr, code } = await new Promise(resolve => {
+      execFile(process.execPath, [ENTRY, "--dir", dir, "--bin", fake], { cwd: root }, (err, out, errOut) => {
+        resolve({ stdout: out, stderr: errOut, code: err ? err.code : 0 });
+      });
+    });
+    assert.match(stderr, /branchling 9\.9\.9 is outside the supported range/);
+    assert.doesNotMatch(stdout, /outside the supported range/);
+    assert.equal(code, 1);
+  } finally {
+    rmSync(where, { recursive: true, force: true });
+  }
+});
+
+test("the TUI reads through the cache: an unchanged backlog is answered without a spawn, a change is read again", async () => {
+  const fixture = await makeFixture("branchling-ui-tui-cache-");
+  const shim = mkdtempSync(join(tmpdir(), "branchling-ui-tui-shim-"));
+  try {
+    // Spawns are counted at the spawn boundary, outside the repository.
+    const counter = join(shim, "spawns");
+    writeFileSync(counter, "");
+    let countingBin;
+    if (process.platform === "win32") {
+      countingBin = join(shim, "counting-branchling.cmd");
+      writeFileSync(countingBin, `@echo spawn>>"${counter}"\r\n@call "${BIN}" %*\r\n`);
+    } else {
+      countingBin = join(shim, "counting-branchling");
+      writeFileSync(countingBin, `#!/bin/sh\necho spawn >> '${counter}'\nexec '${BIN}' "$@"\n`);
+      chmodSync(countingBin, 0o755);
+    }
+    const spawns = () => readFileSync(counter, "utf8").split("\n").filter(Boolean).length;
+    // A short racy window, so the test need not wait RACY_MS after each write.
+    const RACY = 400;
+    const settle = () => sleep(RACY + 150);
+    const seen = [];
+    const shortRacy = (adapter, options) => {
+      seen.push(options);
+      return createCache(adapter, { changes: createFileChanges({ ...options, racyMs: RACY }) });
+    };
+    await settle();
+
+    const { adapter, cached } = await prepareAdapter({
+      adapter: createAdapter({ bin: countingBin, dir: fixture.backlog, cwd: fixture.top }),
+      dir: fixture.backlog,
+      cwd: fixture.top,
+      createCache: shortRacy,
+    });
+    assert.equal(cached, true);
+    assert.equal(typeof adapter.forRequest, "function", "the cache comes through the server's join");
+    assert.deepEqual(seen, [{ dir: fixture.backlog, cwd: fixture.top }], "the cache watches the directory the adapter reads");
+
+    const models = [];
+    const s = session({ adapter, env: { NO_COLOR: "1" }, render: (model, ...rest) => { models.push(model); return renderScreen(model, ...rest); } });
+    const screenNow = () => visible(s.stdout.written.slice(s.stdout.written.lastIndexOf(ESC.home)));
+    const waitFor = async text => {
+      for (let i = 0; i < 200 && !(screenNow().includes(text) && !screenNow().includes(STATS_TEXT.stale)); i++) await sleep(25);
+      assert.ok(screenNow().includes(text), screenNow());
+    };
+    await waitFor("Tasks 2");
+    const afterFirst = spawns();
+    const firstFetchedAt = models.at(-1).freshness.fetchedAt;
+    assert.match(firstFetchedAt, /^\d{4}-\d\d-\d\dT/, "the scope's answeredAt() reaches the model");
+
+    // Unchanged backlog: r is answered from memory, no process starts.
+    s.stdin.emit("data", "r");
+    await waitFor("Tasks 2");
+    assert.equal(spawns(), afterFirst, "a refresh of an unchanged backlog spawns nothing");
+    assert.equal(models.at(-1).freshness.fetchedAt, firstFetchedAt, "a hit keeps the time of the spawn that produced it");
+
+    // Positive control: a change made by branchling itself is read again.
+    await branchling(["new", "--title", "Third fixture task", "--priority", "P2", "--dir", fixture.backlog], { cwd: fixture.top, input: FIXTURE_BODY });
+    await settle();
+    s.stdin.emit("data", "r");
+    await waitFor("Tasks 3");
+    assert.equal(spawns(), afterFirst + 1, "a changed backlog is read with one spawn");
+
+    s.stdin.emit("data", "q");
+    assert.equal(await s.done, 0);
+    assertRestored(s);
+
+    // Without --dir the backlog branchling finds is the one the cache watches.
+    seen.length = 0;
+    const found = await prepareAdapter({
+      adapter: createAdapter({ bin: BIN, cwd: fixture.top }),
+      cwd: fixture.top,
+      createCache: shortRacy,
+    });
+    assert.equal(found.cached, true);
+    assert.equal(seen.length, 1);
+    assert.ok(seen[0].dir.endsWith("backlog"), seen[0].dir);
+  } finally {
+    rmSync(fixture.top, { recursive: true, force: true });
+    rmSync(shim, { recursive: true, force: true });
+  }
 });

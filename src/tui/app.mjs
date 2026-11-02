@@ -18,15 +18,27 @@ import { canDriveScreen, colourEnabled, createScreen } from "./terminal.mjs";
 /** Exit codes, as a shell would report the matching signal. */
 const SIGNAL_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 };
 
-async function fetchModel(adapter) {
+/**
+ * One read of the stats. Through the cache the object given is
+ * `servedFromCache(cache)` (src/cache.mjs), the same join the server uses:
+ * each refresh takes ONE scope, whose adapter returns bare envelopes and whose
+ * `answeredAt()` is when the answer reflects the backlog (for a cache hit, the
+ * time of the spawn that produced it, never the hit). A bare adapter has no
+ * answer time.
+ */
+async function fetchModel(source) {
+  const scope = typeof source.forRequest === "function" ? source.forRequest() : null;
+  const adapter = scope ? scope.adapter : source;
   let envelope;
   try {
     envelope = await adapter.stats();
   } catch (err) {
-    return { model: fromAdapterError("stats", err), envelope: null };
+    return { model: fromAdapterError("stats", err), envelope: null, fetchedAt: null };
   }
+  const at = scope ? scope.answeredAt() : null;
+  const fetchedAt = at === null || at === undefined ? null : new Date(at).toISOString();
   // A malformed envelope throws here: that is a bug, not a state to show.
-  return { model: statsModel(envelope), envelope };
+  return { model: statsModel(envelope, { fetchedAt }), envelope, fetchedAt };
 }
 
 /**
@@ -34,7 +46,8 @@ async function fetchModel(adapter) {
  * throws. Resolves with the exit code; never leaves the terminal changed.
  *
  * @param {object} options
- * @param {{ stats: () => Promise<object> }} options.adapter
+ * @param {{ stats: () => Promise<object> } | { forRequest: () => object }} options.adapter a bare adapter, or
+ *   `servedFromCache(createCache(...))`, which has `forRequest()` instead
  * @param {any} [options.stdin] @param {any} [options.stdout] @param {any} [options.stderr]
  * @param {any} [options.proc] emits SIGINT, SIGTERM, SIGHUP, uncaughtException, unhandledRejection, exit
  * @param {Record<string, string|undefined>} [options.env]
@@ -64,6 +77,7 @@ export async function runTui({
     const screen = createScreen({ stdin, stdout });
     let model = loadingState("stats");
     let lastEnvelope = null;
+    let lastFetchedAt = null;
     let generation = 0;
     let finished = false;
 
@@ -102,13 +116,14 @@ export async function runTui({
     async function refresh() {
       const mine = ++generation;
       // Keep what is on screen while the new read runs, marked stale, rather
-      // than blanking it: the same stale state UI-2's cache will use.
-      model = lastEnvelope ? statsModel(lastEnvelope, { stale: true }) : loadingState("stats");
+      // than blanking it. The cache never hands out a stale answer (a hit
+      // means nothing changed), so "stale" here only ever means "in flight".
+      model = lastEnvelope ? statsModel(lastEnvelope, { stale: true, fetchedAt: lastFetchedAt }) : loadingState("stats");
       draw();
       const next = await fetchModel(adapter);
       if (finished || mine !== generation) return;
       model = next.model;
-      if (next.envelope) lastEnvelope = next.envelope;
+      if (next.envelope) { lastEnvelope = next.envelope; lastFetchedAt = next.fetchedAt; }
       draw();
     }
 
