@@ -33,6 +33,8 @@ An undeclared release, target or stage name is a refusal envelope from branchlin
 
 UI-21 shipped an interim route: branchling 0.2.0 rejects `deploy status --json --release nope` (also --target, --env) with exit 2 and stderr only, no envelope, so rejectingTypedInput assumes that a usage error on a call carrying typed names is the names' fault and answers 422 rejected-input. That guess misattributes a wrongly built flag on such a call, and no pinned command gives the declared releases as JSON, so the page can only show branchling's stderr for them. The upstream contract to ask for: on an undeclared --release/--target/--env, `deploy status --json` prints a `release-status` envelope with refusalKind `unknown-name`, `refusal`, `rejected: { flag, value }` and `declared: [...]`, exit 1; plus the declared releases as data (in the unfiltered release-status envelope or a vocabulary command, see UI-18). Rejected alternative: parsing the '(declared: …)' text in stderr, which AGENTS.md forbids.
 
+Upstream: TL-533 in the branchling repository (filed 2026-11-02) for the unknown-name refusal; the declared releases as data come with TL-532.
+
 ## Steps
 
 1. File the contract above as an issue in limackk/branchling and record its id here.
