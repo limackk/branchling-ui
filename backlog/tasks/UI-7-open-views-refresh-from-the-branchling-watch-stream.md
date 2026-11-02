@@ -33,6 +33,8 @@ Open views refresh when the backlog changes, driven by `branchling watch --json`
 
 Depends on upstream TL-524 in the branchling repository. Replaces the file-system invalidation seam left by the cache task.
 
+Update 2026-11-02: TL-524 is done in the upstream checkout as `branchling follow --json` (one envelope per change), not `watch`; it is not on GitHub yet, so this stays blocked until it is pushed and pinned.
+
 ## Steps
 
 1. Run one `watch --json` child per open backlog and parse its event envelopes.
