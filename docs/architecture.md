@@ -146,6 +146,16 @@ A handler that refuses a request before calling the adapter (a missing or
 malformed parameter) throws `RequestError` from `src/request-error.mjs`:
 `400 bad-request` by default, any 4xx allowed, and no spawn.
 
+A name the user typed (a release, a target, a stage) that branchling rejects
+is the user's to fix, not this package's bug. Until branchling answers it with
+a refusal envelope (it prints stderr only, exit 2), a handler wraps such a call
+in `rejectingTypedInput` (same module): a usage error on a call that carried
+typed names becomes `422 rejected-input` with `input`, `declared` (per
+parameter, from branchling's own JSON, `null` when not known) and branchling's
+message verbatim as `detail`. The view model's `rejected` state names the
+undeclared name and lists the declared ones. A usage error on a call with no
+typed name stays `500 usage-error` (UI-21).
+
 The guard answers `403 forbidden`; an unknown path `404 not-found`; a method
 with no route `405 method-not-allowed`.
 

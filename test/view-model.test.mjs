@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 
 import { STATS_TEXT, statsModel } from "../src/view-model/stats.mjs";
-import { fromAdapterError, fromApiError, loadingState, unreachableState } from "../src/view-model/states.mjs";
+import { fromAdapterError, fromApiError, loadingState, rejectedInputState, unreachableState } from "../src/view-model/states.mjs";
 import { BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
 import { priorityRole, statusRole } from "../src/view-model/roles.mjs";
 
@@ -171,6 +171,61 @@ test("an adapter error becomes the same state the API error would", () => {
   assert.equal(other.errorType, "internal");
   assert.equal(other.detail, "spawn branchling ENOENT");
   for (const model of [refusal, mismatch, usage, other]) assert.ok(isPlainData(model));
+});
+
+// --- UI-21: a name the user typed that branchling rejected ------------------
+// The bodies are the server's `422 rejected-input` shape; test/release-view
+// proves the real executable and route produce it.
+
+const STDERR_RELEASE = "\u2717 branchling deploy status: `nope` is not a declared release (declared: 1.0, 1.1)";
+
+test("a rejected typed name is its own state, not the interface-bug error", () => {
+  const body = { error: { type: "rejected-input", message: "branchling rejected a name that was typed: release=nope", input: { release: "nope" }, declared: { release: null }, detail: STDERR_RELEASE } };
+  const model = fromApiError("release", body, 422);
+  assert.equal(model.state, "rejected");
+  assert.equal(model.errorType, "rejected-input");
+  assert.equal(model.httpStatus, 422);
+  assert.equal(model.title, "No release named \u201cnope\u201d is declared");
+  assert.notEqual(model.title, fromApiError("release", { error: { type: "usage-error", message: "x" } }, 500).title);
+  assert.deepEqual(model.names.map(n => [n.key, n.value, n.known]), [["release", "nope", false]]);
+  // branchling gives no list of releases as data: said so, never an empty list.
+  assert.equal(model.names[0].declared, null);
+  assert.match(model.names[0].declaredText, /no list of the declared releases/);
+  assert.equal(model.branchlingSaid, STDERR_RELEASE);
+  assert.ok(isPlainData(model));
+
+  // Negative control: a usage error with no typed name is still this package's bug.
+  const bug = fromApiError("release", { error: { type: "usage-error", message: "unknown flag --nope" } }, 500);
+  assert.equal(bug.state, "error");
+  assert.equal(bug.title, "The interface called branchling incorrectly");
+});
+
+test("a rejected typed name lists the declared names branchling gave as data", () => {
+  const model = fromApiError("release", { error: { type: "rejected-input", input: { target: "nope" }, declared: { target: ["api", "web"] }, detail: "x" } }, 422);
+  assert.equal(model.title, "No deploy target named \u201cnope\u201d is declared");
+  assert.deepEqual(model.names[0].declared, ["api", "web"]);
+  assert.equal(model.names[0].declaredText, "The declared deploy targets: api, web.");
+  assert.equal(model.names[0].isDeclared, false);
+
+  // A declared list that is empty is said as such, distinct from unknown.
+  const none = rejectedInputState("release", { input: { target: "web" }, declared: { target: [] } });
+  assert.equal(none.names[0].declaredText, "This backlog declares no deploy targets.");
+
+  // Two typed names, one of them declared: the other is the one named.
+  const two = rejectedInputState("release", { input: { release: "nope", target: "web" }, declared: { release: null, target: ["web"] } }, 422);
+  assert.equal(two.title, "No release named \u201cnope\u201d is declared");
+  assert.deepEqual(two.names.map(n => n.key), ["release"]);
+  // Neither known to be declared: both named, one title for both.
+  const both = rejectedInputState("release", { input: { release: "nope", target: "gone" }, declared: { release: null, target: ["web"] } });
+  assert.equal(both.title, "A name that was typed is not declared");
+  assert.deepEqual(both.names.map(n => n.key), ["release", "target"]);
+  for (const m of [model, none, two, both]) {
+    assert.ok(isPlainData(m));
+    for (const str of strings(m)) {
+      assert.doesNotMatch(str, /<[a-z/!]/i);
+      assert.doesNotMatch(str, /\x1b/);
+    }
+  }
 });
 
 test("the stats sentences are plain text shared by both surfaces", () => {

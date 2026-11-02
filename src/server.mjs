@@ -80,7 +80,7 @@ export function isAllowedWrite(headers, port, token) {
 /** The JSON error body for anything a handler throws. Never an empty result. */
 export function errorBody(err) {
   if (err instanceof RequestError) {
-    return { status: err.status, body: { error: { type: err.type, message: err.message } } };
+    return { status: err.status, body: { error: { ...err.fields, type: err.type, message: err.message } } };
   }
   if (err instanceof BranchlingRefusal) {
     return { status: 409, body: { error: { type: "refusal", refusalKind: err.envelope.refusalKind ?? null, message: err.message, envelope: err.envelope } } };

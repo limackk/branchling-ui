@@ -86,6 +86,13 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .state p { margin: 0; }
 .state-error { background: var(--state-error-bg); color: var(--state-error-fg); }
 .state-refusal { background: var(--state-refusal-bg); color: var(--state-refusal-fg); }
+/* A typed name branchling rejected (UI-21): an answer to act on, like a
+   refusal, so it reuses the refusal tokens; links keep the checked fg colour. */
+.state-rejected { background: var(--state-refusal-bg); color: var(--state-refusal-fg); }
+.state-rejected p + p, .state-rejected ul { margin-top: var(--space-1); }
+.state-rejected code { white-space: pre-wrap; }
+.rejected-choices { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; margin: var(--space-1) 0 0; }
+.rejected-choices a { color: inherit; text-decoration: underline; display: inline-block; min-height: 24px; min-width: 24px; padding: 0 var(--space-1); }
 .state-stale { background: var(--state-stale-bg); color: var(--state-stale-fg); margin-bottom: var(--space-3); }
 
 button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-1) var(--space-3); cursor: pointer; margin-top: var(--space-2); }

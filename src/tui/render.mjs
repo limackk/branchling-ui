@@ -113,6 +113,14 @@ function body(model, max) {
     if (model.refusalKind) lines.push([seg("Reason code: ", SGR.dim), seg(model.refusalKind)]);
     return lines;
   }
+  if (model.state === "rejected") {
+    // A name the user typed that branchling rejected (UI-21): not a fault.
+    lines.push([seg(model.title, `${SGR.bold};${SGR.yellow}`)]);
+    for (const line of wrap(model.detail, max)) lines.push([seg(line)]);
+    for (const name of model.names) for (const line of wrap(name.declaredText, max)) lines.push([seg(line)]);
+    if (model.branchlingSaid) for (const line of wrap(`${model.branchlingSaidLabel}: ${model.branchlingSaid}`, max)) lines.push([seg(line, SGR.dim)]);
+    return lines;
+  }
   if (model.freshness && model.freshness.stale) {
     for (const line of wrap(STATS_TEXT.stale, max)) lines.push([seg(line, SGR.yellow)]);
   }

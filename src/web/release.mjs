@@ -57,6 +57,49 @@ function renderState(model, retry) {
   return box;
 }
 
+/** The address of the current selection with one name replaced. */
+function hrefWith(key, value) {
+  const params = new URLSearchParams(location.search);
+  params.set("view", "release");
+  if (value) params.set(key, value);
+  else params.delete(key);
+  return `${location.pathname}?${params}`;
+}
+
+/**
+ * A name the user typed that branchling rejected (UI-21): the state's title
+ * and sentence, what is declared, a link per declared name, and branchling's
+ * own message verbatim.
+ */
+function renderRejected(model) {
+  const box = el("div", { class: "state state-rejected", role: "alert" });
+  box.append(el("h3", { text: model.title }), el("p", { text: model.detail }));
+  for (const name of model.names) {
+    box.append(el("p", { text: name.declaredText }));
+    if (name.declared && name.declared.length) {
+      box.append(el("ul", { class: "rejected-choices", "aria-label": `Declared ${name.noun} names` }, name.declared.map(choice => {
+        const link = el("a", { href: hrefWith(name.key, choice), text: choice });
+        link.addEventListener("click", event => {
+          event.preventDefault();
+          select({ ...selection(), [name.key]: choice });
+        });
+        return el("li", {}, [link]);
+      })));
+    }
+  }
+  if (model.branchlingSaid) {
+    box.append(el("p", { class: "bucket-note" }, [`${model.branchlingSaidLabel}: `, el("code", { text: model.branchlingSaid })]));
+  }
+  const clear = el("button", { type: "button", text: "Show without this name" });
+  clear.addEventListener("click", () => {
+    const next = selection();
+    for (const name of model.names) next[name.key] = "";
+    select(next);
+  });
+  box.append(clear);
+  return box;
+}
+
 let form = null;
 
 /** The selection form, built once so a reload of the data keeps its focus. */
@@ -229,6 +272,10 @@ async function load() {
     for (const lane of model.lanes) knownTargets.add(lane.target);
     syncControls(current);
     body.replaceChildren(...renderRelease(model));
+  } else if (model.state === "rejected") {
+    for (const name of model.names) if (name.key === "target" && name.declared) for (const t of name.declared) knownTargets.add(t);
+    syncControls(current);
+    body.replaceChildren(renderRejected(model));
   } else {
     body.replaceChildren(renderState(model, load));
   }
