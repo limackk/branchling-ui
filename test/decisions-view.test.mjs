@@ -16,6 +16,7 @@
  * nothing was decided. So the order the tests run in does not matter.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -27,6 +28,7 @@ import { join } from "node:path";
 import { createAdapter, listDecisions, run, parseDecideOutput, BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
 import { createServer, CAPABILITY_HEADER, MAX_BODY_BYTES } from "../src/server.mjs";
 import { createCache, servedFromCache } from "../src/cache.mjs";
+import { fixtureEnv } from "./fixtures/env.mjs";
 import { ageOf, decisionRecorded, decisionsFailure, decisionsModel, DECISIONS_TEXT, validateDecision } from "../src/view-model/decisions.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
@@ -41,7 +43,7 @@ after(() => {
 });
 
 async function branchling(root, args, opts) {
-  const { code, stdout, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  const { code, stdout, stderr } = await run(BIN, args, { cwd: root, env: fixtureEnv(root), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
   return stdout;
 }

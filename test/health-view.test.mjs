@@ -6,6 +6,7 @@
  * nothing.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";

@@ -10,6 +10,7 @@
  * every edit; the acceptance test uses the defaults, RACY_MS included.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -22,6 +23,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { createAdapter, run, BranchlingRefusal } from "../src/adapter.mjs";
 import { createCache, createFileChanges, RACY_MS } from "../src/cache.mjs";
+import { fixtureEnv, ignoreHomes } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 const RACY = 400;
@@ -33,7 +35,7 @@ let taskFile;
 let shimDir;
 
 async function branchling(args, opts) {
-  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  const { code, stderr } = await run(BIN, args, { cwd: root, env: fixtureEnv(root), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 
@@ -43,8 +45,10 @@ function fixtureBody(goal) {
   return `\n## Goal\n\n${goal}\n\n## Acceptance criteria\n\n- [ ] ${goal} [proof: noop]\n`;
 }
 
+// commit.gpgsign=false: a user's global signing (an SSH agent that may be
+// locked, or ask for approval) must not decide whether a fixture commit lands.
 function gitIn(cwd, args) {
-  return execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd, encoding: "utf8" });
+  return execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
 }
 
 const spawns = () => readFileSync(counterFile, "utf8").split("\n").filter(Boolean).length;
@@ -56,6 +60,7 @@ before(async () => {
   root = mkdtempSync(join(tmpdir(), "branchling-ui-cache-"));
   dir = join(root, "backlog");
   gitIn(root, ["init", "-q", "-b", "main"]);
+  ignoreHomes(root);
   await branchling(["init", "--dir", dir, "--no-example", "--no-nudge"]);
   const body = JSON.stringify({
     goal: "A fixture task exists.",
@@ -196,7 +201,7 @@ test("an uncommitted edit in a sibling worktree invalidates", async () => {
     const n = spawns();
     await cache.show("TASK-1");
     assert.equal((await cache.show("TASK-1")).fromCache, true);
-    await run(BIN, ["body", "TASK-1", "--reason", "sibling", "--actor", "local:test", "--dir", join(sibling, "backlog")], { cwd: sibling, input: fixtureBody("Sibling edit.") });
+    await run(BIN, ["body", "TASK-1", "--reason", "sibling", "--actor", "local:test", "--dir", join(sibling, "backlog")], { cwd: sibling, env: fixtureEnv(root), input: fixtureBody("Sibling edit.") });
     assert.match(gitIn(sibling, ["status", "--porcelain"]), /backlog\/tasks\//);
     await settle();
     assert.equal((await cache.show("TASK-1")).fromCache, false);
@@ -293,14 +298,17 @@ test("a backlog directory outside any git repository is fingerprinted without gi
   try {
     mkdirSync(join(plain, "tasks"));
     writeFileSync(join(plain, "tasks", "a.md"), "one");
-    const changes = createFileChanges({ dir: plain, racyMs: RACY });
-    await settle();
+    // The clock is injected, as in the racy test above: whether a write is
+    // "fresh" must not depend on how long git takes to answer (UI-32).
+    let clock = Date.now() + RACY + 1;
+    const changes = createFileChanges({ dir: plain, racyMs: RACY, now: () => clock });
     const t1 = await changes.token();
     assert.equal(typeof t1, "string");
     assert.equal(await changes.token(), t1);
     writeFileSync(join(plain, "tasks", "a.md"), "two");
+    clock = Date.now();
     assert.equal(await changes.token(), null, "a fresh write is racy");
-    await settle();
+    clock += RACY + 1;
     const t2 = await changes.token();
     assert.equal(typeof t2, "string");
     assert.notEqual(t2, t1);

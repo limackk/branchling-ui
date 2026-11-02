@@ -9,6 +9,7 @@
  * is proven on strings here, including that markup in it stays text.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";

@@ -8,6 +8,7 @@
  * (UI-20): the version warning and the read cache around the adapter.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
@@ -33,6 +34,7 @@ import { ESC, canDriveScreen, colourEnabled } from "../src/tui/terminal.mjs";
 import { runTui } from "../src/tui/app.mjs";
 import { prepareAdapter } from "../src/tui/start.mjs";
 import { createCache, createFileChanges } from "../src/cache.mjs";
+import { fixtureEnv } from "./fixtures/env.mjs";
 
 const SGR_RE = /\x1b\[[0-9;]*m/;
 const ANY_CSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -370,8 +372,9 @@ const ENTRY = fileURLToPath(new URL("../bin/branchling-ui-tui.mjs", import.meta.
 let root;
 let dir;
 
-async function branchling(args, opts) {
-  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+async function branchling(args, opts = {}) {
+  const at = opts.cwd || root;
+  const { code, stderr } = await run(BIN, args, { cwd: at, env: fixtureEnv(at), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 

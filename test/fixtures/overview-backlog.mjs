@@ -37,10 +37,8 @@ import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import assert from "node:assert/strict";
-
-import { run } from "../../src/adapter.mjs";
-import { BIN, buildEmptyBacklog, buildPlanBacklog, fixtureEnv } from "./plan-backlog.mjs";
+import { branchlingIn } from "./env.mjs";
+import { BIN, buildEmptyBacklog, buildPlanBacklog } from "./plan-backlog.mjs";
 
 export const QUESTION = "Should the garden have a fence?";
 export const QUESTION_TASK = "TASK-5";
@@ -55,12 +53,11 @@ export const FAILING_CHECK = "git-tracked";
  */
 export async function buildOverviewBacklog(root, { bin = BIN } = {}) {
   const { dir } = await buildPlanBacklog(root, { bin });
-  const { code, stderr } = await run(bin, [
+  await branchlingIn(root, { bin })([
     "ask", QUESTION_TASK, "--question", QUESTION,
     "--option", "Yes: keeps the rabbits out", "--option", "No: leave it open", "--recommend", "1",
     "--actor", "agent:fixture", "--dir", dir,
-  ], { cwd: root, env: fixtureEnv(root) });
-  assert.equal(code, 0, `branchling ask exited ${code}: ${stderr}`);
+  ]);
   execFileSync("git", ["add", "-f", "backlog/INDEX.yaml"], { cwd: root });
   return { root, dir };
 }

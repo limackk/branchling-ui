@@ -4,6 +4,7 @@
  * contract test proves the real executable prints that shape).
  */
 
+import "./fixtures/private-homes.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";

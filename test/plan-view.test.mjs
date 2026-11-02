@@ -5,6 +5,7 @@
  * print, so a key renamed upstream fails here rather than rendering nothing.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

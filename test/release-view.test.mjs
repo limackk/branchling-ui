@@ -17,6 +17,7 @@
  * The second fixture declares no targets and must give the empty state.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -30,6 +31,7 @@ import { createServer } from "../src/server.mjs";
 import { releaseModel, findTask } from "../src/view-model/release.mjs";
 import { fromApiError } from "../src/view-model/states.mjs";
 import { RequestError, rejectingTypedInput } from "../src/request-error.mjs";
+import { fixtureEnv, ignoreHomes } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 const BODY = JSON.stringify({
@@ -46,7 +48,7 @@ function git(root, args) {
 }
 
 async function branchling(root, args, opts) {
-  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  const { code, stderr } = await run(BIN, args, { cwd: root, env: fixtureEnv(root), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 
@@ -54,6 +56,7 @@ async function fixture(prefix) {
   const root = mkdtempSync(join(tmpdir(), prefix));
   const dir = join(root, "backlog");
   git(root, ["init", "-q", "-b", "main"]);
+  ignoreHomes(root);
   git(root, ["config", "user.email", "fixture@example.invalid"]);
   git(root, ["config", "user.name", "Fixture"]);
   git(root, ["config", "commit.gpgsign", "false"]);

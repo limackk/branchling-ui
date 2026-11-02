@@ -5,6 +5,7 @@
  * repository's own backlog, whose contents are data, not the contract.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -17,6 +18,7 @@ import {
   BranchlingRefusal, BranchlingUsageError, ContractMismatch,
 } from "../src/adapter.mjs";
 import { BROKEN_GUARDS, buildBrokenBacklog, buildHealthyBacklog } from "./fixtures/health-backlog.mjs";
+import { fixtureEnv } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
@@ -25,7 +27,7 @@ let dir;
 /** The fixture is built through the adapter's own spawn, so it starts
  *  branchling exactly as the adapter does, `.cmd` shim on Windows included. */
 async function branchling(args, opts) {
-  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  const { code, stderr } = await run(BIN, args, { cwd: root, env: fixtureEnv(root), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 

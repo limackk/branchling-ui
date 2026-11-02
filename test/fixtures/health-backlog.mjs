@@ -42,35 +42,17 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { run } from "../../src/adapter.mjs";
+import { BIN, branchlingIn, HOMES } from "./env.mjs";
 
-export const BIN = process.env.BRANCHLING_BIN || "branchling";
+export { BIN };
 
 export const TITLES = { "TASK-1": "Alpha exists", "TASK-2": "Beta exists", "TASK-3": "Gamma exists" };
 export const DIVERGENT_BRANCH = "feature/gamma";
 /** The guards the broken fixture fails, in branchling's order. */
 export const BROKEN_GUARDS = ["refs", "history", "vocabulary"];
 
-/** branchling's own homes for this fixture, so nothing lands in the user's. */
-export function fixtureEnv(root) {
-  return {
-    XDG_DATA_HOME: join(root, "xdg", "data"),
-    XDG_CONFIG_HOME: join(root, "xdg", "config"),
-    XDG_STATE_HOME: join(root, "xdg", "state"),
-  };
-}
-
 function git(root, args) {
   return execFileSync("git", ["-c", "user.email=fixture@example.invalid", "-c", "user.name=Fixture", "-c", "commit.gpgsign=false", ...args], { cwd: root, encoding: "utf8" }).trim();
-}
-
-function makeBranchling(root, bin) {
-  const env = fixtureEnv(root);
-  return async (args, opts = {}) => {
-    const { code, stdout, stderr } = await run(bin, args, { cwd: root, env, ...opts });
-    assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
-    return stdout;
-  };
 }
 
 /** Replaces one frontmatter line of a task file, and fails if it was not there. */
@@ -95,8 +77,8 @@ export async function buildHealthyBacklog(root, { bin = BIN } = {}) {
   const dir = join(root, "backlog");
   git(root, ["init", "-q", "-b", "main"]);
   // The fixture's own branchling homes are not part of the repository.
-  writeFileSync(join(root, ".gitignore"), "xdg/\n");
-  const branchling = makeBranchling(root, bin);
+  writeFileSync(join(root, ".gitignore"), `${HOMES}/\n`);
+  const branchling = branchlingIn(root, { bin });
   await branchling(["init", "--dir", dir, "--no-example", "--no-nudge"]);
   for (const title of Object.values(TITLES)) {
     const body = JSON.stringify({ goal: title, verification: [{ id: "noop", bash: "true", proves: "The fixture can be closed." }] });
@@ -113,7 +95,7 @@ export async function buildHealthyBacklog(root, { bin = BIN } = {}) {
  */
 export async function buildBrokenBacklog(root, { bin = BIN } = {}) {
   const { dir } = await buildHealthyBacklog(root, { bin });
-  const branchling = makeBranchling(root, bin);
+  const branchling = branchlingIn(root, { bin });
 
   git(root, ["checkout", "-q", "-b", DIVERGENT_BRANCH]);
   await branchling(["take", "TASK-3", "--actor", "agent:fixture", "--dir", dir]);

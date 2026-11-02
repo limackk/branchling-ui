@@ -5,6 +5,7 @@
  * a test set the Host header, and the Host header is what the guard judges.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -20,6 +21,7 @@ import { createAdapter, run, BranchlingRefusal } from "../src/adapter.mjs";
 import { createCache, createFileChanges, servedFromCache } from "../src/cache.mjs";
 import { RequestError } from "../src/request-error.mjs";
 import { createServer, CAPABILITY_HEADER } from "../src/server.mjs";
+import { fixtureEnv } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
@@ -27,7 +29,7 @@ let dir;
 let server;
 
 async function branchling(args, opts) {
-  const { code, stderr } = await run(BIN, args, { cwd: root, ...opts });
+  const { code, stderr } = await run(BIN, args, { cwd: root, env: fixtureEnv(root), ...opts });
   assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
 }
 

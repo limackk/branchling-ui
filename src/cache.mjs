@@ -63,10 +63,11 @@
  *
  * KNOWN LIMITS, each one a way the answer can change with no change seen here:
  *   - branchling's per-machine state outside the repository: the reservation
- *     lockfiles that `take` writes under the user's data directory and the
+ *     lockfiles that `take` writes under the user's state directory and the
  *     preferences under the user's config directory (`branchling where`
- *     names both). No reading envelope was seen to expose a reservation, but
- *     nothing promises that.
+ *     names the config one; the locks are under `$XDG_STATE_HOME/branchling`,
+ *     else `~/.local/state/branchling`). No reading envelope was seen to
+ *     expose a reservation, but nothing promises that.
  *   - a sibling worktree that keeps its backlog at a DIFFERENT relative path.
  *   - other clones reachable only through a remote: their state arrives with
  *     a fetch, which moves a remote ref and so is covered.
@@ -199,6 +200,11 @@ export function createFileChanges({ dir, cwd, racyMs = RACY_MS, now = Date.now }
 
   return {
     async token() {
+      // The clock is read BEFORE looking. Read after the walk and git's three
+      // spawns, a slow look (a loaded machine, git at 0.6 s a call) made a
+      // file written just before it look older than it was when seen, and a
+      // racy state was vouched for (UI-32).
+      const lookedAt = now();
       const backlog = await canonical(target);
       const [own, top, trees, refs] = await Promise.all([
         walk(backlog),
@@ -219,7 +225,7 @@ export function createFileChanges({ dir, cwd, racyMs = RACY_MS, now = Date.now }
         }
       }
       // Too recent to trust: a second write in the same tick would not show.
-      if (newestNs > BigInt(Math.floor(now() - racyMs)) * 1_000_000n) return null;
+      if (newestNs > BigInt(Math.floor(lookedAt - racyMs)) * 1_000_000n) return null;
       return createHash("sha256").update(parts.join("\n\0\n")).digest("hex");
     },
   };

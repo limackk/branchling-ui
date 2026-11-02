@@ -33,16 +33,16 @@
  * package-lock.json) has; check with `node_modules/.bin/branchling --help`.
  */
 
-import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { run } from "../../src/adapter.mjs";
+import { BIN, branchlingIn, fixtureEnv, ignoreHomes } from "./env.mjs";
 
-export const BIN = process.env.BRANCHLING_BIN || "branchling";
+// Re-exported for the fixtures built on this one; ./env.mjs is their source.
+export { BIN, fixtureEnv };
 
 export const PLAN_RATIONALE = "The foundation first, the house on it after.";
 export const WAVES = [
@@ -56,20 +56,6 @@ export const TITLES = {
   "TASK-4": "Doors hang",
   "TASK-5": "A garden exists",
 };
-
-/** branchling's own homes for this fixture, so nothing lands in the user's. */
-export function fixtureEnv(root) {
-  return { XDG_DATA_HOME: join(root, "xdg", "data"), XDG_CONFIG_HOME: join(root, "xdg", "config") };
-}
-
-function makeBranchling(root, bin) {
-  const env = fixtureEnv(root);
-  return async (args, opts = {}) => {
-    const { code, stdout, stderr } = await run(bin, args, { cwd: root, env, ...opts });
-    assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
-    return stdout;
-  };
-}
 
 /** The `seed` plan: the five tasks, numbered TASK-1..5 in this order. */
 function seedPlan() {
@@ -94,7 +80,9 @@ export async function buildEmptyBacklog(root, { bin = BIN } = {}) {
   mkdirSync(root, { recursive: true });
   const dir = join(root, "backlog");
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
-  const branchling = makeBranchling(root, bin);
+  // branchling's homes live in the fixture (./env.mjs), invisible to its git.
+  ignoreHomes(root);
+  const branchling = branchlingIn(root, { bin });
   await branchling(["init", "--dir", dir, "--no-example", "--no-nudge"]);
   return { root, dir, branchling };
 }

@@ -12,6 +12,7 @@
  * TASK-1 startable and TASK-2 in flight; TASK-3 is blocked_by TASK-2.
  */
 
+import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
