@@ -29,7 +29,7 @@ function el(tag, props = {}, children = []) {
 /** A failure (error or refusal) as a box with role="alert". */
 function failureNode(model, retry) {
   const box = el("div", { class: `state state-${model.state}`, role: "alert" });
-  box.append(el("h3", { text: model.title }), el("p", { text: model.detail }));
+  box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
   if (model.details && model.details.length) {
     box.append(el("ul", { class: "refusal-details" }, model.details.map(line => el("li", { text: line }))));
   }
@@ -51,20 +51,21 @@ function questionForm(q) {
   fieldset.append(el("legend", { text: `Answer the question on ${q.taskId}` }));
 
   const reasonId = `decision-${n}-reason`;
-  const reason = el("textarea", { id: reasonId, name: "reason", rows: "3", maxlength: "2000" });
+  const reason = el("textarea", { id: reasonId, class: "textarea", name: "reason", rows: "3", maxlength: "2000" });
   let ownWords = null;
   if (q.options.length) {
-    const group = el("fieldset", { class: "decision-options" }, [el("legend", { text: DECISIONS_TEXT.optionsLegend })]);
+    const group = el("fieldset", { class: "choices decision-options" }, [el("legend", { text: DECISIONS_TEXT.optionsLegend })]);
+    // Each option is a radio card: the whole label is the target.
     for (const option of q.options) {
       const id = `decision-${n}-option-${option.number}`;
-      group.append(el("div", { class: "decision-option" }, [
+      group.append(el("label", { class: "choice decision-option", for: id }, [
         el("input", { type: "radio", id, name: "choice", value: String(option.number) }),
-        el("label", { for: id, text: `${option.number}. ${option.label}` }),
+        el("span", { text: `${option.number}. ${option.label}` }),
       ]));
     }
     const ownId = `decision-${n}-own`;
     ownWords = el("input", { type: "radio", id: ownId, name: "choice", value: "own" });
-    group.append(el("div", { class: "decision-option" }, [ownWords, el("label", { for: ownId, text: DECISIONS_TEXT.ownWords })]));
+    group.append(el("label", { class: "choice decision-option", for: ownId }, [ownWords, el("span", { text: DECISIONS_TEXT.ownWords })]));
     fieldset.append(group);
     reason.addEventListener("input", () => { if (reason.value.trim()) ownWords.checked = true; });
   } else if (q.optionsNote) {
@@ -122,10 +123,10 @@ function questionForm(q) {
 function questionNode(q) {
   const meta = [q.statusLabel, q.priority, `asked by ${q.askedBy}`].filter(Boolean).join(" · ");
   const when = q.askedAt ? el("time", { datetime: q.askedAt, title: q.askedAt, text: q.ageLabel }) : document.createTextNode(q.ageLabel);
-  return el("li", { class: "decision" }, [
+  return el("li", { class: "card decision" }, [
     el("h3", {}, [el("span", { class: "task-id", text: q.taskId }), ` ${q.title}`]),
-    el("p", { class: "task-meta" }, [`${meta} · `, when]),
-    el("p", { class: "decision-question" }, [el("span", { class: "visually-hidden", text: "Question: " }), q.text]),
+    el("p", { class: "task-meta asked" }, [`${meta} · `, when]),
+    el("p", { class: "question decision-question" }, [el("span", { class: "visually-hidden", text: "Question: " }), q.text]),
     el("p", { class: "bucket-note", text: q.needs }),
     questionForm(q),
   ]);

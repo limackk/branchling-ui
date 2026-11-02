@@ -10,38 +10,34 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="topbar bar">
+<div class="app">
+<header class="sidebar">
   <span class="brand">
-    <svg class="icon brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21V9"/><path d="M7 13c0-3 2.5-5 6-5"/><path d="M13 8c0-3 2.5-5 6-5 0 3.5-2.5 6-6 5Z" fill="currentColor"/><circle cx="7" cy="6" r="2.2"/><path d="M4 21h6"/></svg>
+    <svg class="icon brand-mark" aria-hidden="true"><use href="/icons.svg#brand"/></svg>
     <h1>Backlog</h1>
   </span>
-  <p class="root" id="root"></p>
-  <nav aria-label="Views">
-    <ul class="views">
-      <li><a href="?view=decisions" data-view-link="decisions">Decisions</a></li>
-      <li><a href="?view=plan" data-view-link="plan">Plan</a></li>
-      <li><a href="?view=release" data-view-link="release">Release</a></li>
-      <li><a href="?view=stats" data-view-link="stats">Stats</a></li>
-    </ul>
+  <div class="backlog-switch">
+    <span class="t-caption">Backlog directory</span>
+    <span class="path" id="root"></span>
+  </div>
+  <nav class="nav" aria-label="Views">
+    <a href="?view=stats" data-view-link="stats"><svg class="icon" aria-hidden="true"><use href="/icons.svg#overview"/></svg><span>Stats</span></a>
+    <a href="?view=plan" data-view-link="plan"><svg class="icon" aria-hidden="true"><use href="/icons.svg#plan"/></svg><span>Plan</span></a>
+    <a href="?view=release" data-view-link="release"><svg class="icon" aria-hidden="true"><use href="/icons.svg#pipeline"/></svg><span>Release</span></a>
+    <a href="?view=decisions" data-view-link="decisions"><svg class="icon" aria-hidden="true"><use href="/icons.svg#decision"/></svg><span>Decisions</span></a>
   </nav>
 </header>
 <main id="main" class="page" tabindex="-1">
-  <section aria-labelledby="plan-title" data-view="plan" hidden>
-    <h2 id="plan-title">Plan</h2>
-    <div id="plan" aria-live="polite" aria-busy="true">
-      <p class="state state-loading">Loading the plan…</p>
-    </div>
-  </section>
   <section aria-labelledby="stats-title" data-view="stats">
     <h2 id="stats-title">Stats</h2>
     <div id="stats" aria-live="polite" aria-busy="true">
       <p class="state state-loading">Loading stats…</p>
     </div>
   </section>
-  <section aria-labelledby="decisions-title" data-view="decisions" hidden>
-    <h2 id="decisions-title">Decisions waiting on a person</h2>
-    <div id="decisions">
-      <p class="state state-loading">Loading the questions waiting on a decision…</p>
+  <section aria-labelledby="plan-title" data-view="plan" hidden>
+    <h2 id="plan-title">Plan</h2>
+    <div id="plan" aria-live="polite" aria-busy="true">
+      <p class="state state-loading">Loading the plan…</p>
     </div>
   </section>
   <section aria-labelledby="release-title" data-view="release" hidden>
@@ -50,6 +46,13 @@
       <p class="state state-loading">Loading the release pipeline…</p>
     </div>
   </section>
+  <section aria-labelledby="decisions-title" data-view="decisions" hidden>
+    <h2 id="decisions-title">Decisions waiting on a person</h2>
+    <div id="decisions">
+      <p class="state state-loading">Loading the questions waiting on a decision…</p>
+    </div>
+  </section>
 </main>
+</div>
 </body>
 </html>

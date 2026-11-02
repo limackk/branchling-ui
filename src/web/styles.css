@@ -3,8 +3,8 @@
  *
  * Views use only the semantic custom properties below, never a literal
  * colour. Light and dark are one light-dark() declaration per token; the
- * scheme follows prefers-color-scheme. Every text/background pair meets WCAG
- * 2.2 AA in both schemes (docs/design/contrast-pairs.json).
+ * scheme follows prefers-color-scheme. Every pair the views use meets WCAG
+ * 2.2 AA in both schemes: node .agents/skills/ui-verify/contrast.mjs.
  *
  * Colour roles: a status or priority gets a role from
  * src/view-model/roles.mjs, never a colour. All six roles are styled here;
@@ -131,6 +131,10 @@
   --state-stale-bg: var(--role-progress-bg);
   --state-stale-fg: var(--role-progress-fg);
   --state-stale-border: light-dark(var(--blue-200), #26406b);
+  /* an answer branchling recorded (UI-5): a write that went through */
+  --state-recorded-bg: var(--role-success-bg);
+  --state-recorded-fg: var(--role-success-fg);
+  --state-recorded-border: light-dark(var(--green-200), #24502f);
 
   /* ---------- typography ---------- */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -600,19 +604,38 @@ a.task-id:hover { text-decoration: underline; }
 
 /* =====================================================================
  * This page's markup on the system. The views build plain elements with
- * a few classes (src/web/app.mjs, src/web/release.mjs); these rules give
- * them the system's look without a component library.
+ * a few classes (src/web/app.mjs, plan.mjs, release.mjs, decisions.mjs);
+ * these rules give them the system's look without a component library.
  * ===================================================================== */
 
-.bar { position: static; height: auto; min-height: var(--topbar-height); padding: var(--space-2) var(--space-6); flex-wrap: wrap; row-gap: 0; }
-.bar .brand { padding: 0; }
-.bar h1 { font-size: var(--font-size-400); }
-.root { margin: 0; font-family: var(--font-mono); font-size: var(--font-size-100); color: var(--color-text-muted); overflow-wrap: anywhere; }
-.page > section + section { margin-top: var(--space-10); }
+/* the app shell (UI-25, docs/architecture.md). Wide: the sidebar of the
+   mockups. Below 64rem: the same header is a band above the page with the
+   four views in one row that wraps; no drawer, so nothing is hidden behind a
+   menu button and the shell needs no script. */
+.app { min-height: 100vh; }
+.sidebar h1 { font-size: var(--font-size-400); }
+.backlog-switch:has(.path:empty) { display: none; }
+.page { min-width: 0; width: 100%; }
+.page > section:not([hidden]) + section:not([hidden]) { margin-top: var(--space-10); }
 .page h2 { font-size: var(--font-size-600); letter-spacing: -0.01em; margin-bottom: var(--space-4); }
 .page h3 { font-size: var(--font-size-500); margin: var(--space-6) 0 var(--space-3); }
 .page h4 { font-size: var(--font-size-300); }
-@media (max-width: 64rem) { .bar { padding: var(--space-2) var(--space-4); } }
+@media (max-width: 64rem) {
+  .app { grid-template-rows: auto 1fr; }
+  .sidebar {
+    position: static; inset: auto; z-index: auto; width: auto; height: auto; overflow: visible;
+    transform: none; transition: none; box-shadow: none;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-right: 0; border-bottom: var(--border-width) solid var(--color-border-default);
+  }
+  .sidebar .brand { padding: 0; }
+  .backlog-switch { padding: 0; border: 0; background: none; }
+  .backlog-switch .t-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-0-5); margin: 0 calc(var(--space-2) * -1); }
+  .nav a { padding: 0 var(--space-2); }
+  .nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--color-action-primary); }
+}
 
 /* stats: totals as stat tiles */
 .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-3); margin: 0; }
@@ -661,6 +684,18 @@ a.task-id:hover { text-decoration: underline; }
 .release-controls label { font-size: var(--font-size-200); color: var(--color-text-muted); }
 .release-controls button { margin-top: 0; }
 .release-refs { margin-bottom: var(--space-4); }
+/* The refs table keeps its table semantics at every width. Wide, it is as
+   wide as its content, every cell padded alike. On a phone it scrolls inside
+   itself, never the page sideways, and no column is squeezed: ref and SHA do
+   not wrap, the note gets room for a short sentence per line. */
+.page table.release-refs { width: auto; max-width: 100%; }
+.page table.release-refs td:last-child { min-width: 12rem; }
+.page table.release-refs tr > :last-child { padding-right: var(--space-4); }
+@media (max-width: 40rem) {
+  .page table.release-refs { display: block; overflow-x: auto; }
+  .page table.release-refs td:nth-child(2), .page table.release-refs td:nth-child(3) { white-space: nowrap; }
+  .page table.release-refs td:last-child { min-width: 14rem; }
+}
 .release-refs caption { text-align: left; font-size: var(--font-size-300); font-weight: var(--font-weight-semibold); padding: var(--space-2) var(--space-3); background: var(--color-bg-surface); }
 .release-refs td.sha { background: none; font-size: var(--font-size-200); }
 .release-lane + .release-lane { margin-top: var(--space-6); }
@@ -680,74 +715,93 @@ a.task-id:hover { text-decoration: underline; }
 .release-scope h4 { margin: var(--space-4) 0 0; }
 .unknown { font-style: italic; }
 
-/* ---- merged from main (UI-3, UI-5, UI-21), tokens renamed onto the system ---- */
-/* A typed name branchling rejected (UI-21): an answer to act on, like a
-   refusal, so it reuses the refusal tokens; links keep the checked fg colour. */
-.state-rejected { background: var(--state-refusal-bg); color: var(--state-refusal-fg); }
-.state-rejected p + p, .state-rejected ul { margin-top: var(--space-1); }
-.state-rejected code { white-space: pre-wrap; }
-.rejected-choices { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; margin: var(--space-1) 0 0; }
-.rejected-choices a { color: inherit; text-decoration: underline; display: inline-block; min-height: 24px; min-width: 24px; padding: 0 var(--space-1); }
-/* The decisions view (UI-5). The recommended option is marked in its label's
-   text, never by colour alone. Targets are at least 24px (WCAG 2.5.8). */
-.decisions { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-4); }
-.decision { background: var(--color-bg-subtle); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); }
-.decision h3 { margin: 0; }
-.decision .task-meta { margin: 0; font-size: 0.875rem; }
-.decision-question { font-size: 1.0625rem; margin: var(--space-2) 0; overflow-wrap: anywhere; }
-.decision-form fieldset { border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-4); }
-.decision-form legend { font-weight: 600; padding: 0 var(--space-1); }
-.decision-options { margin-bottom: var(--space-2); }
-.decision-option { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 24px; margin: var(--space-1) 0; }
-.decision-option input { width: 24px; height: 24px; margin: 0; flex: none; accent-color: var(--color-action-primary); }
-.decision-reason-label { display: block; margin-top: var(--space-2); }
-.decision-form textarea { display: block; width: 100%; font: inherit; color: var(--color-text-default); background: var(--color-bg-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); }
-.decision-form button { min-height: 24px; }
-.decision-form button:disabled { cursor: progress; }
-.decision-feedback .state { margin-top: var(--space-2); }
-.refusal-details { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
-.state-recorded { background: var(--role-success-bg); color: var(--role-success-fg); margin-bottom: var(--space-4); }
-.state-recorded p + p { margin-top: var(--space-1); }
+/* a typed name branchling rejected (UI-21): an answer to act on, like a
+   refusal, so it wears the refusal tokens; its links keep that fg colour */
+.state-rejected { background: var(--state-refusal-bg); color: var(--state-refusal-fg); border-color: var(--state-refusal-border); }
+.state-rejected code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rejected-choices { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; margin: 0; }
+.rejected-choices a { display: inline-flex; align-items: center; min-height: var(--control-height-sm); min-width: 24px; padding: 0 var(--space-2); color: inherit; font-family: var(--font-mono); font-size: var(--font-size-300); border: var(--border-width) solid currentColor; border-radius: var(--radius-md); text-decoration: none; }
+.rejected-choices a:hover { text-decoration: underline; }
 
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* an answer branchling recorded (UI-5) */
+.state-recorded { background: var(--state-recorded-bg); color: var(--state-recorded-fg); border-color: var(--state-recorded-border); margin-bottom: var(--space-4); }
+.refusal-details { margin: 0; padding-left: var(--space-5); font-family: var(--font-mono); font-size: var(--font-size-200); }
 
-/* View navigation (shared by every view). */
-.views { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; margin: var(--space-2) 0 0; }
-.views a { display: inline-block; min-height: 24px; padding: var(--space-1) var(--space-4); color: var(--color-action-primary); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); }
-.views a[aria-current="page"] { background: var(--color-bg-subtle); color: var(--color-text-default); font-weight: 600; }
+/* targets the views build as plain links are at least 24px (WCAG 2.5.8) */
+a.task-id { display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; }
 
-/* The plan view (UI-3). Wave states differ by more than colour: a label, a
-   border style and whether the wave starts collapsed. */
-.plan-summary { font-size: 1.125rem; font-weight: 600; margin: 0 0 var(--space-1); }
-.plan-measure { font-weight: 600; }
-.quiet { color: var(--color-text-muted); margin: var(--space-1) 0; }
-.plan-rationale { margin: var(--space-4) 0; padding: var(--space-2) var(--space-4); border-left: 3px solid var(--color-border-strong); }
-.plan-rationale figcaption { color: var(--color-text-muted); font-size: 0.875rem; }
-.plan-rationale blockquote { margin: 0; }
-.plan-rationale p { margin: 0; }
+/* ---------- the plan view (UI-3), after mockups/plan.html ----------
+   A wave's state is its label first; the active wave also has the accent
+   rail and border, a later one a dashed border, a closed one starts
+   collapsed. Wave states are not statuses, but their badges stay neutral
+   too: the label carries the meaning. */
+.plan-summary { font-size: var(--font-size-500); font-weight: var(--font-weight-semibold); line-height: var(--line-height-tight); margin: 0 0 var(--space-1); }
+.quiet { color: var(--color-text-muted); font-size: var(--font-size-300); margin: var(--space-1) 0; }
+.plan-rationale { margin: var(--space-4) 0 var(--space-6); max-width: var(--prose-max); }
+.plan-rationale figcaption { font-size: var(--font-size-400); font-weight: var(--font-weight-semibold); }
+.plan-rationale blockquote { margin: var(--space-2) 0 0; color: var(--color-text-muted); font-size: var(--font-size-300); }
 .plan-region { margin-top: var(--space-6); }
-.tasks { list-style: none; padding: 0; margin: var(--space-1) 0; }
-.task { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); padding: var(--space-1) 0; border-bottom: 1px solid var(--color-border-strong); }
-.task-id { font-weight: 600; font-variant-numeric: tabular-nums; }
-a.task-id { color: var(--color-action-primary); display: inline-block; min-height: 24px; min-width: 24px; }
-.task-notes { color: var(--color-text-muted); font-size: 0.875rem; }
-.group { border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); margin: var(--space-1) 0; }
-.waves { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-2); }
-.wave { border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); }
-.wave-head { cursor: pointer; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); align-items: baseline; min-height: 24px; }
-.wave-name { font-weight: 600; }
-.wave-state { padding: 0 var(--space-2); border-radius: var(--radius-md); background: var(--role-neutral-bg); color: var(--role-neutral-fg); }
-.wave-progress { color: var(--color-text-muted); font-size: 0.875rem; }
-.wave-active { border: 3px solid var(--color-action-primary); background: var(--color-bg-subtle); }
-.wave-next { border-style: solid; }
-.wave-later { border-style: dashed; }
-.wave-closed { border-style: dotted; }
-.wave-closed .wave-name, .wave-later .wave-name { font-weight: 400; }
+.page .plan-region .card-head h3 { margin: 0; font-size: var(--font-size-400); }
+.page .plan-region > h3 { margin: 0 0 var(--space-3); }
+.plan-region > .card-body > :first-child { margin-top: 0; }
+.plan-region > .card-body > :last-child { margin-bottom: 0; }
+.plan-measure { font-weight: var(--font-weight-semibold); }
 
-.panel { border: 3px solid var(--color-action-primary); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); margin-bottom: var(--space-4); background: var(--color-bg-subtle); }
-.panel h3 { margin-top: 0; }
-.panel-close { display: inline-block; margin-top: var(--space-2); min-height: 24px; color: var(--color-action-primary); }
-.facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); margin: 0; }
+.tasks { list-style: none; padding: 0; margin: 0; }
+.task { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0; border-bottom: var(--border-width) solid var(--color-border-default); }
+.task:last-child { border-bottom: 0; }
+.task-title { font-weight: var(--font-weight-medium); min-width: 0; overflow-wrap: anywhere; }
+.task-notes { flex-basis: 100%; color: var(--color-text-muted); font-size: var(--font-size-200); }
+.group { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: var(--border-width) dashed var(--color-border-strong); border-radius: var(--radius-md); }
+.group > .quiet { margin: 0; font-size: var(--font-size-200); }
+
+.wave > .card { min-width: 0; }
+.wave:last-child .wave-rail .line { display: none; }
+.wave-head { cursor: pointer; list-style: none; min-height: var(--control-height-md); border-bottom: 0; }
+.wave-head::-webkit-details-marker { display: none; }
+details[open] > .wave-head { border-bottom: var(--border-width) solid var(--color-border-default); }
+.wave-chevron { color: var(--color-text-muted); transition: transform var(--duration-fast) var(--ease-standard); }
+details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
+.wave-number { font-family: var(--font-mono); font-size: var(--font-size-200); color: var(--color-text-muted); }
+.wave-name { font-size: var(--font-size-400); font-weight: var(--font-weight-semibold); }
+.wave .card-body > :first-child { margin-top: 0; }
+.wave[data-state="later"] > .card { border-style: dashed; border-color: var(--color-border-strong); }
+.wave[data-state="closed"] .wave-name { font-weight: var(--font-weight-medium); }
+
+/* the task detail panel (`&task=`): a card with the accent border */
+.panel { margin-bottom: var(--space-6); padding: var(--space-4); background: var(--color-bg-surface); border: 2px solid var(--color-action-primary); border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
+.page .panel h3 { margin: 0 0 var(--space-3); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.page .panel h4 { margin: var(--space-4) 0 var(--space-1); }
+.panel .state { margin-bottom: var(--space-2); }
+.panel-close { display: inline-flex; align-items: center; min-height: var(--control-height-sm); margin-top: var(--space-3); font-size: var(--font-size-300); font-weight: var(--font-weight-medium); }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--space-4); margin: 0; font-size: var(--font-size-300); }
 .facts div { display: contents; }
+.facts dt, .facts dd { padding: var(--space-2) 0; border-bottom: var(--border-width) solid var(--color-border-default); }
 .facts dt { color: var(--color-text-muted); }
 .facts dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---------- the decisions view (UI-5), after mockups/decisions.html ----------
+   The recommended option is marked in its label's text, never by colour
+   alone, and never preselected. */
+.decisions-summary { color: var(--color-text-muted); margin-bottom: var(--space-4); max-width: var(--prose-max); }
+.decisions { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-4); max-width: 52rem; }
+.page .decision h3 { margin: 0; font-size: var(--font-size-400); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.decision .task-meta.asked { display: block; margin: 0; }
+.decision-question { overflow-wrap: anywhere; }
+.decision > .bucket-note { font-size: var(--font-size-300); }
+.decision-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.decision-form > fieldset { display: grid; gap: var(--space-3); }
+.decision-form legend { padding: 0; margin-bottom: var(--space-2); font-size: var(--font-size-300); font-weight: var(--font-weight-medium); }
+.choices.decision-options legend { color: var(--color-text-muted); font-weight: var(--font-weight-regular); }
+.decision-option { font-size: var(--font-size-300); }
+.decision-option input { width: 1.25rem; height: 1.25rem; margin: 0; }
+.decision-reason-label { font-size: var(--font-size-300); font-weight: var(--font-weight-medium); }
+.decision-form .textarea { margin-top: calc(var(--space-2) * -1); }
+.decision-form button:disabled { cursor: progress; background: var(--color-action-disabled-bg); color: var(--color-action-disabled-fg); }
+.decision-feedback:empty { display: none; }
+.decision-feedback > p:not(.state) { color: var(--color-text-muted); font-size: var(--font-size-300); }
+.decision-feedback .state { margin-top: var(--space-1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wave-chevron { transition: none; }
+}

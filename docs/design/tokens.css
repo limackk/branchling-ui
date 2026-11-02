@@ -124,6 +124,10 @@
   --state-stale-bg: var(--role-progress-bg);
   --state-stale-fg: var(--role-progress-fg);
   --state-stale-border: light-dark(var(--blue-200), #26406b);
+  /* an answer branchling recorded (UI-5): a write that went through */
+  --state-recorded-bg: var(--role-success-bg);
+  --state-recorded-fg: var(--role-success-fg);
+  --state-recorded-border: light-dark(var(--green-200), #24502f);
 
   /* ---------- typography ---------- */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;

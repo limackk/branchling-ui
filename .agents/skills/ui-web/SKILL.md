@@ -45,8 +45,9 @@ call). Never add a runtime dependency.
 ## Design tokens
 
 The design system is "Ledger", documented in `docs/design/` (open
-`design-system.html` through a static server; mockups of every planned
-screen are in `docs/design/mockups/`). `src/web/styles.css` is a copy of
+`design-system.html` through a static server, the `design-mockups` entry of
+`.claude/launch.json`; mockups of every planned screen are in
+`docs/design/mockups/`, and a view is built after its mockup). `src/web/styles.css` is a copy of
 `docs/design/tokens.css` and `components.css`, followed by the rules that
 map this page's own markup onto it. Change a token or a component in
 `docs/design/` first, then copy it, so the documentation stays the truth.
@@ -55,9 +56,23 @@ Views use only the semantic custom properties (`--color-bg-surface`,
 `--color-text-muted`, `--color-action-primary`, `--role-<role>-bg`…), never
 a primitive (`--n-500`, `--teal-600`) and never a literal colour. Each
 semantic token is one `light-dark(light, dark)` declaration, so the dark
-scheme cannot drift from the light one. Adding a token means checking its
-contrast in both schemes and adding the pairs to
-`docs/design/contrast-pairs.json`.
+scheme cannot drift from the light one. Adding a token, or using two tokens
+together in a new way, means adding the pair to
+`.agents/skills/ui-verify/contrast.mjs` (it checks both schemes) and to
+`docs/design/contrast-pairs.json`. The page's CSP forbids `style`
+attributes: a computed size (a meter's width) is set through
+`element.style`, never through markup.
+
+## The app shell and a new view
+
+The page is the shell of the mockups (docs/architecture.md, "The page"): a
+`<header class="sidebar">` with the brand, the backlog directory and
+`<nav aria-label="Views">`, then `<main class="page">` with one
+`<section data-view="<id>" hidden>` per view. A new view adds, in one change:
+its section in `src/web/index.html`, its link in the nav (an icon from
+`src/web/icons.svg`, a real `href="?view=<id>"`), and its one line in
+`VIEW_MODULES` in `src/web/app.mjs`. A link is a page load, so the view state
+in the URL is the whole state.
 
 ## Colour roles
 

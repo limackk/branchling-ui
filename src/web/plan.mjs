@@ -24,6 +24,19 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+
+/** An icon from the design system's sprite (/icons.svg), hidden from assistive technology. */
+function icon(name, cls = "icon") {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", cls);
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `/icons.svg#${name}`);
+  svg.append(use);
+  return svg;
+}
+
 function taskHref(id) {
   const params = new URLSearchParams(location.search);
   params.set("view", "plan");
@@ -62,7 +75,7 @@ function renderState(model, retry, what) {
     box.append(el("p", { text: `Loading ${what}…` }));
     return box;
   }
-  box.append(el("h3", { text: model.title }), el("p", { text: model.detail }));
+  box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
   if (model.refusalKind) box.append(el("p", { text: `Reason code: ${model.refusalKind}` }));
   if (retry) {
     const again = el("button", { type: "button", text: "Try again" });
@@ -101,16 +114,26 @@ function taskList(tasks, emptyText, extra = () => []) {
   return el("ul", { class: "tasks" }, tasks.map(t => taskItem(t, extra(t))));
 }
 
-function region(id, title, children) {
-  return el("section", { class: "plan-region", "aria-labelledby": id }, [el("h3", { id, text: title }), ...children]);
+/** A titled part of the plan: a card, or (`bare`) a plain section for content that is cards itself. */
+function region(id, title, children, { bare = false } = {}) {
+  if (bare) return el("section", { class: "plan-region", "aria-labelledby": id }, [el("h3", { id, text: title }), ...children]);
+  return el("section", { class: "card plan-region", "aria-labelledby": id }, [
+    el("div", { class: "card-head" }, [el("h3", { id, text: title })]),
+    el("div", { class: "card-body" }, children),
+  ]);
 }
 
 function renderWave(wave) {
-  const head = el("summary", { class: "wave-head" }, [
+  // The meter repeats the label's numbers for the eye; its width is set
+  // through the CSSOM, which the page's CSP allows (a style attribute it does not).
+  const fill = el("span");
+  fill.style.width = wave.total ? `${Math.round((wave.closed / wave.total) * 100)}%` : "0";
+  const head = el("summary", { class: "card-head wave-head" }, [
+    icon("chevron-right", "icon wave-chevron"),
     el("span", { class: "wave-number", text: `Wave ${wave.number}` }),
     el("span", { class: "wave-name", text: wave.name }),
-    el("span", { class: `wave-state wave-state-${wave.state}`, text: wave.stateLabel }),
-    el("span", { class: "wave-progress", text: wave.progressLabel }),
+    el("span", { class: `badge role-neutral wave-state wave-state-${wave.state}`, text: wave.stateLabel }),
+    el("span", { class: "end wave-progress" }, [el("span", { class: "meter", "aria-hidden": "true" }, [fill]), el("span", { text: wave.progressLabel })]),
   ]);
   const body = [];
   if (wave.groups.length) {
@@ -118,8 +141,13 @@ function renderWave(wave) {
   }
   if (wave.endsOnHuman) body.push(el("p", { class: "quiet", text: "This wave ends on a person: an unattended run cannot close it on its own." }));
   body.push(taskList(wave.tasks, "This wave schedules no tasks."));
-  return el("li", { class: `wave wave-${wave.state}`, "aria-current": wave.active ? "step" : null }, [
-    el("details", { open: !wave.collapsed }, [head, ...body]),
+  const rail = el("div", { class: "wave-rail", "aria-hidden": "true" }, [
+    el("span", { class: "dot" }, [wave.state === "closed" ? icon("check") : document.createTextNode(String(wave.number))]),
+    el("span", { class: "line" }),
+  ]);
+  return el("li", { class: `wave wave-${wave.state}`, "data-state": wave.state, "aria-current": wave.active ? "step" : null }, [
+    rail,
+    el("details", { class: "card", open: !wave.collapsed }, [head, el("div", { class: "card-body" }, body)]),
   ]);
 }
 
@@ -144,7 +172,7 @@ function renderPlan(model) {
     parts.push(el("p", { class: "quiet" }, [document.createTextNode("As of "), el("time", { datetime: model.freshness.fetchedAt, text: at.toLocaleString() })]));
   }
   if (model.rationale) {
-    parts.push(el("figure", { class: "plan-rationale" }, [
+    parts.push(el("figure", { class: "card card-pad plan-rationale" }, [
       el("figcaption", { text: "Why this order" }),
       el("blockquote", {}, [el("p", { text: model.rationale })]),
     ]));
@@ -170,7 +198,7 @@ function renderPlan(model) {
 
   parts.push(region("plan-waves", `Waves (${model.waves.length})`, [
     el("ol", { class: "waves" }, model.waves.map(renderWave)),
-  ]));
+  ], { bare: true }));
 
   if (model.overtaken.length) {
     parts.push(region("plan-overtaken", `Overtaken (${model.overtaken.length})`, [
@@ -196,7 +224,8 @@ function renderDetail(model, retry) {
   }
   const rows = [
     ["Status", el("span", { class: `role role-${model.statusRole}`, text: model.statusLabel || "unknown" })],
-    ["Priority", el("span", { class: `role role-${model.priorityRole}`, text: model.priority || "none" })],
+    // A priority is a square tag, never confused with a status pill (docs/design).
+    ["Priority", el("span", { class: `prio role-${model.priorityRole}`, text: model.priority || "none" })],
     ["Blocked", document.createTextNode(model.blocked ? "yes" : "no")],
   ];
   if (model.file) rows.push(["File", el("code", { text: model.file })]);

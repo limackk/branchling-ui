@@ -33,8 +33,10 @@ node bin/branchling-ui.mjs --dir "$dir" --port 0   # prints the address
 
 Open `<address>?view=plan`, then `?view=plan&task=TASK-3` (the detail panel).
 A reload and a pasted link must show the same screen. `--no-plan` builds a
-backlog without a plan (the empty state). A view without a fixture builder
-gets one in `test/fixtures/`, runnable the same way.
+backlog without a plan (the empty state). The other views have theirs:
+`node test/fixtures/decisions-backlog.mjs [--no-questions]` and
+`node test/fixtures/release-backlog.mjs [--no-targets]`. A view without a
+fixture builder gets one in `test/fixtures/`, runnable the same way.
 
 ## 3. Screenshots: light and dark, 375 px and desktop width
 
@@ -95,9 +97,13 @@ contents of `axe.min.js` from `npm pack axe-core@4.10.2` in the page, then
 node .agents/skills/ui-verify/contrast.mjs
 ```
 
-It reads the tokens from `src/web/styles.css` and fails under 4.5:1 for text
-and 3:1 for borders and the focus ring. A view that adds a token adds its
-pairs to that script in the same change.
+It reads the tokens from `src/web/styles.css`, resolves each
+`light-dark()` declaration and its `var()` chain for light and for dark, and
+fails under 4.5:1 for text and 3:1 for borders, the focus ring and other
+marks, when a token does not resolve, or when no dark value was found at
+all. A view that adds a token or a new pairing adds the pair to that script
+in the same change. To see that it bites, darken a token's dark value in
+`styles.css` and run it again (then restore the file).
 
 ## Reporting
 

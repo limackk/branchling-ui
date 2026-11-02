@@ -1,8 +1,8 @@
 # Design: the Ledger system and the screens
 
 A design system and mockups of every screen of the branchling-ui web
-interface. Nothing here is wired into `src/web/` yet; adopting it is its own
-task (see "Moving it into the app" below).
+interface. The page in `src/web/` is drawn with it (UI-25; see "In the app"
+below).
 
 Open it through any static server, for example:
 
@@ -102,19 +102,32 @@ today. Each one is either an upstream task or a small view-model computation:
 ## In the app
 
 `src/web/styles.css` is `tokens.css` and `components.css` copied, followed by
-the rules that put the page's current markup (the stats and release views)
-on the system. The roles are listed in `ROLES` in `src/view-model/roles.mjs`;
-every value still maps to `neutral`. Change a token or component here first,
-then copy it; the ui-web skill says the same.
+the rules that put the page's markup on the system: the app shell, then the
+stats, plan, release and decisions views, each after its mockup.
+`src/web/icons.svg` is `icons.svg` copied; the page uses it for the brand,
+the view links and the plan's waves. Change a token, component or icon here
+first, then copy it; the ui-web skill says the same. The roles are listed in
+`ROLES` in `src/view-model/roles.mjs`; every status and priority still maps to
+`neutral` (UI-18).
 
-Not moved yet: the app shell with the sidebar (the page has one screen so
-far) and `icons.svg`, which the page does not use yet. Each comes with the
-first view that needs it.
+The shell is the sidebar of `mockups/shell.js` from 64rem up. Below that it is
+a band above the page with the four view links in one row, not the mockups'
+drawer: with four views a drawer only hides them (docs/architecture.md, "The
+page"). Not in the app yet: the top bar (search, the freshness indicator, the
+scheme switch) and the count badges on the links, which need data the page
+does not have; the drawer, tables folding into lists, the task drawer and the
+write dialogs, which come with the views that need them (the plan's task
+detail is still an inline panel).
+
+Tokens added in the app's work, here first: `--state-recorded-bg/-fg/-border`
+(an answer branchling recorded, UI-5), on the success role.
 
 ## Accessibility check
 
 - Contrast: `contrast-pairs.json`, 45 of 45 pairs pass AA (script from the
-  ux-ui-designer skill).
+  ux-ui-designer skill). For the app, `.agents/skills/ui-verify/contrast.mjs`
+  reads the tokens from `src/web/styles.css` and checks every pair the views
+  use, in both schemes.
 - No horizontal scroll at 375 px on any screen; one `h1` per page; no
   duplicate ids; every control has an accessible name (checked in the
   browser).

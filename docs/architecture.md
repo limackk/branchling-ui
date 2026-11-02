@@ -68,7 +68,7 @@ src/views/<view>.mjs         a view's API routes
 src/view-model/<view>.mjs    the shared view model, pure functions
 src/view-model/states.mjs    loading, error, refusal and unreachable states
 src/view-model/roles.mjs     status and priority colour roles
-src/web/                     the page: index.html, app.mjs, styles.css
+src/web/                     the page: index.html, app.mjs, one module per view, styles.css, icons.svg
 bin/branchling-ui-tui.mjs    starts the terminal interface (TUI) for one backlog
 src/tui/terminal.mjs         colour and screen capabilities, the full-screen lifecycle
 src/tui/render.mjs           a view model as lines of text, a pure function
@@ -239,6 +239,55 @@ of a non-GET route once, for every route alike (`readJsonBody`):
 413, and the connection is closed), valid JSON (else 400). The handler gets it
 as `body` and checks its shape itself, throwing a `RequestError` (400) for a
 malformed one before any branchling command runs.
+
+## The page: one design system, an app shell, a view per screen (UI-25)
+
+**The design system.** The page is drawn with "Ledger", documented in
+`docs/design/` (tokens, components, icon sprite, mockups of every screen).
+`src/web/styles.css` is `docs/design/tokens.css` and `components.css` copied,
+followed by the rules that put each view's markup on the system;
+`src/web/icons.svg` is `docs/design/icons.svg` copied. A token or component
+changes in `docs/design/` first, then is copied. Every semantic colour is one
+`light-dark(light, dark)` declaration on `:root`, so the scheme follows
+`prefers-color-scheme` and a dark value cannot be forgotten.
+`.agents/skills/ui-verify/contrast.mjs` resolves those declarations (and the
+older separate dark block, should one come back) and checks every pair the
+views use, in both schemes.
+
+**Moving between views.** Which view is on screen is `?view=` in the URL,
+read once on load by `src/web/app.mjs`: the other sections are `hidden` and
+only the current view's module is imported. The navigation is the app shell
+of the mockups (`docs/design/mockups/shell.js`): a `<header>` holding the
+brand, the backlog directory and a `<nav aria-label="Views">` of four real
+links (`?view=stats`, `plan`, `release`, `decisions`), the current one marked
+`aria-current="page"`. A link is a full page load, so Back, reload and a
+shared link show the same screen with no history code, and each view keeps
+the URL parameters it owns (`&task=`, `&target=`, `&release=`). From 64rem up
+the header is the sidebar; below it, the same header is a band above the page
+with the four links in one row that wraps. Plain HTML and CSS: no script and
+no dependency.
+
+Rejected:
+
+- **The mockups' phone drawer** (a menu button that slides the sidebar in).
+  With four views the links fit in one row at 375 px, so a drawer would only
+  hide them behind a button, and it needs a script, focus management and an
+  Escape handler that the band does not.
+- **Switching views in place** (`pushState` and showing another section
+  without a load). It saves one page load (the shell and modules are tiny
+  next to the ~500 ms read each view makes anyway) but every view would have
+  to start, stop and re-read on `popstate`, which none is written for.
+- **Stacked sections on one scrolling page** (the state before UI-3): each
+  view fetches on start, so four views on one page would run every read at
+  once, and the screen a link names would not be the screen shown first.
+- **A tab bar** (`role="tablist"`). Tabs promise panels that switch in place
+  with arrow keys; these are separate screens with their own URLs, which is
+  what links and `aria-current` say.
+
+Not in the shell yet: the mockups' top bar (search, the freshness indicator,
+the scheme switch) and the count badges on the links. Each needs data or a
+setting the page does not have: the decisions count alone costs one spawn
+per active task (see the decisions view) on every screen.
 
 ## The decisions view (UI-5)
 

@@ -14,14 +14,6 @@
         "docs/design"
       ],
       "port": 4390
-    },
-    {
-      "name": "ui",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "bin/branchling-ui.mjs"
-      ],
-      "port": 4322
     }
   ]
 }
