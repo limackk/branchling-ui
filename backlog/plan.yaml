@@ -20,7 +20,7 @@ waves:
   # `set` and `declare` on GitHub (UI-6, UI-8), a vocabulary envelope (UI-18),
   # the watch stream (UI-7).
   - name: "After upstream"
-    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24, UI-33, UI-34, UI-37, UI-38]
+    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24, UI-33, UI-34, UI-37, UI-38, UI-39]
   # The maintainer's decision.
   - name: "Before publish"
     tasks: [UI-10]
