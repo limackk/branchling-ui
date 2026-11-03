@@ -8,8 +8,8 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P1
-status: pending
-owner: unassigned
+status: done
+owner: agent:loop-a
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
@@ -44,5 +44,5 @@ Part of the 'Without a release' wave (2026-11-02): work the pinned branchling 7d
 
 ## Acceptance criteria
 
-- [ ] Take, release and handoff change a fixture task through branchling, each refusal reaches the page unchanged, a foreign Origin is refused, and the panel is not stale after a write. [proof: task-actions]
-- [ ] The panel's actions were checked with the ui-verify skill in light and dark, keyboard only, including a refusal. [proof: actions-screens]
+- [x] Take, release and handoff change a fixture task through branchling, each refusal reaches the page unchanged, a foreign Origin is refused, and the panel is not stale after a write. [proof: task-actions]
+- [x] The panel's actions were checked with the ui-verify skill in light and dark, keyboard only, including a refusal. [proof: actions-screens]

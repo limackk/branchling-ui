@@ -53,6 +53,7 @@ const NOUNS = {
   release: ["release", "releases"],
   target: ["deploy target", "deploy targets"],
   stage: ["stage", "stages"],
+  role: ["role", "roles"],
 };
 
 function nouns(key) {

@@ -113,17 +113,29 @@ function spawnTarget(command, args) {
   };
 }
 
+/** `env` over this process's environment; a key given as null or undefined is removed. */
+function mergeEnv(env) {
+  const out = { ...process.env };
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || value === null) delete out[key];
+    else out[key] = String(value);
+  }
+  return out;
+}
+
 /**
  * Starts the executable and collects its output. Exported for the test
  * fixtures, which have to start branchling exactly the way the adapter does.
  * `env` is merged over this process's environment; the fixtures use it to give
  * branchling a private data and config home, so a fixture's reservations and
- * telemetry never land in the user's own directories.
+ * telemetry never land in the user's own directories. A key given as `null`
+ * or `undefined` is removed from the child's environment (a test of the
+ * default actor drops `BACKLOG_ACTOR` that way).
  */
 export function run(bin, args, { cwd, input, env } = {}) {
   const target = spawnTarget(resolveBin(bin), args);
   return new Promise((resolve, reject) => {
-    const options = { cwd, maxBuffer: 64 * 1024 * 1024, ...(env ? { env: { ...process.env, ...env } } : {}), ...target.options };
+    const options = { cwd, maxBuffer: 64 * 1024 * 1024, ...(env ? { env: mergeEnv(env) } : {}), ...target.options };
     const child = execFile(target.file, target.args, options, (err, stdout, stderr) => {
       if (err && typeof err.code !== "number") { reject(err); return; }
       resolve({ code: err ? err.code : 0, stdout, stderr });
@@ -355,7 +367,24 @@ export function acceptVerdict(envelope, code) {
   throw new ContractMismatch(`${envelope.kind} answered ok: ${envelope.ok} with exit ${code}`);
 }
 
-export function createAdapter({ dir, bin, cwd } = {}) {
+/**
+ * A value a writing call puts on branchling's argv: a non-empty string that
+ * cannot be read as a flag. Checked here as well as by the route, so no
+ * caller of the adapter can smuggle `--take-over` or `--actor` in as a value.
+ */
+function argWord(base, name, value) {
+  if (typeof value !== "string" || !value.trim()) throw new BranchlingUsageError(base, 2, `${name} is required`);
+  if (value.startsWith("-")) throw new BranchlingUsageError(base, 2, `${name} cannot start with "-": branchling would read it as a flag`);
+  return value;
+}
+
+/**
+ * `opts.env` is merged over this process's environment for every spawn (see
+ * `run`). The server passes none: branchling then sees the environment of the
+ * person who started it, `$BACKLOG_ACTOR` included. Tests use it to give
+ * branchling a private state, data and config home and a known actor.
+ */
+export function createAdapter({ dir, bin, cwd, env } = {}) {
   const withDir = args => (dir ? [...args, "--dir", dir] : args);
 
   /**
@@ -365,7 +394,7 @@ export function createAdapter({ dir, bin, cwd } = {}) {
    */
   async function json(args, expectedKind, opts = {}) {
     const full = withDir([...args, "--json"]);
-    const { code, stdout, stderr } = await run(bin, full, { cwd, input: opts.input });
+    const { code, stdout, stderr } = await run(bin, full, { cwd, input: opts.input, env });
     if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
     const envelope = parseEnvelope(stdout, expectedKind);
     if (opts.verdict) return acceptVerdict(envelope, code);
@@ -376,7 +405,7 @@ export function createAdapter({ dir, bin, cwd } = {}) {
   return {
     /** The executable's version, checked against SUPPORTED_RANGE. */
     async version() {
-      const { code, stdout, stderr } = await run(bin, ["--version"], { cwd });
+      const { code, stdout, stderr } = await run(bin, ["--version"], { cwd, env });
       if (code !== 0) throw new BranchlingUsageError(["--version"], code, stderr);
       const match = stdout.match(/(\d+\.\d+\.\d+)/);
       if (!match) throw new ContractMismatch("unrecognised --version output: " + stdout.trim());
@@ -455,9 +484,53 @@ export function createAdapter({ dir, bin, cwd } = {}) {
       }
       if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", word("--actor", actor));
       const full = withDir([...args, "--json"]);
-      const { code, stdout, stderr } = await run(bin, full, { cwd });
+      const { code, stdout, stderr } = await run(bin, full, { cwd, env });
       if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
       return parseDecideOutput(stdout, code);
+    },
+
+    /*
+     * The task panel's writes (UI-30): `take`, `release` and `handoff`. None
+     * takes an actor: branchling resolves it itself ($BACKLOG_ACTOR, then the
+     * user's config, then its default), and the envelope (or the history)
+     * says whom it recorded. None passes `--take-over`, `--probe`, `--role`,
+     * `--status`, `--with` or `--to-owner`: the panel offers none of them.
+     * Every value is an argv element, never a shell string, and one starting
+     * with "-" is refused before branchling runs (argWord).
+     *
+     * How each one fails, measured on branchling 0.2.0 (7d76538):
+     *   take     every failure is an envelope, so a BranchlingRefusal: exit 1
+     *            `other-owner` (held), `closed` (a closed task); exit 2
+     *            `not-found` (no such task)
+     *   release  exit 1 `other-owner`, exit 2 `not-found`, both envelopes.
+     *            A missing --reason is exit 2 with `refusalKind: "usage"`,
+     *            which argWord makes unreachable from here
+     *   handoff  exit 1 `other-owner` (an envelope). An undeclared role, a
+     *            backlog with no `roles:`, and a missing --reason are exit 2
+     *            with stderr only: a BranchlingUsageError, which the route
+     *            turns into 422 rejected-input for the role that was typed
+     */
+
+    /** `take <ID>`: reserve the task and set it in progress (`task-take`). */
+    async take(id) {
+      const base = ["take"];
+      return json([...base, argWord(base, "the task id", id)], "task-take");
+    },
+
+    /** `release <ID> --reason "…"`: give the task back to the queue (`task-release`). */
+    async release(id, { reason } = {}) {
+      const base = ["release"];
+      return json([...base, argWord(base, "the task id", id), "--reason", argWord(base, "--reason", reason)], "task-release");
+    },
+
+    /** `handoff <ID> --to-role <r> --reason "…"`: hand the task to a role (`task-handoff`). */
+    async handoff(id, { role, reason } = {}) {
+      const base = ["handoff"];
+      return json([
+        ...base, argWord(base, "the task id", id),
+        "--to-role", argWord(base, "--to-role", role),
+        "--reason", argWord(base, "--reason", reason),
+      ], "task-handoff");
     },
 
     /** Escape hatch for commands without a typed wrapper yet. */

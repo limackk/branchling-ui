@@ -106,6 +106,9 @@ const PAIRS = [
   ["color-action-primary", "color-bg-selected", MARK, "the current view bar"],
   ["role-attention-dot", "color-bg-surface", MARK, "the question marker"],
   ["role-neutral-dot", "role-neutral-bg", MARK, "the dot in a role pill (the label carries the meaning; checked anyway)"],
+  // the task panel's action dialogs (UI-30): a field's error, an input's border
+  ["role-danger-fg", "color-bg-raised", TEXT, "a field's error in an action dialog (UI-30)"],
+  ["color-border-strong", "color-bg-raised", MARK, "an input's border in an action dialog (UI-30)"],
 ];
 // Not checked, on purpose: color-border-default is a decorative divider
 // between parts of a card; no control or state is identified by it alone

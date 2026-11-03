@@ -18,6 +18,7 @@ import {
   BranchlingRefusal, BranchlingUsageError, ContractMismatch,
 } from "../src/adapter.mjs";
 import { BROKEN_GUARDS, buildBrokenBacklog, buildHealthyBacklog } from "./fixtures/health-backlog.mjs";
+import { OTHER_ACTOR, ROLES, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
 import { fixtureEnv } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
@@ -221,4 +222,81 @@ test("a verdict whose ok disagrees with its exit code is a contract mismatch", a
 test("a doctor or check refusal still throws", async () => {
   const refused = fakeBin("fake-check-refusal", '{"schemaVersion": 1, "kind": "check", "ok": false, "failed": ["refs"], "guards": [], "refusalKind": "no-backlog", "refusal": "no"}', 1);
   await assert.rejects(createAdapter({ bin: refused }).check(), err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "no-backlog");
+});
+
+// --- take, release and handoff (UI-30) ----------------------------------------------
+// Each builds its own fixture (test/fixtures/actions-backlog.mjs), whose
+// branchling state, data and config homes are inside its own root, so the
+// `take` locks never land in the user's state directory.
+
+const ACTOR = "local:maja";
+
+async function actionsFixture() {
+  const fx = await buildActionsBacklog(join(root, `actions-${Math.random().toString(36).slice(2)}`), { bin: BIN });
+  return { ...fx, adapter: createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root, env: { ...fx.env, BACKLOG_ACTOR: ACTOR } }) };
+}
+
+test("take reserves a task (task-take), and refuses one held by somebody else or closed", async () => {
+  const { adapter } = await actionsFixture();
+  const taken = await adapter.take("TASK-1");
+  assert.equal(taken.kind, "task-take");
+  assert.equal(taken.ok, true);
+  assert.equal(taken.id, "TASK-1");
+  assert.equal(taken.task.owner, ACTOR);
+  assert.equal(taken.lock.actor, ACTOR);
+  assert.equal(taken.from, "pending");
+  assert.equal(typeof taken.task.status, "string");
+  assert.notEqual(taken.task.status, taken.from);
+  await assert.rejects(adapter.take("TASK-2"), err => err instanceof BranchlingRefusal
+    && err.envelope.kind === "task-take" && err.envelope.refusalKind === "other-owner" && err.message.includes(OTHER_ACTOR));
+  await assert.rejects(adapter.take("TASK-3"), err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "closed");
+  // An unknown task exits 2, but WITH an envelope: a refusal, not a usage error.
+  await assert.rejects(adapter.take("TASK-99"), err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "not-found" && err.code === 2);
+});
+
+test("release returns a held task to the queue (task-release), and refuses somebody else's", async () => {
+  const { adapter } = await actionsFixture();
+  await adapter.take("TASK-1");
+  const released = await adapter.release("TASK-1", { reason: "Blocked on the payment provider." });
+  assert.equal(released.kind, "task-release");
+  assert.equal(released.ok, true);
+  assert.equal(released.released, true);
+  assert.equal(released.owner, "");
+  assert.equal(typeof released.comment, "string");
+  await assert.rejects(adapter.release("TASK-2", { reason: "Not mine." }), err => err instanceof BranchlingRefusal
+    && err.envelope.kind === "task-release" && err.envelope.refusalKind === "other-owner");
+  assert.equal((await adapter.show("TASK-2")).kind, "task-show", "positive control: the fixture still answers");
+});
+
+test("handoff hands a task to a declared role (task-handoff); an undeclared role is a usage error", async () => {
+  const { adapter } = await actionsFixture();
+  await adapter.take("TASK-1");
+  const handed = await adapter.handoff("TASK-1", { role: ROLES[1], reason: "Ready for review." });
+  assert.equal(handed.kind, "task-handoff");
+  assert.equal(handed.ok, true);
+  assert.deepEqual(handed.role, { from: "", to: ROLES[1] });
+  assert.deepEqual(handed.owner, { from: ACTOR, to: "" });
+  assert.equal(handed.comment.actor, ACTOR);
+  assert.equal(handed.comment.text, "Ready for review.");
+  await assert.rejects(adapter.handoff("TASK-2", { role: ROLES[0], reason: "Not mine." }), err => err instanceof BranchlingRefusal
+    && err.envelope.kind === "task-handoff" && err.envelope.refusalKind === "other-owner");
+  // branchling 0.2.0 rejects an undeclared role with stderr only, exit 2.
+  await assert.rejects(adapter.handoff("TASK-4", { role: "designer", reason: "x" }), err => err instanceof BranchlingUsageError
+    && err.code === 2 && /designer/.test(err.stderr));
+});
+
+test("a writing call refuses a missing or flag-shaped value before branchling runs", async () => {
+  // A bin that does not exist: reaching the spawn would fail differently.
+  const adapter = createAdapter({ bin: join(root, "no-such-branchling"), dir });
+  const refused = [
+    () => adapter.take("--take-over"),
+    () => adapter.take(""),
+    () => adapter.release("TASK-1", {}),
+    () => adapter.release("TASK-1", { reason: "--actor=x" }),
+    () => adapter.handoff("TASK-1", { role: "--to-owner", reason: "x" }),
+    () => adapter.handoff("TASK-1", { role: "reviewer" }),
+  ];
+  for (const call of refused) await assert.rejects(call(), err => err instanceof BranchlingUsageError && /required|flag/.test(err.message));
+  // Positive control: a well-formed call does reach the spawn (and fails there).
+  await assert.rejects(adapter.take("TASK-1"), err => !(err instanceof BranchlingUsageError && /flag|required/.test(err.message)));
 });

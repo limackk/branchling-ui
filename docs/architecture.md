@@ -337,6 +337,30 @@ say what `$BACKLOG_ACTOR` and the user config already say, and one more place
 for the two to disagree). branchling cannot yet be told to refuse when it
 falls back to its default actor; that is an upstream gap.
 
+## The task panel's actions (UI-30)
+
+The panel offers Take, Return to queue and Hand off, each one branchling
+command through a typed adapter call (`take`, `release`, `handoff`, envelope
+kinds `task-take`, `task-release`, `task-handoff`) and a POST route in
+`src/views/task.mjs` (`/api/task/take`, `/release`, `/handoff`) behind the
+write guard. They follow the decisions view's rules: the body is checked by
+`validateTaskAction` (`src/view-model/task-actions.mjs`, shared with the page)
+before anything spawns; only `id`, `reason` and `role` exist, an `actor` is
+refused by name, and `take-over`, `probe`, `with`, `to-owner`, `status` or any
+other field is unknown. A take-over crosses somebody else's claim and is left
+to the CLI. No `--actor` is passed. The answer is branchling's envelope
+unchanged, and the page shows the actor branchling recorded: `take`'s lock,
+`handoff`'s comment, and for `release`, whose envelope names nobody, the
+history exchange that carries its comment id. Each opens a confirmation (a
+second modal `<dialog>`) that names the command and asks for its reason (and
+role); a refusal is shown in it unchanged, with its detail lines.
+
+**Roles.** No read of branchling 0.2 reports the declared `roles:`, so the role
+is typed. An undeclared one is exit 2 with stderr only, which the route turns
+into `422 rejected-input` (`declared: null`) with branchling's message, which
+names the roles, verbatim. **Freshness.** The cache treats the three calls as
+writes, so the panel's re-read right after one spawns again.
+
 ## The overview (UI-29)
 
 The default screen: no `view` (or one not listed) is the overview. It answers

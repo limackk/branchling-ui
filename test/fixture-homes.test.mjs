@@ -25,6 +25,7 @@ import { buildTasksBacklog } from "./fixtures/tasks-backlog.mjs";
 import { buildBrokenBacklog } from "./fixtures/health-backlog.mjs";
 import { buildTaskBacklog } from "./fixtures/task-backlog.mjs";
 import { buildOverviewBacklog } from "./fixtures/overview-backlog.mjs";
+import { buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
 
 const sentinel = mkdtempSync(join(tmpdir(), "branchling-ui-sentinel-"));
 const work = mkdtempSync(join(tmpdir(), "branchling-ui-homes-"));
@@ -56,17 +57,18 @@ function files(root) {
 
 test("building the fixtures writes nothing into the homes the environment names", async () => {
   const tasks = await buildTasksBacklog(join(work, "tasks"));
-  const [broken, task, overview] = await Promise.all([
+  const [broken, task, overview, actions] = await Promise.all([
     buildBrokenBacklog(join(work, "broken")),
     buildTaskBacklog(join(work, "task")),
     buildOverviewBacklog(join(work, "overview")),
+    buildActionsBacklog(join(work, "actions")),
   ]);
   assert.deepEqual(readdirSync(sentinel), [], "nothing was created in any sentinel home");
 
   // Positive control: every one of them ran `take`, and its lock directory
   // (with the `origin` file naming the repository) is in the fixture. The
   // lock itself may be gone again: `ask` releases it.
-  for (const fx of [tasks, broken, task, overview]) {
+  for (const fx of [tasks, broken, task, overview, actions]) {
     const origins = files(join(fx.root, HOMES, "state")).filter(f => f.endsWith("origin"));
     assert.ok(origins.length > 0, `${fx.root} keeps its own lock directory`);
     assert.doesNotMatch(execFileSync("git", ["status", "--porcelain"], { cwd: fx.root, encoding: "utf8" }), new RegExp(`^.. ${HOMES}/`, "m"),

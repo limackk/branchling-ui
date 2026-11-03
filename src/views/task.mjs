@@ -12,11 +12,29 @@
  *                                view's detail read before UI-27 folded its panel
  *                                into this one
  *
- * Read only: nothing here writes, and no actor is passed.
+ * The panel's writes (UI-30), each one branchling command:
+ *
+ *   POST /api/task/take      `{ id }`                  `take <ID>`
+ *   POST /api/task/release   `{ id, reason }`          `release <ID> --reason`
+ *   POST /api/task/handoff   `{ id, role, reason }`    `handoff <ID> --to-role --reason`
+ *
+ * Each sits behind the server's write guard (Host, Origin and the capability
+ * token), which runs before any handler and before the body is read; nothing
+ * here repeats it. The body is checked by the same `validateTaskAction` the
+ * page uses, and a malformed one (an `actor`, `take-over` or any other field
+ * included) is a 400 before branchling runs. No actor is passed: branchling
+ * resolves it from the environment of the person who started the server.
+ * The answer is the envelope branchling printed, unchanged; a refusal is the
+ * server's 409 with its text unchanged. A role branchling does not know
+ * (exit 2, stderr only, in 0.2.0) is `422 rejected-input` for that role, with
+ * branchling's message verbatim; no read reports the declared roles, so
+ * `declared` is null. The cache passes every write through and invalidates
+ * what it holds, so the panel's next read is fresh.
  */
 
 import { readTask } from "../adapter.mjs";
-import { RequestError } from "../request-error.mjs";
+import { RequestError, rejectingTypedInput } from "../request-error.mjs";
+import { validateTaskAction } from "../view-model/task-actions.mjs";
 import { TASK_ID_SHAPE } from "../view-model/tasks.mjs";
 
 /**
@@ -35,10 +53,34 @@ export function taskIdParam(params) {
   return id;
 }
 
+/** The body of an action, checked before branchling runs; a 400 otherwise. */
+function checked(action, body) {
+  const result = validateTaskAction(action, body);
+  if (!result.ok) throw new RequestError(result.message);
+  return result.value;
+}
+
 export default {
   id: "task",
   routes: [
     { method: "GET", path: "/api/task", handler: ({ adapter, params }) => adapter.show(taskIdParam(params)) },
     { method: "GET", path: "/api/task/panel", handler: ({ adapter, params }) => readTask(adapter, taskIdParam(params)) },
+    { method: "POST", path: "/api/task/take", handler: ({ adapter, body }) => adapter.take(checked("take", body).id) },
+    {
+      method: "POST",
+      path: "/api/task/release",
+      handler: ({ adapter, body }) => {
+        const { id, reason } = checked("release", body);
+        return adapter.release(id, { reason });
+      },
+    },
+    {
+      method: "POST",
+      path: "/api/task/handoff",
+      handler: ({ adapter, body }) => {
+        const { id, role, reason } = checked("handoff", body);
+        return rejectingTypedInput({ role }, () => adapter.handoff(id, { role, reason }), async () => ({ role: null }));
+      },
+    },
   ],
 };

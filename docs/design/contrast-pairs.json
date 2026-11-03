@@ -280,5 +280,29 @@
   "fg": "#8d9793",
   "bg": "#161b19",
   "use": "ui"
+ },
+ {
+  "name": "L danger-fg/raised",
+  "fg": "#8f1c13",
+  "bg": "#ffffff",
+  "use": "text"
+ },
+ {
+  "name": "D danger-fg/raised",
+  "fg": "#f5a59e",
+  "bg": "#1d2321",
+  "use": "text"
+ },
+ {
+  "name": "L border-strong/raised",
+  "fg": "#6b7671",
+  "bg": "#ffffff",
+  "use": "ui"
+ },
+ {
+  "name": "D border-strong/raised",
+  "fg": "#6f7a75",
+  "bg": "#1d2321",
+  "use": "ui"
  }
 ]
