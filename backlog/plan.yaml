@@ -4,7 +4,7 @@
 # supervised loops work it in parallel, one worktree each, and the main session
 # merges what they finish. Only the first two waves can be worked now: the third
 # waits on branchling itself and the last on the maintainer.
-updated: 2026-11-02
+updated: 2026-11-03
 rationale: "Every view renders the same view model through the same server, so the decision and the skeleton come first and the cache beside them. The read views and the terminal surface then run in parallel on that base. What needs a branchling capability that is not on GitHub or not released yet waits in its own wave instead of being worked around, and the package is named last, once there is something to publish."
 waves:
   # UI-1 decides the stack and defines the view model; UI-2 sits between the
@@ -20,7 +20,7 @@ waves:
   # `set` and `declare` on GitHub (UI-6, UI-8), a vocabulary envelope (UI-18),
   # the watch stream (UI-7).
   - name: "After upstream"
-    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24, UI-33, UI-34, UI-37]
+    tasks: [UI-14, UI-9, UI-6, UI-8, UI-18, UI-7, UI-22, UI-23, UI-24, UI-33, UI-34, UI-37, UI-38]
   # The maintainer's decision.
   - name: "Before publish"
     tasks: [UI-10]
