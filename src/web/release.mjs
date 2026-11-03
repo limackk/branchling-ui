@@ -7,10 +7,15 @@
  * what is shown and pass through to `deploy status --target/--release`;
  * `?view=release` brings this section into view on load. A reload or a shared
  * link shows the same screen.
+ *
+ * Release planning (UI-8, src/web/release-planning.mjs) sits under the
+ * pipeline: declaring a release selects it here (`?release=`), and planning
+ * tasks for it reads the comparison again.
  */
 
 import { RELEASE_TEXT, releaseModel } from "/view-model/release.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
+import { SEEN_LIST_ID, createPlanning } from "/release-planning.mjs";
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -107,10 +112,12 @@ function controls() {
   if (form) return form;
   form = el("form", { class: "release-controls", "aria-label": "Release pipeline selection" });
   const targetSelect = el("select", { id: "release-target", name: "target" });
-  const releaseInput = el("input", { id: "release-name", name: "release", type: "text", autocomplete: "off", spellcheck: "false" });
+  const releaseInput = el("input", { id: "release-name", name: "release", type: "text", autocomplete: "off", spellcheck: "false", list: SEEN_LIST_ID });
   const show = el("button", { type: "submit", text: "Show" });
   const clear = el("button", { type: "button", text: "Clear" });
   clear.addEventListener("click", () => select({ target: "", release: "" }));
+  const declare = el("button", { type: "button", text: "Declare a release" });
+  declare.addEventListener("click", () => planning.focusDeclare());
   form.addEventListener("submit", event => {
     event.preventDefault();
     select({ target: targetSelect.value, release: releaseInput.value.trim() });
@@ -118,7 +125,7 @@ function controls() {
   form.append(
     el("label", { for: "release-target", text: "Target" }), targetSelect,
     el("label", { for: "release-name", text: "Compare with release" }), releaseInput,
-    show, clear,
+    show, clear, declare,
   );
   return form;
 }
@@ -234,12 +241,17 @@ function renderRelease(model) {
 let generation = 0;
 let body = null;
 
+const planning = createPlanning({
+  onDeclared: name => select({ ...selection(), release: name }),
+  onPlanned: () => load(),
+});
+
 async function load() {
   const target = document.getElementById("release");
   if (!target) return;
   if (!body) {
     body = el("div", { "aria-live": "polite" });
-    target.replaceChildren(controls(), body);
+    target.replaceChildren(controls(), body, planning.node);
   }
   const current = selection();
   const mine = ++generation;
@@ -247,6 +259,7 @@ async function load() {
   body.setAttribute("aria-busy", "true");
   body.replaceChildren(renderState(loadingState("release"), load));
   let model;
+  let envelope = null;
   try {
     const query = new URLSearchParams();
     if (current.target) query.set("target", current.target);
@@ -257,6 +270,7 @@ async function load() {
     if (!res.ok) {
       model = fromApiError("release", json, res.status);
     } else {
+      envelope = json;
       model = releaseModel(json, {
         stale: res.headers.get("x-branchling-ui-stale") === "1",
         fetchedAt: res.headers.get("x-branchling-ui-fetched-at"),
@@ -266,6 +280,8 @@ async function load() {
     model = unreachableState("release", err.message);
   }
   if (mine !== generation) return;
+  // A release branchling answered for is one tasks can be planned for.
+  planning.update({ release: current.release, status: envelope, known: Boolean(envelope) && Boolean(current.release) && Boolean(model.release) });
   if (model.state === "ready" || model.state === "empty") {
     for (const lane of model.lanes) knownTargets.add(lane.target);
     syncControls(current);

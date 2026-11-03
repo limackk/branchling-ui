@@ -984,3 +984,20 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 .task-panel .kv .editable .pen { flex: none; width: 0.9rem; height: 0.9rem; }
 @media (hover: none) { .task-panel .kv .editable .pen { opacity: 1; } }
 .task-field-form .cmd code { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* ---------- release planning (UI-8), after mockups/releases.html (the Planning tab) ----------
+   Two cards under the pipeline, side by side from 40rem (.grid-2) and stacked
+   below: "Declare a release" (a form with its command preview, .cmd) and
+   "Plan tasks for <release>" (a .tlist of checkboxes, one `set` per change).
+   Tokens only, from pairs contrast.mjs already checks. */
+.release-planning { margin-top: var(--space-8); }
+.release-planning-grid { margin-top: var(--space-3); align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
+.release-planning .card-head { flex-wrap: wrap; }
+.release-planning .cmd code { overflow-wrap: anywhere; white-space: pre-wrap; }
+.release-plan-tasks { border: 0; margin: 0; padding: 0; min-width: 0; }
+.release-plan-tasks .tlist li { grid-template-columns: 1fr; padding: var(--space-2) 0; }
+.release-plan-tasks .check { align-items: flex-start; min-height: 24px; overflow-wrap: anywhere; }
+.release-plan-tasks .check input { flex: none; margin-top: 0.15rem; }
+.release-plan-tasks .t-meta { padding-left: calc(1rem + var(--space-2)); }
+.release-planning-details { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-200); }
+/* ---------- end release planning ---------- */

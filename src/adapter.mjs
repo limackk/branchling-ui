@@ -579,6 +579,44 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       return envelope;
     },
 
+    /**
+     * `declare releases <name> --reason "…" [--ref <ref>]`: append one release
+     * to `releases:` in config.yaml, the reason written as a comment above it
+     * (`vocabulary-declare`, UI-8). 0.3.0 is the first release that has it.
+     * branchling edits the file; this package never does.
+     *
+     * Measured on branchling 0.3.0, every answer is an envelope:
+     *
+     *   { schemaVersion: 1, kind: "vocabulary-declare", ok, key, name,
+     *     entry: { name, ref } | null, reason, file,
+     *     refusalKind, refusal, details }
+     *
+     * and every failure a BranchlingRefusal: exit 1 `duplicate` (a name
+     * already declared; changing an entry stays a hand edit); exit 2
+     * `malformed` (not a lowercase slug, a ref that is not one ref name),
+     * `usage` (no name, an empty --reason, an unknown flag, not a backlog)
+     * and `undeclared-key` (a key no command writes).
+     *
+     * Only `releases` is wrapped. `deploy_targets` takes a repository, or
+     * repeatable `--stage <n>=<ref>[,<ref>]` and `--paths`, which nothing in
+     * this package offers yet; it is refused here, before a spawn, rather
+     * than passed through half-built. The reason is required here as well as
+     * by branchling, and no value may start with "-" (argWord): branchling
+     * has no `--` and would read it as a flag, and 0.3.0 writes a `--ref`
+     * of `-x` to config.yaml as given.
+     */
+    async declare(key, name, { reason, ref } = {}) {
+      const base = ["declare"];
+      if (key !== "releases") throw new BranchlingUsageError(base, 2, `declare ${String(key)} is not wrapped: only releases is`);
+      const args = [...base, key, argWord(base, "the release name", name), "--reason", argWord(base, "--reason", reason)];
+      if (ref !== undefined && ref !== null && ref !== "") args.push("--ref", argWord(base, "--ref", ref));
+      const envelope = await json(args, "vocabulary-declare");
+      if (envelope.ok !== true || envelope.key !== key || typeof envelope.name !== "string" || !envelope.entry || typeof envelope.entry !== "object") {
+        throw new ContractMismatch("vocabulary-declare answered success without the entry it wrote");
+      }
+      return envelope;
+    },
+
     /** Escape hatch for commands without a typed wrapper yet. */
     raw: json,
   };

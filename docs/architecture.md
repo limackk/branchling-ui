@@ -393,6 +393,37 @@ has no `--` and reads it as a flag, so such a value cannot be set through the
 CLI at all. The reason is optional; 0.3.0 requires none for any field `set`
 edits, and a refusal asking for one would be shown like any other.
 
+## Release planning (UI-8)
+
+Under the release view's pipeline, after the Planning tab of
+`docs/design/mockups/releases.html`: "Declare a release" and "Plan tasks for
+<release>" (`src/web/release-planning.mjs`, model in
+`src/view-model/release-planning.mjs`). The release view keeps the selection
+(`?release=`) and the comparison of plan with shipped (`deploy status
+--release`); declaring selects the new release, and planning reads the
+comparison again.
+
+**Declare.** `POST /api/release/declare` takes `{ name, reason, ref? }`,
+checked by `validateDeclare` (shared with the page: an `actor` or any other
+key, or a missing reason, is a 400 before a spawn), and runs
+`adapter.declare("releases", …)`, one `declare releases <name> --reason "…"
+[--ref]` (kind `vocabulary-declare`, first in 0.3.0). Every failure is a
+refusal envelope (`duplicate` exit 1; `malformed`, `usage` exit 2), so the
+usual 409 with branchling's text. branchling writes config.yaml; the cache
+passes the call through as a write. `deploy_targets` is not wrapped: its
+`--stage`/`--paths`/`--repository` form is not offered yet.
+
+**Plan.** One `set <ID> release <name>` per changed checkbox, through UI-6's
+`POST /api/task/field`: there is no second write path for `set`. A cleared box
+sets the release to empty. The run stops at the first refusal.
+
+**Which releases are declared.** No read of 0.3.0 returns `releases:` as data
+(not deploy status, stats, query, doctor, plan, show, log, audit or where), so
+the page never shows a "declared" list. A release counts as selectable when
+`deploy status --release` answers it with an envelope; the release box
+suggests the releases *seen* (task rows, `release.current`, names declared on
+the page), labelled as seen. UI-21's `declared.release` stays `null`.
+
 ## The overview (UI-29)
 
 The default screen: no `view` (or one not listed) is the overview. It answers
