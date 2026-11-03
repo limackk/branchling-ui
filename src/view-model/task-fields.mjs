@@ -103,9 +103,9 @@ export function fieldLabel(key) {
   return known ? known.label : String(key).replace(/_/g, " ");
 }
 
-function badText(value, name, max) {
+function badText(value, name, max, { leadingDash = false } = {}) {
   if (value.length > max) return `${name} is longer than ${max} characters.`;
-  if (value.startsWith("-")) return `${name} cannot start with "-": branchling would read it as a flag.`;
+  if (!leadingDash && value.startsWith("-")) return `${name} cannot start with "-": branchling would read it as a flag.`;
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) return `${name} cannot contain control characters.`;
   return null;
@@ -135,7 +135,7 @@ export function validateFieldEdit(input) {
   }
   if (typeof input.value !== "string") return { ok: false, field: "value", message: "The value must be text; an empty value clears the field." };
   const value = input.value.trim();
-  const valueProblem = badText(value, "The value", FIELD_EDIT_LIMITS.value);
+  const valueProblem = badText(value, "The value", FIELD_EDIT_LIMITS.value, { leadingDash: true });
   if (valueProblem) return { ok: false, field: "value", message: valueProblem };
   const out = { id: input.id, field: input.field, value };
   if (input.reason !== undefined && input.reason !== null) {

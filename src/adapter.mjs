@@ -512,9 +512,14 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
    * `opts.verdict`: the command is one of VERDICT_KINDS, whose failing answer
    * exits non-zero with a normal envelope. Every other call keeps the rule
    * that a non-zero exit is a refusal.
+   *
+   * `opts.literal`: words passed after `--`, at the very end, so branchling
+   * reads each as a positional even when it starts with "-". Only for a
+   * command whose parser has the terminator (`set` since 0.3.0).
    */
   async function json(args, expectedKind, opts = {}) {
-    const full = withDir([...args, "--json"]);
+    const flagged = withDir([...args, "--json"]);
+    const full = opts.literal ? [...flagged, "--", ...opts.literal] : flagged;
     const { code, stdout, stderr } = await run(bin, full, { cwd, input: opts.input, env });
     if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
     const envelope = parseEnvelope(stdout, expectedKind);
@@ -702,21 +707,22 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
      * may not be empty, a reserved reason (`unknown`, `proven`).
      *
      * `value` may be empty: an empty value clears a field that may be empty;
-     * a list field takes its items comma-separated. A value starting with "-"
-     * is refused here: branchling has no `--` and reads it as a flag
-     * (`unknown flag: -x`), so such a value cannot be set through the CLI at
-     * all. `actor` is passed only when the caller states one; the server
-     * never does.
+     * a list field takes its items comma-separated. The id, the field and the
+     * value go after `--` (branchling 0.3.0 has the terminator), so a value
+     * that starts with "-", a title "-x", is set as written; the id, the field,
+     * the reason and the actor are still names and words that may not.
+     * `actor` is passed only when the caller states one; the server never
+     * does.
      */
     async set(id, field, value, { reason, actor } = {}) {
       const base = ["set"];
-      const args = [...base, argWord(base, "the task id", id), argWord(base, "the field", field)];
+      const literal = [argWord(base, "the task id", id), argWord(base, "the field", field)];
       if (typeof value !== "string") throw new BranchlingUsageError(base, 2, "the value must be a string (empty clears the field)");
-      if (value.startsWith("-")) throw new BranchlingUsageError(base, 2, `the value cannot start with "-": branchling would read it as a flag`);
-      args.push(value);
+      literal.push(value);
+      const args = [...base];
       if (reason !== undefined && reason !== null && reason !== "") args.push("--reason", argWord(base, "--reason", reason));
       if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", argWord(base, "--actor", actor));
-      const envelope = await json(args, "task-set");
+      const envelope = await json(args, "task-set", { literal });
       if (envelope.ok !== true || typeof envelope.id !== "string" || typeof envelope.field !== "string" || !Array.isArray(envelope.changes)) {
         throw new ContractMismatch("task-set answered success without the field it set");
       }

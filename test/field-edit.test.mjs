@@ -203,12 +203,20 @@ test("a list field takes comma-separated items and an empty value clears it; an 
   assert.ok(texts.includes("labels: billing,risk → (empty)"), texts.join(" | "));
 });
 
-test("the adapter refuses a value or a reason starting with '-' before anything is spawned", async () => {
+test("a value starting with '-' is set as written, after branchling's --, with no flag read out of it", async () => {
+  const fx = await fixture();
+  for (const value of ["-leading dash", "--take-over", "--actor=agent:x"]) {
+    const set = await fx.adapter.set("TASK-1", "title", value);
+    assert.equal(set.value, value);
+    assert.equal(set.actor, ACTOR, `${value}: no actor was smuggled in`);
+    assert.equal(taskPanelModel(await readTask(fx.adapter, "TASK-1")).title, value);
+  }
+});
+
+test("the adapter refuses an id, a field, a reason or an actor starting with '-' before anything is spawned", async () => {
   // A bin that does not exist: reaching the spawn would fail differently.
   const adapter = createAdapter({ bin: join(tmpdir(), "no-such-branchling-bin"), dir: tmpdir() });
   for (const [args, what] of [
-    [["TASK-1", "title", "-leading dash"], "value"],
-    [["TASK-1", "title", "--take-over"], "value"],
     [["TASK-1", "--actor", "x"], "field"],
     [["--help", "title", "x"], "id"],
     [["TASK-1", "title", "x", { reason: "--actor=agent:x" }], "reason"],
@@ -267,7 +275,7 @@ test("POST /api/task/field refuses a body that names an actor, or any unknown ke
       { id: "TASK-1", field: "priority" },
       { id: "--help", field: "priority", value: "P0" },
       { id: "TASK-1", field: "--actor", value: "P0" },
-      { id: "TASK-1", field: "priority", value: "-P0" },
+      { id: "TASK-1", field: "priority", value: "P0", reason: "--actor" },
       [1, 2],
     ]) {
       const res = await post(body);
@@ -332,13 +340,13 @@ test("validateFieldEdit accepts { id, field, value, reason? }, trimmed, an empty
   assert.deepEqual(validateFieldEdit({ id: "TASK-1", field: "priority", value: " P1 ", reason: " why " }), { ok: true, value: { id: "TASK-1", field: "priority", value: "P1", reason: "why" } });
   assert.deepEqual(validateFieldEdit({ id: "TASK-1", field: "epic", value: "" }), { ok: true, value: { id: "TASK-1", field: "epic", value: "" } });
   assert.deepEqual(validateFieldEdit({ id: "TASK-1", field: "epic", value: "x", reason: "  " }), { ok: true, value: { id: "TASK-1", field: "epic", value: "x" } });
+  assert.deepEqual(validateFieldEdit({ id: "TASK-1", field: "title", value: " -x" }), { ok: true, value: { id: "TASK-1", field: "title", value: "-x" } }, "a value may start with '-'; set takes it after --");
   const refused = [
     [{ id: "TASK-1", field: "priority", value: "P1", actor: "local:x" }, null, /actor/],
     [{ id: "TASK-1", field: "priority", value: "P1", extra: 1 }, null, /Unknown field "extra"/],
     [{ id: "nope", field: "priority", value: "P1" }, "id", /not a task id/],
     [{ id: "TASK-1", field: "Priority", value: "P1" }, "field", /not a field name/],
     [{ id: "TASK-1", field: "priority", value: 1 }, "value", /text/],
-    [{ id: "TASK-1", field: "title", value: " -x" }, "value", /"-"/],
     [{ id: "TASK-1", field: "title", value: "a\u0007" }, "value", /control/],
     [{ id: "TASK-1", field: "title", value: "x".repeat(FIELD_EDIT_LIMITS.value + 1) }, "value", /longer/],
     [{ id: "TASK-1", field: "title", value: "x", reason: "--actor" }, "reason", /"-"/],
