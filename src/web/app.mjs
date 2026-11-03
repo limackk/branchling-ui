@@ -93,7 +93,8 @@ async function load() {
  * Which view is on screen is `?view=` in the URL. Stats is rendered here; any
  * other view is its own module in src/web/, listed below with ONE line, and is
  * imported only when it is on screen. It exports `start(section)`, or starts
- * itself on import as release.mjs does. No `view`, or one not listed, is the
+ * itself on import as release.mjs does, and optionally `refresh()`: re-read
+ * without a loading state, called by live.mjs when the backlog changed (UI-7). No `view`, or one not listed, is the
  * overview (UI-29); `?view=stats` still shows the stats view, which the
  * overview folds in and the nav no longer links (docs/architecture.md).
  */
@@ -113,9 +114,13 @@ for (const link of document.querySelectorAll("[data-view-link]")) {
   if (link.dataset.viewLink === current) link.setAttribute("aria-current", "page");
   else link.removeAttribute("aria-current");
 }
-if (current === "stats") load();
-else import(VIEW_MODULES[current]).then(m => m.start?.(document.querySelector(`[data-view="${current}"]`)));
+const shown = current === "stats"
+  ? (load(), Promise.resolve({ refresh: load }))
+  : import(VIEW_MODULES[current]).then(m => (m.start?.(document.querySelector(`[data-view="${current}"]`)), m));
 
 // The task panel (UI-27) opens over every view: `?task=<ID>`, or any link
 // carrying `data-task`. Its own module, so no view repeats it.
 import("/task.mjs").then(m => m.start());
+
+// Live refresh (UI-7): re-reads the modules on screen through their `refresh()`.
+import("/live.mjs").then(m => m.start([shown, import("/task.mjs")]));

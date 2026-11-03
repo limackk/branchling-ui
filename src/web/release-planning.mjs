@@ -122,7 +122,7 @@ export function createPlanning({ onDeclared, onPlanned }) {
   redraw();
   const declareFeedback = el("div", { class: "release-planning-feedback" });
   const declareButton = el("button", { type: "submit", class: "btn btn-primary" }, [icon("plus"), PLANNING_TEXT.declare]);
-  const declareForm = el("form", { class: "card release-declare", "aria-labelledby": "release-declare-title", novalidate: true }, [
+  const declareForm = el("form", { class: "card release-declare", "aria-labelledby": "release-declare-title", novalidate: true, "data-draft": "" }, [
     el("div", { class: "card-head" }, [el("h3", { id: "release-declare-title", text: PLANNING_TEXT.declareHeading })]),
     el("div", { class: "card-body stack" }, [
       declareFeedback,
@@ -219,7 +219,7 @@ export function createPlanning({ onDeclared, onPlanned }) {
     const apply = el("button", { type: "submit", class: "btn btn-primary" }, [icon("flag"), PLANNING_TEXT.planApply(0)]);
     const feedback = el("div", { class: "release-planning-feedback" });
     planFeedback = feedback;
-    const form = el("form", { class: "release-plan-form", "aria-labelledby": "release-plan-title", novalidate: true }, [
+    const form = el("form", { class: "release-plan-form", "aria-labelledby": "release-plan-title", novalidate: true, "data-draft": "" }, [
       el("div", { class: "card-body stack" }, [
         el("p", { class: "t-meta", text: PLANNING_TEXT.planScope }),
         el("fieldset", { class: "release-plan-tasks" }, [

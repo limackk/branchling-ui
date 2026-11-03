@@ -23,6 +23,18 @@
  * route alike: `application/json` only, at most MAX_BODY_BYTES, handed to the
  * handler as `body`. It is read only after the guard has passed, so a foreign
  * page cannot make the server buffer anything.
+ *
+ * LIVE REFRESH (UI-7). `GET /api/events` is a server-sent events stream of
+ * the live source handed in as `live` (src/live.mjs): `connected`,
+ * `disconnected` and `change` events, and a comment line every
+ * KEEPALIVE_MS so a proxy or the browser does not drop an idle stream. It is
+ * a route of the server, not of the view registry, because a handler returns
+ * one JSON body and this response never ends. It passes the same Host guard
+ * as every request, and it is a GET, so it needs no capability: it carries
+ * task ids and field names, nothing a write needs. A page of another origin
+ * cannot read it: EventSource is subject to CORS, and this server sends no
+ * Access-Control-Allow-Origin. Without `live` the route is a 404. Closing the
+ * server closes the live source, and so its `follow` child.
  */
 
 import { createServer as createHttpServer } from "node:http";
@@ -41,6 +53,12 @@ export const CAPABILITY_HEADER = "x-branchling-ui-capability";
 export const FETCHED_AT_HEADER = "X-Branchling-UI-Fetched-At";
 /** The largest request body a route accepts. A decision is a few hundred bytes. */
 export const MAX_BODY_BYTES = 16 * 1024;
+/** The path of the live refresh stream (UI-7). */
+export const EVENTS_PATH = "/api/events";
+/** How often an idle event stream gets a comment line (ms). */
+export const KEEPALIVE_MS = 15_000;
+/** How long the browser waits before reconnecting a dropped stream (ms). */
+export const EVENTS_RETRY_MS = 2000;
 
 const LOOPBACK_BIND = new Set(["127.0.0.1", "::1"]);
 const SRC = fileURLToPath(new URL(".", import.meta.url));
@@ -147,6 +165,30 @@ export function readJsonBody(req, limit = MAX_BODY_BYTES) {
   });
 }
 
+/**
+ * One page's event stream: the live source's events as SSE, until the page
+ * goes away. The event names are the `type` of src/live.mjs's events; the
+ * data is the rest of the event as JSON.
+ */
+function serveEvents(req, res, live, keepAliveMs) {
+  res.writeHead(200, {
+    ...SECURITY_HEADERS,
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(`retry: ${EVENTS_RETRY_MS}\n\n`);
+  const send = ({ type, ...data }) => {
+    if (!res.writableEnded) res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const keepAlive = setInterval(() => { if (!res.writableEnded) res.write(": keep-alive\n\n"); }, keepAliveMs);
+  keepAlive.unref?.();
+  const unsubscribe = live.subscribe(send);
+  const stop = () => { clearInterval(keepAlive); unsubscribe(); };
+  req.on("close", stop);
+  res.on("close", stop);
+}
+
 /** Published path -> file, fixed at startup: nothing a request names is ever
  *  joined onto a directory, so there is no traversal to guard against. */
 function staticFiles() {
@@ -191,10 +233,13 @@ function listenOnce(server, port, host) {
  * @param {string} [options.host] "127.0.0.1" (default) or "::1"; nothing else
  * @param {number} [options.attempts] ports tried upward from `port` before
  *   falling back to one the system picks
+ * @param {object} [options.live] the live source (src/live.mjs createLive)
+ *   behind GET /api/events; the server owns it from here and closes it
+ * @param {number} [options.keepAliveMs] the event stream's comment cadence
  * @param {(line: string) => void} [options.log] where server-side faults go
  * @returns {Promise<{ url: string, port: number, close: () => Promise<void> }>}
  */
-export async function createServer({ adapter, port = DEFAULT_PORT, host = "127.0.0.1", attempts = 10, views = defaultViews, log = line => console.error(line) } = {}) {
+export async function createServer({ adapter, live = null, port = DEFAULT_PORT, host = "127.0.0.1", attempts = 10, views = defaultViews, keepAliveMs = KEEPALIVE_MS, log = line => console.error(line) } = {}) {
   if (!adapter) throw new TypeError("createServer needs an adapter");
   if (!LOOPBACK_BIND.has(host)) throw new Error(`refusing to bind ${host}: only 127.0.0.1 or ::1`);
 
@@ -212,6 +257,11 @@ export async function createServer({ adapter, port = DEFAULT_PORT, host = "127.0
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (req.method !== "GET" && !isAllowedWrite(req.headers, boundPort, token)) {
         refuse(res, 403, "forbidden", "A write needs a same-origin page and its capability token");
+        return;
+      }
+
+      if (live && req.method === "GET" && url.pathname === EVENTS_PATH) {
+        serveEvents(req, res, live, keepAliveMs);
         return;
       }
 
@@ -283,9 +333,13 @@ export async function createServer({ adapter, port = DEFAULT_PORT, host = "127.0
   return {
     url: `http://${urlHost}:${boundPort}/`,
     port: boundPort,
-    close: () => new Promise((resolve, reject) => {
-      server.close(err => (err ? reject(err) : resolve()));
-      server.closeAllConnections?.();
-    }),
+    close: async () => {
+      const closed = new Promise((resolve, reject) => {
+        server.close(err => (err ? reject(err) : resolve()));
+        server.closeAllConnections?.();
+      });
+      // The follow child goes with the server, never as an orphan.
+      await Promise.all([closed, live ? live.close() : null]);
+    },
   };
 }

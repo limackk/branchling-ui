@@ -336,14 +336,22 @@ test("the started interface takes the backlog root from one where at startup, no
   let none;
   try {
     await found.port;
-    assert.deepEqual(shim.calls(), ["--version", "where --json"], "startup runs where, and no stats");
+    // The live refresh's follow child (UI-7) is started too; it is no read.
+    const reads = calls => calls.filter(c => !c.startsWith("follow "));
+    assert.deepEqual(reads(shim.calls()), ["--version", "where --json"], "startup runs where, and no stats");
     assert.doesNotMatch(found.stderr, /serving uncached/);
+
+    // The found backlog's follow child, once, before the second start, so its
+    // call cannot land in the second start's slice.
+    for (let i = 0; i < 60 && !shim.calls().some(c => c.startsWith("follow ")); i++) await sleep(50);
+    assert.equal(shim.calls().filter(c => c.startsWith("follow ")).length, 1, "one follow child for the found backlog");
 
     // No backlog above the working directory: where's own reason, and uncached.
     const before = shim.calls().length;
     none = startEntry(outside, shim.bin);
     await none.port;
-    assert.deepEqual(shim.calls().slice(before), ["--version", "where --json"]);
+    await sleep(500);
+    assert.deepEqual(shim.calls().slice(before), ["--version", "where --json"], "no backlog: no follow child either");
     assert.match(none.stderr, /no backlog found from .*\(no backlog here: .*\); serving uncached/);
   } finally {
     found.child.kill();

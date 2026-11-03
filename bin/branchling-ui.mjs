@@ -15,13 +15,19 @@
  * whole `stats --json`, which costs a backlog scan. If `where` finds no
  * backlog or fails, the server runs uncached and every view reports the
  * failure itself.
+ *
+ * Live refresh (UI-7): one `branchling follow --json` child for the backlog,
+ * started here at startup (src/live.mjs says why not lazily), feeds the
+ * pages' /api/events stream and adds its invalidations to the cache's
+ * fingerprint. The server closes it when it closes.
  */
 
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 
 import { createAdapter } from "../src/adapter.mjs";
-import { createCache, servedFromCache } from "../src/cache.mjs";
+import { createCache, createFileChanges, servedFromCache, withLiveChanges } from "../src/cache.mjs";
+import { createLive } from "../src/live.mjs";
 import { createServer, DEFAULT_PORT } from "../src/server.mjs";
 
 const { values } = parseArgs({
@@ -59,9 +65,14 @@ if (!backlogDir) {
     console.warn(`branchling-ui: no backlog found from ${process.cwd()} (${err.message.split("\n")[0]}); serving uncached`);
   }
 }
-const served = backlogDir ? servedFromCache(createCache(adapter, { dir: backlogDir, cwd: process.cwd() })) : adapter;
+// No backlog found: no follow child either. It would fail to arm and restart
+// forever; the page shows live updates as off, which is the truth.
+const live = backlogDir ? createLive({ adapter }) : null;
+live?.start();
+const changes = backlogDir && withLiveChanges(createFileChanges({ dir: backlogDir, cwd: process.cwd() }), live);
+const served = backlogDir ? servedFromCache(createCache(adapter, { changes })) : adapter;
 
-const server = await createServer({ adapter: served, port });
+const server = await createServer({ adapter: served, live, port });
 if (server.port !== port && port !== 0) console.warn(`branchling-ui: port ${port} is taken, using ${server.port}`);
 console.log(`branchling-ui: ${server.url}`);
 

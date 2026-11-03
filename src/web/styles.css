@@ -1001,3 +1001,10 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 .release-plan-tasks .t-meta { padding-left: calc(1rem + var(--space-2)); }
 .release-planning-details { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-200); }
 /* ---------- end release planning ---------- */
+
+/* ---------- live refresh (UI-7), after mockups/states.html "live updates off" ----------
+   The region is always in the page and empty while live; only the banner in it
+   has a box, so an empty region takes no space. Text and an icon say what is
+   wrong, never the colour alone. Tokens only. */
+.live-status .banner { margin-bottom: var(--space-4); flex-wrap: wrap; }
+.live-status .banner .icon { flex: none; }

@@ -246,7 +246,7 @@ const planning = createPlanning({
   onPlanned: () => load(),
 });
 
-async function load() {
+async function load({ quiet = false } = {}) {
   const target = document.getElementById("release");
   if (!target) return;
   if (!body) {
@@ -257,7 +257,8 @@ async function load() {
   const mine = ++generation;
   syncControls(current);
   body.setAttribute("aria-busy", "true");
-  body.replaceChildren(renderState(loadingState("release"), load));
+  // A live refresh keeps the pipeline on screen until the new one is in.
+  if (!quiet) body.replaceChildren(renderState(loadingState("release"), load));
   let model;
   let envelope = null;
   try {
@@ -296,7 +297,10 @@ async function load() {
   body.setAttribute("aria-busy", "false");
 }
 
-window.addEventListener("popstate", load);
+/** Called by live.mjs when the backlog changed (UI-7). */
+export const refresh = () => load({ quiet: true });
+
+window.addEventListener("popstate", () => load());
 load().then(() => {
   if (new URLSearchParams(location.search).get("view") === "release") {
     document.getElementById("release-title")?.scrollIntoView();

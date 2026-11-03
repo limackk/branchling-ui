@@ -62,13 +62,14 @@ bin/branchling-ui.mjs        starts the server for one backlog, prints the URL
 src/adapter.mjs              the only door into branchling (unchanged by UI-1)
 src/server.mjs               HTTP, the loopback guard, static files, the route table
 src/cache.mjs                UI-2's read cache, and servedFromCache, its join to the server
+src/live.mjs                 UI-7's live source: one `follow` child, restarts, listeners
 src/request-error.mjs        RequestError: a request answered with a 4xx before branchling runs
 src/views/index.mjs          the view registry: one import and one entry per view
 src/views/<view>.mjs         a view's API routes
 src/view-model/<view>.mjs    the shared view model, pure functions
 src/view-model/states.mjs    loading, error, refusal and unreachable states
 src/view-model/roles.mjs     status and priority colour roles
-src/web/                     the page: index.html, app.mjs, one module per view, styles.css, icons.svg
+src/web/                     the page: index.html, app.mjs, one module per view, live.mjs, styles.css, icons.svg
 bin/branchling-ui-tui.mjs    starts the terminal interface (TUI) for one backlog
 src/tui/terminal.mjs         colour and screen capabilities, the full-screen lifecycle
 src/tui/render.mjs           a view model as lines of text, a pure function; KEYS
@@ -294,6 +295,86 @@ Not in the shell yet: the mockups' top bar (search, the freshness indicator,
 the scheme switch) and the count badges on the links. Each needs data or a
 setting the page does not have: the decisions count alone costs one spawn
 per active task (see the decisions view) on every screen.
+
+## Live refresh (UI-7)
+
+Open views re-read when the backlog changes, pushed rather than polled. The
+task said `branchling watch --json` (upstream TL-524); what shipped in
+branchling 0.3.0 is **`branchling follow --json`**, one `change-stream`
+envelope per line: `ready` once the watch is armed, `change` (task `id`,
+`file`, `change` = created / modified / deleted, the `fields` that moved,
+`__body__` for the body) and `heartbeat`.
+
+**What `follow` does not see** (`branchling follow --help`): other worktrees
+and branches, `plan.yaml`, history records, `updated:`, the generated views,
+and anything that happened while it was not running. Writes inside one short
+burst are folded into one comparison. So it is an *addition* to the cache's
+fingerprint, never a replacement.
+
+The pieces, each in the layer that owns it:
+
+- **Adapter** (`adapter.follow({ heartbeat, maxEvents })`, the only
+  streaming call). Spawns `follow --json` through the same `spawnTarget` as
+  every call (the Windows `.cmd` handling included) and returns an
+  EventEmitter handle: `envelope` (checked by `parseChangeLine`: kind,
+  `schemaVersion` in SUPPORTED_SCHEMA_VERSIONS, a known `event`, a task id on
+  a change), `mismatch` (a ContractMismatch for a line that is not one; the
+  stream goes on), `exit` (exactly once), `pid` and `close()`. The npm bin is
+  a launcher whose watcher is its own child and which does not pass SIGTERM
+  on, so the child is a process-group leader and `close()` signals the group
+  (`taskkill /T` on Windows); killing the pid alone left the watcher holding
+  the pipe and the server open.
+- **Live source** (`src/live.mjs`, `createLive({ adapter })`). One child per
+  server, i.e. per backlog, shared by every page and by the cache. Started
+  **eagerly** by `bin/branchling-ui.mjs`: a page that opens later joins an
+  armed stream, so no change falls between its first read and `ready`.
+  Lazily started on the first page, every server's first second would be
+  such a window; the price of eager is one idle process for the life of a
+  server that exists to be looked at. **Restart**: an exit nobody asked for
+  marks the stream down, tells listeners `disconnected` and restarts after
+  1 s, doubling to 30 s; the delay resets once a child stayed live 10 s. A
+  child silent for three heartbeats is stopped as hung. After `ready` again
+  listeners get `connected` with `resync: true`.
+- **Cache** (`withLiveChanges(createFileChanges(…), live)`). The token is
+  the fingerprint prefixed with the live generation, which moves on every
+  `change`, `ready` and exit. The fingerprint is still taken on every read
+  and still decides, so while the stream is not live the cache vouches for
+  exactly what the fingerprint vouches for; while it is live an event makes
+  the next read miss even before the fingerprint would notice. Invalidation
+  is of every entry, not per task: one task's change moves `query`, `stats`,
+  `plan`, `deploy status` and other tasks' `blocked` verdict.
+- **Server** (`GET /api/events`, server-sent events). Events `connected`
+  (`resync`), `disconnected`, `change` (`id`, `change`, `fields`, `file`,
+  `at`; `id: null` when a line could not be read), a `retry:` of 2 s and a
+  comment line every 15 s for proxies. Same Host guard as every request; a
+  GET, so no capability. **A foreign origin cannot read it**: EventSource is
+  subject to CORS and the server sends no `Access-Control-Allow-Origin`. It
+  carries ids and field names, nothing a write needs. Closing the server
+  closes the live source and its child; the tests assert the process group
+  is gone.
+- **Page** (`src/web/live.mjs`, one import line in `app.mjs`). One
+  EventSource; on `change`, or on `connected` after a resync or after this
+  page's own connection dropped, it calls `refresh()` on the modules on
+  screen, debounced 250 ms. `refresh()` is an optional export of a view
+  module (overview, tasks, plan, release, decisions, stats, the task panel):
+  re-read without a loading state, the old answer staying until the new one
+  is in. **Health has none on purpose**: `check` runs the release gate's
+  guards, a cost spent on "Run again", not on every save. Focus on a redrawn
+  control is put back on its twin (same id, same task link, same text). While
+  the stream is down a banner (`role="status"`, text from
+  `src/view-model/live.mjs`, an icon, not colour alone) says live updates
+  stopped, with "Refresh now".
+- **Never under the user's hands.** A refresh is deferred while focus is in
+  any form, and while a `form[data-draft]` (a decision's answer, a task
+  action's confirmation, the release view's declare and plan forms) has had input since it was submitted and is still on
+  the page; the banner then says the view will refresh when the user leaves
+  the form, and "Refresh now" overrides. Filter forms are not drafts: what
+  they hold is already in the URL.
+
+Not done: the terminal interface does not subscribe. It could: the live
+source is server-side and the notice text is in the shared view model, but
+the TUI talks to the adapter directly, so it would run its own `follow` child
+through `createLive` and redraw on `change`.
 
 ## The decisions view (UI-5)
 

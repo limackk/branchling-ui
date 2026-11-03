@@ -317,6 +317,12 @@ function isTextField(node) {
   return node.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "reset"].includes(node.type);
 }
 
+/** Called by live.mjs when the backlog changed (UI-7); the list stays until the answer is in. */
+export function refresh() {
+  if (!root) return null;
+  return Promise.all([load(), loadStats()]);
+}
+
 export function start(section) {
   root = section.querySelector("#tasks");
   countRegion = el("p", { class: "tasks-count", "aria-live": "polite", "aria-atomic": "true" });

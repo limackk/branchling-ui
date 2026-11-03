@@ -72,20 +72,36 @@
  *   - other clones reachable only through a remote: their state arrives with
  *     a fetch, which moves a remote ref and so is covered.
  *   - the branchling executable itself being upgraded under a running cache.
- * Until `branchling watch --json` exists (upstream TL-524), these are the
- * honest edges of a file-system fingerprint.
+ * These are the honest edges of a file-system fingerprint. The change stream
+ * (`branchling follow`, UI-7, below) does not close them: it sees even less.
  *
- * THE SEAM FOR TL-524. Change detection is an injectable object:
+ * THE SEAM, AND WHAT UI-7 PUT IN IT. Change detection is an injectable object:
  *
  *   createCache(adapter, { changes })   // changes = { async token() }
  *
  * `token()` resolves to a string that differs whenever the backlog may have
  * changed, or to `null` when it cannot vouch for the current state (that read
  * is then neither answered from nor stored in the cache). The default is
- * `createFileChanges({ dir, cwd })`. A source built on `branchling watch
- * --json` (UI-7) would bump a generation counter on each event and return it;
- * it must still answer `null` until its stream is known to be live, or the
- * window between subscribing and the first event would be stale.
+ * `createFileChanges({ dir, cwd })`.
+ *
+ * UI-7 (upstream TL-524, which shipped as `branchling follow --json`, not the
+ * `watch` this comment used to name) adds `withLiveChanges(fileChanges, live)`:
+ * the fingerprint's token prefixed with the live stream's generation
+ * (src/live.mjs), which moves on every `change` event, every `ready` and every
+ * exit of the child. It is a COMBINATION, never a replacement:
+ *   - the fingerprint is still taken on every read and still decides. `follow`
+ *     does not see git refs, other worktrees or branches, plan.yaml, history
+ *     records or `updated:`, which the fingerprint does, and it sees nothing
+ *     while it is not running. So while the stream is not live (no `ready`
+ *     yet, or the child is down) the cache vouches for exactly what the
+ *     fingerprint vouches for, and no more; while it is live, an event makes
+ *     the next read miss even before the fingerprint would notice;
+ *   - the generation is read before and after the fingerprint: an event that
+ *     lands while the fingerprint is being taken answers `null`.
+ * Invalidation is of EVERY entry, not per task: a change to one task moves
+ * `query`, `stats`, `plan`, `deploy status` and the `blocked` verdict in other
+ * tasks' `show`, so there is no entry a task change provably leaves alone; and
+ * the fingerprint changes for every entry on any write anyway.
  *
  * WHAT A CACHED CALL RETURNS. The reading methods (query, stats, plan, show,
  * log, deployStatus) resolve to a frozen
@@ -130,8 +146,10 @@ export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deploySta
  * `where` (UI-38) names directories and creates nothing (`branchling where
  * --help`); its answer depends on the working directory and the environment,
  * which the fingerprint does not see, so it is not cached either.
+ * `follow` (UI-7) writes nothing (`follow --help`) and returns a stream
+ * handle, which is not an answer to cache.
  */
-const PASSTHROUGH_READS = ["version", "where", "doctor", "check"];
+const PASSTHROUGH_READS = ["version", "where", "doctor", "check", "follow"];
 
 function git(args, cwd) {
   return new Promise(resolvePromise => {
@@ -230,6 +248,24 @@ export function createFileChanges({ dir, cwd, racyMs = RACY_MS, now = Date.now }
       // Too recent to trust: a second write in the same tick would not show.
       if (newestNs > BigInt(Math.floor(lookedAt - racyMs)) * 1_000_000n) return null;
       return createHash("sha256").update(parts.join("\n\0\n")).digest("hex");
+    },
+  };
+}
+
+/**
+ * The fingerprint `file` combined with the live stream `live` (anything with
+ * `snapshot() -> { generation }`, i.e. createLive in src/live.mjs). See the
+ * header: the fingerprint still decides; the generation only adds misses.
+ */
+export function withLiveChanges(file, live) {
+  if (!file || typeof file.token !== "function") throw new TypeError("withLiveChanges needs a change source");
+  if (!live || typeof live.snapshot !== "function") throw new TypeError("withLiveChanges needs a live stream");
+  return {
+    async token() {
+      const before = live.snapshot().generation;
+      const token = await file.token();
+      if (token === null || live.snapshot().generation !== before) return null;
+      return `${before}:${token}`;
     },
   };
 }

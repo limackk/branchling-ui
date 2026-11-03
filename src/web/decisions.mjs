@@ -48,7 +48,7 @@ let formCount = 0;
 
 function questionForm(q) {
   const n = ++formCount;
-  const form = el("form", { class: "decision-form", novalidate: "" });
+  const form = el("form", { class: "decision-form", novalidate: "", "data-draft": "" });
   const fieldset = el("fieldset");
   fieldset.append(el("legend", { text: `Answer the question on ${q.taskId}` }));
 
@@ -195,3 +195,6 @@ async function load() {
 export function start() {
   load();
 }
+
+/** Called by live.mjs when the backlog changed (UI-7); the list stays until the answer is in. */
+export const refresh = () => load();

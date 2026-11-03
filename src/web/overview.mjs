@@ -292,12 +292,15 @@ export function start(section) {
     target.setAttribute("aria-busy", pending > 0 ? "true" : "false");
   }
 
-  async function load(name) {
+  async function load(name, { quiet = false } = {}) {
     pending++;
     target.setAttribute("aria-busy", "true");
     // Try again: a failed part goes back to loading until its read answers.
-    delete parts[name];
-    delete times[name];
+    // A live refresh (UI-7) keeps the part on screen until the new answer is in.
+    if (!quiet) {
+      delete parts[name];
+      delete times[name];
+    }
     const answer = await read(OVERVIEW_READS[name]);
     parts[name] = overviewPart(answer);
     times[name] = { fetchedAt: answer.ok ? answer.fetchedAt : null, stale: answer.ok && answer.stale };
@@ -312,5 +315,10 @@ export function start(section) {
     draw();
     for (const n of names) load(n);
   };
+  reload = () => Promise.all(Object.keys(OVERVIEW_READS).map(n => load(n, { quiet: true })));
   retry(null);
 }
+
+/** Set by start(); live.mjs calls refresh() when the backlog changed (UI-7). */
+let reload = null;
+export const refresh = () => reload?.();

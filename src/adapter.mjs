@@ -17,7 +17,8 @@
  * No other module in this package may spawn branchling or read a backlog file.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { delimiter, extname, join } from "node:path";
 
@@ -143,6 +144,149 @@ export function run(bin, args, { cwd, input, env } = {}) {
     });
     if (input !== undefined) child.stdin.end(input);
   });
+}
+
+/** The events a `change-stream` envelope may carry (branchling 0.3.0 `follow --json`). */
+export const CHANGE_STREAM_EVENTS = Object.freeze(["ready", "change", "heartbeat"]);
+/** The `change` values of a `change` event. */
+export const CHANGE_KINDS = Object.freeze(["created", "modified", "deleted"]);
+/** The longest line `follow` may print before it is a ContractMismatch, not a buffer. */
+export const MAX_STREAM_LINE = 1024 * 1024;
+
+/**
+ * One line of `follow --json` as a checked `change-stream` envelope, or a
+ * ContractMismatch. Measured on branchling 0.3.0, every line is
+ *
+ *   { schemaVersion: 1, kind: "change-stream", event: "ready"|"change"|"heartbeat",
+ *     at: <ISO>, root: <backlog dir>, id, file, change, fields: [] }
+ *
+ * with `id`, `file` and `change` null except on `change`, where `id` is the
+ * task id, `change` one of CHANGE_KINDS and `fields` the frontmatter fields
+ * that moved (`__body__` for the markdown body).
+ */
+export function parseChangeLine(line) {
+  const envelope = parseEnvelope(line, "change-stream");
+  if (!CHANGE_STREAM_EVENTS.includes(envelope.event)) throw new ContractMismatch(`change-stream event "${envelope.event}" is not one of ${CHANGE_STREAM_EVENTS.join(", ")}`);
+  if (!Array.isArray(envelope.fields) || !envelope.fields.every(f => typeof f === "string")) throw new ContractMismatch("change-stream envelope has no fields list");
+  if (envelope.event === "change") {
+    if (typeof envelope.id !== "string" || !envelope.id) throw new ContractMismatch("change-stream change names no task id");
+    if (!CHANGE_KINDS.includes(envelope.change)) throw new ContractMismatch(`change-stream change "${envelope.change}" is not one of ${CHANGE_KINDS.join(", ")}`);
+  }
+  return envelope;
+}
+
+/**
+ * Stops a long-running child started through `spawnTarget`, and everything
+ * it started. The npm bin is a launcher: `branchling follow` is node running
+ * the bin, which runs `scripts/follow-changes.mjs` as ITS child and does not
+ * pass SIGTERM on (measured on 0.3.0). Killing the pid alone orphaned the
+ * watcher, which kept the stdout pipe, and with it the server, open. So on
+ * POSIX the child is started as a process-group leader (`detached`) and the
+ * signal goes to the group; on Windows (cmd.exe running a `.cmd` shim, then
+ * node) the tree goes with `taskkill /T`. A group still there after
+ * `graceMs` is killed.
+ */
+function signalTree(child, signal) {
+  if (process.platform === "win32") {
+    execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => {});
+    return;
+  }
+  try { process.kill(-child.pid, signal); } catch { /* the group is gone */ }
+}
+
+function stopTree(child, graceMs = 2000) {
+  if (!child.pid) return;
+  signalTree(child, "SIGTERM");
+  if (process.platform === "win32") return;
+  const timer = setTimeout(() => signalTree(child, "SIGKILL"), graceMs);
+  timer.unref();
+  child.once("close", () => clearTimeout(timer));
+}
+
+/**
+ * `branchling follow --json`: a long-running child that prints one
+ * `change-stream` envelope per line (see parseChangeLine). The ONLY streaming
+ * call; every other call is one spawn, one envelope.
+ *
+ * Returns a handle, an EventEmitter:
+ *
+ *   "envelope"  (envelope)          a checked envelope: ready, change, heartbeat
+ *   "mismatch"  (ContractMismatch)  a line that is not one; the stream goes on
+ *   "exit"      ({ code, signal, stderr, error })  exactly once, when the child
+ *               is gone (error: it could not be started at all)
+ *
+ *   handle.pid       the child's pid, a process-group leader on POSIX (the
+ *                    cmd.exe shim's on Windows); branchling's watcher is
+ *                    its child, so kill the group (-pid), not the pid
+ *   handle.close()   stops the child; resolves once it has exited
+ *
+ * A line is never a crash: the handle has no "error" event, so a listener
+ * cannot be forgotten. Exit codes, from `follow --help`: 0 stopped (signal,
+ * reader gone, --max-events reached), 1 the watch could not be set up, 2 a
+ * usage error. Deciding what an exit means (restart, give up) is the
+ * caller's (src/live.mjs).
+ */
+function followStream(bin, args, { cwd, env } = {}) {
+  const target = spawnTarget(resolveBin(bin), args);
+  const handle = new EventEmitter();
+  let child;
+  let exited = false;
+  let stderr = "";
+  let rest = "";
+  const done = new Promise(resolvePromise => handle.once("exit", resolvePromise));
+  const finish = info => {
+    if (exited) return;
+    exited = true;
+    handle.emit("exit", { code: null, signal: null, stderr, error: null, ...info });
+  };
+  const line = text => {
+    if (!text.trim()) return;
+    try {
+      handle.emit("envelope", parseChangeLine(text));
+    } catch (err) {
+      handle.emit("mismatch", err instanceof ContractMismatch ? err : new ContractMismatch(String(err && err.message || err)));
+    }
+  };
+  try {
+    child = spawn(target.file, target.args, {
+      cwd, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32",
+      ...(env ? { env: mergeEnv(env) } : {}), ...target.options,
+    });
+  } catch (error) {
+    queueMicrotask(() => finish({ error }));
+    handle.pid = null;
+    handle.close = () => done;
+    return handle;
+  }
+  handle.pid = child.pid ?? null;
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", chunk => {
+    rest += chunk;
+    let nl;
+    while ((nl = rest.indexOf("\n")) !== -1) {
+      line(rest.slice(0, nl));
+      rest = rest.slice(nl + 1);
+    }
+    if (rest.length > MAX_STREAM_LINE) {
+      handle.emit("mismatch", new ContractMismatch(`a change-stream line is longer than ${MAX_STREAM_LINE} bytes`));
+      rest = "";
+    }
+  });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-4096); });
+  child.on("error", error => { if (child.pid === undefined) finish({ error }); });
+  // The launcher gone, its watcher must not stay behind holding the pipe.
+  child.on("exit", () => { if (!exited) stopTree(child); });
+  child.on("close", (code, signal) => {
+    if (rest.trim()) line(rest);
+    rest = "";
+    finish({ code, signal });
+  });
+  handle.close = () => {
+    if (!exited) stopTree(child);
+    return done;
+  };
+  return handle;
 }
 
 function compareVersions(a, b) {
@@ -615,6 +759,21 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
         throw new ContractMismatch("vocabulary-declare answered success without the entry it wrote");
       }
       return envelope;
+    },
+
+    /**
+     * `follow --json [--heartbeat <s>] [--max-events <n>]`: the change stream
+     * (UI-7). Returns the handle `followStream` describes, not a promise. The
+     * server keeps one per backlog (src/live.mjs); nothing caches it.
+     */
+    follow({ heartbeat, maxEvents } = {}) {
+      const args = ["follow", "--json"];
+      for (const [flag, value] of [["--heartbeat", heartbeat], ["--max-events", maxEvents]]) {
+        if (value === undefined || value === null) continue;
+        if (!Number.isInteger(value) || value < 0) throw new BranchlingUsageError(["follow", flag, String(value)], 2, `${flag} takes a whole number of 0 or more`);
+        args.push(flag, String(value));
+      }
+      return followStream(bin, withDir(args), { cwd, env });
     },
 
     /** Escape hatch for commands without a typed wrapper yet. */

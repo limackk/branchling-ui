@@ -201,12 +201,17 @@ function renderPlan(model) {
 
 /* ---------- wiring ---------- */
 
+/** Set by start(); live.mjs calls it when the backlog changed (UI-7). */
+let reload = null;
+export const refresh = () => reload?.({ quiet: true });
+
 export function start(section) {
   document.title = "Backlog plan";
   const target = section.querySelector("#plan");
-  async function load() {
+  async function load({ quiet = false } = {}) {
     target.setAttribute("aria-busy", "true");
-    target.replaceChildren(renderState(loadingState("plan"), null, PLAN_TEXT.loading));
+    // A live refresh keeps the plan on screen until the new one is in.
+    if (!quiet) target.replaceChildren(renderState(loadingState("plan"), null, PLAN_TEXT.loading));
     const [plan, tasks] = await Promise.all([getJson("/api/plan"), getJson("/api/plan/tasks")]);
     let model;
     if (!plan.ok) model = failureModel("plan", plan);
@@ -223,5 +228,6 @@ export function start(section) {
     target.setAttribute("aria-busy", "false");
   }
 
+  reload = load;
   load();
 }

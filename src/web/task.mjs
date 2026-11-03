@@ -485,7 +485,7 @@ function openConfirm(action, model, opener) {
   const submit = el("button", { type: "submit", class: "btn btn-primary" }, [icon(ACTION_ICONS[action]), text.submit]);
   const cancel = el("button", { type: "button", class: "btn btn-ghost", text: TASK_ACTIONS_TEXT.cancel });
   cancel.addEventListener("click", closeConfirm);
-  const form = el("form", { class: "task-action-form", novalidate: true }, [
+  const form = el("form", { class: "task-action-form", novalidate: true, "data-draft": "" }, [
     el("div", { class: "dialog-head" }, [
       el("h2", { id: "task-action-title", class: "t-section", text: text.title(id) }),
       model.title && model.title !== id ? el("p", { class: "t-meta", text: model.title }) : null,
@@ -584,7 +584,7 @@ function render(model, retry) {
 
 /* ---------- opening and closing ---------- */
 
-async function show(id, { reload = false, keepRecorded = false } = {}) {
+async function show(id, { reload = false, keepRecorded = false, quiet = false } = {}) {
   if (!dialog.open) dialog.showModal();
   if (id === shownId && !reload) { title.focus(); return null; }
   if (!keepRecorded) { recorded = null; edited = null; }
@@ -596,8 +596,11 @@ async function show(id, { reload = false, keepRecorded = false } = {}) {
     return null;
   }
   body.setAttribute("aria-busy", "true");
-  render(taskPanelLoading(id));
-  title.focus();
+  // A live refresh (UI-7) keeps the panel and the focus where they are.
+  if (!quiet) {
+    render(taskPanelLoading(id));
+    title.focus();
+  }
   let model;
   let answer = null;
   try {
@@ -689,6 +692,16 @@ function onClick(event) {
   history.pushState({ ...(history.state || {}), taskPanel: (open ? depthNow() : 0) + 1 }, "", href);
   show(id);
   notify();
+}
+
+/**
+ * Called by live.mjs when the backlog changed (UI-7): the open task is read
+ * again in place. Not while an action is being confirmed: that dialog is a
+ * form, and live.mjs defers while focus is in one.
+ */
+export function refresh() {
+  if (!dialog || !dialog.open || shownId === null || confirmBox?.open) return null;
+  return show(shownId, { reload: true, keepRecorded: true, quiet: true });
 }
 
 /** Called by app.mjs on every page. */
