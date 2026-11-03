@@ -293,6 +293,22 @@ test("a write through the cache invalidates even when the fingerprint cannot see
   assert.equal(spawns(), n + 4);
 });
 
+test("where passes through the cache: answered by a spawn each time, and it drops no cached read", async () => {
+  const cache = createCache(adapter(), { changes: { token: async () => "unchanged" } });
+  await cache.stats();
+  const n = spawns();
+  const first = await cache.where();
+  const second = await cache.where();
+  assert.equal(first.kind, "where", "the bare envelope, not a cache entry");
+  assert.ok(second.backlog && second.backlog.root);
+  assert.equal(spawns(), n + 2, "where is never answered from memory");
+  // It is a read: the cached stats survives it.
+  assert.equal((await cache.stats()).fromCache, true);
+  // Positive control: a write in its place drops it.
+  await cache.raw(["stats"], "stats");
+  assert.equal((await cache.stats()).fromCache, false);
+});
+
 test("a backlog directory outside any git repository is fingerprinted without git", async () => {
   const plain = mkdtempSync(join(tmpdir(), "branchling-ui-nogit-"));
   try {

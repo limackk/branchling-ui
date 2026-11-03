@@ -9,7 +9,7 @@ import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -84,6 +84,64 @@ test("stats and plan answer with their declared kinds", async () => {
   const adapter = createAdapter({ bin: BIN, dir, cwd: root });
   assert.equal((await adapter.stats()).kind, "stats");
   assert.equal((await adapter.plan()).kind, "plan");
+});
+
+// `where` (UI-38): the backlog root the entries hand to the cache. A
+// BACKLOG_DIR exported by the person running the tests would win over
+// discovery, so these calls drop it.
+const noBacklogEnv = { BACKLOG_DIR: null };
+
+test("where names the fixture's backlog, and the rule that found it", async () => {
+  const explicit = await createAdapter({ bin: BIN, dir, cwd: root, env: noBacklogEnv }).where();
+  assert.equal(explicit.kind, "where");
+  assert.equal(explicit.error, null);
+  assert.equal(explicit.backlog.source, "explicit");
+  assert.equal(realpathSync(explicit.backlog.root), realpathSync(dir));
+  for (const key of ["home", "config", "data", "preferences", "agentProfiles"]) assert.ok(key in explicit, key);
+
+  // Without --dir, branchling discovers it from the working directory, also below it.
+  const sub = join(root, "nested", "deeper");
+  mkdirSync(sub, { recursive: true });
+  for (const cwd of [root, sub]) {
+    const found = await createAdapter({ bin: BIN, cwd, env: noBacklogEnv }).where();
+    assert.equal(found.backlog.source, "discovery", cwd);
+    assert.equal(realpathSync(found.backlog.root), realpathSync(dir), cwd);
+  }
+});
+
+test("where with no backlog is an answer (backlog null, the reason in error), not a refusal", async () => {
+  const outside = mkdtempSync(join(tmpdir(), "branchling-ui-no-backlog-"));
+  try {
+    const none = await createAdapter({ bin: BIN, cwd: outside, env: noBacklogEnv }).where();
+    assert.equal(none.kind, "where");
+    assert.equal(none.backlog, null);
+    assert.match(none.error, /no backlog/i);
+
+    // A --dir that is not a backlog answers the same way.
+    const notOne = await createAdapter({ bin: BIN, dir: join(root, "no-such-backlog"), cwd: root, env: noBacklogEnv }).where();
+    assert.equal(notOne.backlog, null);
+    assert.match(notOne.error, /does not look like a backlog/);
+
+    // Positive control: the same call from the fixture finds one.
+    assert.ok((await createAdapter({ bin: BIN, cwd: root, env: noBacklogEnv }).where()).backlog.root);
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("a where envelope with an unknown backlog shape is a contract mismatch", async () => {
+  const base = { schemaVersion: 1, kind: "where", home: "/h", homeSource: "default", config: "/c", data: "/d" };
+  const good = fakeBin("fake-where-ok", JSON.stringify({ ...base, backlog: { root: "/r/backlog", source: "explicit" }, error: null }), 0);
+  assert.equal((await createAdapter({ bin: good }).where()).backlog.root, "/r/backlog");
+  const noRoot = fakeBin("fake-where-no-root", JSON.stringify({ ...base, backlog: { source: "explicit" }, error: null }), 0);
+  await assert.rejects(createAdapter({ bin: noRoot }).where(), ContractMismatch);
+  const silent = fakeBin("fake-where-silent", JSON.stringify({ ...base, backlog: null, error: null }), 0);
+  await assert.rejects(createAdapter({ bin: silent }).where(), ContractMismatch);
+  // The 0.2.x shape: no schemaVersion, no kind.
+  const bare = fakeBin("fake-where-02", JSON.stringify({ backlog: { root: "/r/backlog", source: "explicit" } }), 0);
+  await assert.rejects(createAdapter({ bin: bare }).where(), ContractMismatch);
+  const otherKind = fakeBin("fake-where-stats", JSON.stringify({ schemaVersion: 1, kind: "stats", root: "/r/backlog" }), 0);
+  await assert.rejects(createAdapter({ bin: otherKind }).where(), ContractMismatch);
 });
 
 test("a value outside the vocabulary is a usage error, not an envelope", async () => {

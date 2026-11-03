@@ -103,7 +103,7 @@
  * Errors (refusals, usage errors, contract mismatches) are never cached: the
  * entry is dropped when the spawn rejects. Identical reads made while one is
  * in flight under the same fingerprint share that one spawn. `version` passes
- * through uncached, and so do `doctor` and `check`. Every other method (`raw` and any future write) passes
+ * through uncached, and so do `where`, `doctor` and `check`. Every other method (`raw` and any future write) passes
  * through and bumps a local generation before and after it runs, so a write
  * made through this object can never be answered around.
  */
@@ -127,8 +127,11 @@ export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deploySta
  * AGENTS.md and docs/ at the repository root, skills in the user's home), so
  * a hit could be stale. Running both over a fixture was checked to leave
  * every file under the backlog directory unchanged (branchling 0.2.0).
+ * `where` (UI-38) names directories and creates nothing (`branchling where
+ * --help`); its answer depends on the working directory and the environment,
+ * which the fingerprint does not see, so it is not cached either.
  */
-const PASSTHROUGH_READS = ["version", "doctor", "check"];
+const PASSTHROUGH_READS = ["version", "where", "doctor", "check"];
 
 function git(args, cwd) {
   return new Promise(resolvePromise => {

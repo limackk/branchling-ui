@@ -17,7 +17,7 @@
  */
 
 import assert from "node:assert/strict";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { run } from "../../src/adapter.mjs";
@@ -61,4 +61,25 @@ export function branchlingIn(root, { bin = BIN } = {}) {
     assert.equal(code, 0, `branchling ${args.join(" ")} exited ${code}: ${stderr}`);
     return stdout;
   };
+}
+
+/**
+ * A `bin` that records the arguments of every spawn, one line each, and then
+ * runs `bin`. For the startup tests (UI-38), which count WHICH commands an
+ * entry runs before its first view, not only how many. Only for arguments
+ * without cmd.exe metacharacters (`--version`, `where --json`).
+ */
+export function argvShim(dir, { bin = BIN } = {}) {
+  const log = join(dir, "argv.log");
+  writeFileSync(log, "");
+  let file;
+  if (process.platform === "win32") {
+    file = join(dir, "argv-branchling.cmd");
+    writeFileSync(file, `@echo %*>>"${log}"\r\n@call "${bin}" %*\r\n`);
+  } else {
+    file = join(dir, "argv-branchling");
+    writeFileSync(file, `#!/bin/sh\necho "$*" >> '${log}'\nexec '${bin}' "$@"\n`);
+    chmodSync(file, 0o755);
+  }
+  return { bin: file, calls: () => readFileSync(log, "utf8").split(/\r?\n/).map(l => l.trim()).filter(Boolean) };
 }

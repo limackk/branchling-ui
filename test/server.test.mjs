@@ -21,7 +21,7 @@ import { createAdapter, run, BranchlingRefusal } from "../src/adapter.mjs";
 import { createCache, createFileChanges, servedFromCache } from "../src/cache.mjs";
 import { RequestError } from "../src/request-error.mjs";
 import { createServer, CAPABILITY_HEADER } from "../src/server.mjs";
-import { fixtureEnv } from "./fixtures/env.mjs";
+import { argvShim, fixtureEnv } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
@@ -308,22 +308,55 @@ test("each request's scope reports only its own reads, so concurrent requests ca
   assert.equal(e.answeredAt(), 1000);
 });
 
-test("the started interface finds the backlog from its working directory and serves it cached", async () => {
+/** bin/branchling-ui.mjs started in `cwd`; resolves once it prints its address. */
+function startEntry(cwd, bin) {
   const binPath = fileURLToPath(new URL("../bin/branchling-ui.mjs", import.meta.url));
-  const child = spawn(process.execPath, [binPath, "--port", "0", "--bin", BIN], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
-  let stderr = "";
-  child.stderr.on("data", d => { stderr += d; });
-  try {
-    const port = await new Promise((resolve, reject) => {
-      let out = "";
-      child.stdout.on("data", d => {
-        out += d;
-        const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
-        if (m) resolve(Number(m[1]));
-      });
-      child.on("exit", code => reject(new Error(`exited ${code}: ${stderr}`)));
+  const env = { ...process.env };
+  delete env.BACKLOG_DIR; // discovery from cwd, whatever the person running the tests exported
+  const child = spawn(process.execPath, [binPath, "--port", "0", "--bin", bin], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+  const started = { child, stderr: "" };
+  child.stderr.on("data", d => { started.stderr += d; });
+  started.port = new Promise((resolve, reject) => {
+    let out = "";
+    child.stdout.on("data", d => {
+      out += d;
+      const m = out.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
+      if (m) resolve(Number(m[1]));
     });
-    const srv = { port };
+    child.on("exit", code => reject(new Error(`exited ${code}: ${started.stderr}`)));
+  });
+  return started;
+}
+
+test("the started interface takes the backlog root from one where at startup, not from stats (UI-38)", async () => {
+  const shimDir = mkdtempSync(join(tmpdir(), "branchling-ui-server-argv-"));
+  const outside = mkdtempSync(join(tmpdir(), "branchling-ui-server-nobacklog-"));
+  const shim = argvShim(shimDir, { bin: BIN });
+  const found = startEntry(root, shim.bin);
+  let none;
+  try {
+    await found.port;
+    assert.deepEqual(shim.calls(), ["--version", "where --json"], "startup runs where, and no stats");
+    assert.doesNotMatch(found.stderr, /serving uncached/);
+
+    // No backlog above the working directory: where's own reason, and uncached.
+    const before = shim.calls().length;
+    none = startEntry(outside, shim.bin);
+    await none.port;
+    assert.deepEqual(shim.calls().slice(before), ["--version", "where --json"]);
+    assert.match(none.stderr, /no backlog found from .*\(no backlog here: .*\); serving uncached/);
+  } finally {
+    found.child.kill();
+    if (none) none.child.kill();
+    rmSync(shimDir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("the started interface finds the backlog from its working directory and serves it cached", async () => {
+  const entry = startEntry(root, BIN);
+  try {
+    const srv = { port: await entry.port };
     await sleep(2200); // RACY_MS: the bin uses the cache's defaults
     const first = await call(srv, { path: "/api/stats" });
     assert.equal(first.status, 200);
@@ -331,8 +364,8 @@ test("the started interface finds the backlog from its working directory and ser
     const second = await call(srv, { path: "/api/stats" });
     assert.ok(first.headers["x-branchling-ui-fetched-at"], "the cache reports when it answered");
     assert.equal(second.headers["x-branchling-ui-fetched-at"], first.headers["x-branchling-ui-fetched-at"]);
-    assert.doesNotMatch(stderr, /serving uncached/);
+    assert.doesNotMatch(entry.stderr, /serving uncached/);
   } finally {
-    child.kill();
+    entry.child.kill();
   }
 });

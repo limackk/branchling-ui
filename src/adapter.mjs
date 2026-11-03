@@ -400,6 +400,35 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
 
     stats: () => json(["stats"], "stats"),
     /**
+     * `where`: the backlog this run would read and the rule that found it,
+     * plus this machine's branchling homes. Measured on branchling 0.3.0:
+     *
+     *   { schemaVersion: 1, kind: "where", home, homeSource, config, data,
+     *     preferences: { path, exists }, agentProfiles: { path, exists },
+     *     backlog: { root, source } | null, error: string | null }
+     *
+     * `source` is `explicit` (--dir), `env`, `discovery` or `colocated`. No
+     * backlog found (nothing above the working directory, or a `--dir` that is
+     * not a backlog) is NOT a refusal: exit 0, `backlog: null` and the reason
+     * in `error`. So this call returns that answer, and a caller that needs a
+     * root reads `backlog` and shows `error` when it is null. A bad flag is
+     * exit 2, stderr only: a BranchlingUsageError. It creates nothing.
+     *
+     * `backlog` that is neither null nor an object with a string `root`
+     * is a shape this package does not know, so a ContractMismatch.
+     */
+    async where() {
+      const envelope = await json(["where"], "where");
+      const { backlog } = envelope;
+      if (backlog !== null && !(backlog && typeof backlog.root === "string" && backlog.root)) {
+        throw new ContractMismatch("where answered a backlog without a root");
+      }
+      if (backlog === null && typeof envelope.error !== "string") {
+        throw new ContractMismatch("where answered no backlog and no error");
+      }
+      return envelope;
+    },
+    /**
      * `doctor`: the setup checks (`ok`, `root`, `next`, `checks[]` of `id`,
      * `title`, `status`, `detail`, `fix`). A failing verdict is returned, not
      * thrown (VERDICT_KINDS).

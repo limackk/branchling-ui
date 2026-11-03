@@ -13,7 +13,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { execFile, execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -34,7 +34,7 @@ import { ESC, canDriveScreen, colourEnabled } from "../src/tui/terminal.mjs";
 import { runTui } from "../src/tui/app.mjs";
 import { prepareAdapter } from "../src/tui/start.mjs";
 import { createCache, createFileChanges } from "../src/cache.mjs";
-import { fixtureEnv } from "./fixtures/env.mjs";
+import { argvShim, fixtureEnv } from "./fixtures/env.mjs";
 
 const SGR_RE = /\x1b\[[0-9;]*m/;
 const ANY_CSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -560,16 +560,53 @@ test("the TUI reads through the cache: an unchanged backlog is answered without 
     // Without --dir the backlog branchling finds is the one the cache watches.
     seen.length = 0;
     const found = await prepareAdapter({
-      adapter: createAdapter({ bin: BIN, cwd: fixture.top }),
+      adapter: createAdapter({ bin: BIN, cwd: fixture.top, env: { BACKLOG_DIR: null } }),
       cwd: fixture.top,
       createCache: shortRacy,
     });
     assert.equal(found.cached, true);
     assert.equal(seen.length, 1);
-    assert.ok(seen[0].dir.endsWith("backlog"), seen[0].dir);
+    assert.equal(realpathSync(seen[0].dir), realpathSync(fixture.backlog));
   } finally {
     rmSync(fixture.top, { recursive: true, force: true });
     rmSync(shim, { recursive: true, force: true });
+  }
+});
+
+test("without --dir the TUI takes the backlog root from one where, not from stats (UI-38)", async () => {
+  const shimDir = mkdtempSync(join(tmpdir(), "branchling-ui-tui-argv-"));
+  const outside = mkdtempSync(join(tmpdir(), "branchling-ui-tui-nobacklog-"));
+  try {
+    const shim = argvShim(shimDir, { bin: BIN });
+    const env = { BACKLOG_DIR: null };
+    const seen = [];
+    const recordCache = (adapter, options) => { seen.push(options); return createCache(adapter, options); };
+    const sub = join(root, "nested");
+    mkdirSync(sub, { recursive: true });
+
+    const found = await prepareAdapter({ adapter: createAdapter({ bin: shim.bin, cwd: sub, env }), cwd: sub, createCache: recordCache });
+    assert.equal(found.cached, true);
+    assert.equal(realpathSync(seen[0].dir), realpathSync(dir), "the root where names, found from a subdirectory");
+    assert.deepEqual(shim.calls(), ["--version", "where --json"], "startup runs where, and no stats");
+
+    // No backlog above the working directory: where answers backlog null,
+    // so the TUI runs uncached and its first read shows the failure.
+    const before = shim.calls().length;
+    const none = await prepareAdapter({ adapter: createAdapter({ bin: shim.bin, cwd: outside, env }), cwd: outside, createCache: recordCache });
+    assert.equal(none.cached, false);
+    assert.equal(seen.length, 1, "no cache was made");
+    assert.deepEqual(shim.calls().slice(before), ["--version", "where --json"]);
+    await assert.rejects(none.adapter.stats());
+
+    // With --dir nothing is asked: the directory given is the root.
+    const given = shim.calls().length;
+    const explicit = await prepareAdapter({ adapter: createAdapter({ bin: shim.bin, dir, cwd: root, env }), dir, cwd: root, createCache: recordCache });
+    assert.equal(explicit.cached, true);
+    assert.equal(seen[1].dir, dir);
+    assert.deepEqual(shim.calls().slice(given), ["--version"]);
+  } finally {
+    rmSync(shimDir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

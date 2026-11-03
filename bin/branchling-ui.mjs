@@ -10,10 +10,11 @@
  * Reads go through UI-2's cache (src/cache.mjs), which fingerprints the backlog
  * directory and so needs to know where it is. With `--dir` that is the
  * directory given. Without it, the directory branchling itself found is taken
- * from the `root` key of one `stats --json` envelope at startup (`where
- * --json` would say it more directly, but it prints no schemaVersion/kind
- * envelope, so the adapter cannot take it as a contract). If that first read
- * fails, the server runs uncached and every view reports the failure itself.
+ * from one `where --json` at startup (`backlog.root`; branchling 0.3.0 prints
+ * it as an envelope, TL-528, UI-38). Until then this was the `root` of a
+ * whole `stats --json`, which costs a backlog scan. If `where` finds no
+ * backlog or fails, the server runs uncached and every view reports the
+ * failure itself.
  */
 
 import { parseArgs } from "node:util";
@@ -51,8 +52,9 @@ if (!supported) console.warn(`branchling-ui: branchling ${version} is outside th
 let backlogDir = dir;
 if (!backlogDir) {
   try {
-    const { root } = await adapter.stats();
-    if (typeof root === "string" && root) backlogDir = root;
+    const { backlog, error } = await adapter.where();
+    if (backlog) backlogDir = backlog.root;
+    else console.warn(`branchling-ui: no backlog found from ${process.cwd()} (${error.split("\n")[0]}); serving uncached`);
   } catch (err) {
     console.warn(`branchling-ui: no backlog found from ${process.cwd()} (${err.message.split("\n")[0]}); serving uncached`);
   }

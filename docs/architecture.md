@@ -188,10 +188,13 @@ nothing produces that yet, and the page and model keep the field for when
 something does.
 
 `bin/branchling-ui.mjs` always serves through the cache. The cache needs the
-backlog directory: with `--dir` that is it; without, it is the `root` of one
-`stats --json` at startup (`where --json` names it more directly but prints
-no `schemaVersion`/`kind` envelope, so the adapter cannot take it). If that
-read fails, the server runs uncached and the views report the failure.
+backlog directory: with `--dir` that is it; without, it is `backlog.root`
+of one `where --json` at startup (`adapter.where()`, kind `where`, an
+envelope since branchling 0.3.0; UI-38). The terminal interface does the
+same in `prepareAdapter`. Before 0.3.0 it was the `root` of a whole
+`stats --json`, which scans the backlog. If `where` finds no backlog
+(`backlog: null`, the reason in `error`, still exit 0) or fails, the
+interface runs uncached and the views report the failure.
 
 ## The loopback guard
 

@@ -14,10 +14,11 @@
  *
  * CACHE. createCache fingerprints the backlog directory, so it needs to know
  * where that is. With `--dir` it is the directory given. Without it, the
- * directory branchling itself found is taken from the `root` key of one
- * `stats --json` envelope (the same approach the web entry takes in UI-3). If
- * that read fails, the TUI runs uncached and its first screen shows the
- * failure. The cache is returned through `servedFromCache`, the same join the
+ * directory branchling itself found is taken from `backlog.root` of one
+ * `where --json` envelope (UI-38; before branchling 0.3.0 printed `where` as
+ * an envelope, the `root` of a whole `stats --json`), as the web entry does.
+ * If `where` finds no backlog or fails, the TUI runs uncached and its first
+ * screen shows the failure. The cache is returned through `servedFromCache`, the same join the
  * server uses, so runTui takes one scope per refresh and gets bare envelopes.
  */
 
@@ -46,8 +47,8 @@ export async function prepareAdapter({ adapter, dir, cwd, warn = () => {}, creat
   let backlogDir = dir;
   if (!backlogDir) {
     try {
-      const { root } = await adapter.stats();
-      if (typeof root === "string" && root) backlogDir = root;
+      const { backlog } = await adapter.where();
+      if (backlog) backlogDir = backlog.root;
     } catch {
       // The first read through the uncached adapter reports the same failure on screen.
     }

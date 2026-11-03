@@ -25,6 +25,7 @@ verification:
     bash: "npm test -- --test-name-pattern='decisions|decide' && ! grep -q parseDecideOutput src/adapter.mjs"
 ---
 
+
 ## Goal
 
 The decisions view lists open questions with one branchling call, shows each question's options and recommendation, reads decide's answer as a standard envelope, and cannot record a person's answer under branchling's default agent actor. Today UI-5 spawns one log per active task, offers only a free-text answer, and parses decide's non-envelope output with a dedicated reader.
@@ -34,6 +35,8 @@ The decisions view lists open questions with one branchling call, shows each que
 Found while building UI-5 against the pinned branchling 0.2.0. (1) No command lists open questions across the backlog: listDecisions() in src/adapter.mjs runs `query --json` once and then `log <ID> --decisions --json` for every active task, 4 at a time, about 0.45 s per spawn, so the view's cost grows with the backlog. (2) `log <ID> --decisions --json` omits a question's `options` and `recommend` (which `ask --json` and `resume --json` carry), so the radio-button answer built in src/web/decisions.mjs never appears. (3) `decide --json` prints no envelope: no schemaVersion, no kind of its own; a refusal puts its kind in `kind` rather than `refusalKind`/`refusal`; an unknown task exits 2 where other refusals exit 1. src/adapter.mjs parseDecideOutput reads exactly the two 0.2 shapes and fails loudly on anything else. (4) decide's argument parser has no `--` terminator or `--flag=value`, so an answer starting with '-' is refused by the UI. (5) When no actor is configured, decide falls back to the default agent actor silently, and its JSON does not say which source named the actor, so a person's answer can be recorded as an agent's; the page shows the recorded actor so it is visible. Option (a): file these upstream as CLI contracts and map them here once released and pinned. Option (b): read history/*.jsonl or task files for the options and the open set; rejected, AGENTS.md forbids reading backlog files outside the adapter's CLI calls. (a) is the solid choice.
 
 Upstream (filed 2026-11-02 in the branchling repository): TL-536 for gaps 1 and 2 (open questions in one call, with options), TL-537 for gaps 4 and 5 (`--` and `--reason=`, `actorSource`), and the existing TL-528 for gap 3 (decide in the envelope; the refusal shape was added to its context).
+
+Gap 3 is CLOSED by branchling 0.3.0 (TL-528, verified in UI-38 on 2026-11-03): `decide --json` prints `kind: "task-decide"` with `refusalKind` on a refusal (`not-found` exit 2, `unknown-event` exit 1); the adapter reads it through parseEnvelope since UI-14, and parseDecideOutput is gone. Gaps 1, 2, 4 and 5 stay open upstream (TL-536, TL-537).
 
 ## Steps
 
