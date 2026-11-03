@@ -33,6 +33,8 @@ The tasks view offers an Open / Archived / All scope, as the mockup docs/design/
 
 Found while building UI-26 against the pinned branchling 0.2.0. `query --json` without `--status` returns the active tasks only; `--status ""` gives the same set, and `all` or `*` are refused as unknown statuses. The only way to reach archived tasks is to name their status. Option (a): file upstream a `query` scope flag (for example `--scope active|archived|all`) whose envelope says which scope it answered, and map the mockup's segmented control onto it once released and pinned. Option (b): build `--status` from the keys of `stats --json` byStatus; rejected, it names statuses in the UI (the vocabulary belongs to UI-18) and would miss a task whose status is outside the config. Option (a) is the solid choice.
 
+Upstream: TL-540 in the branchling repository (filed 2026-11-03), `query --scope active|archived|all` with a `scope` key in the envelope.
+
 ## Steps
 
 1. Re-check against the pinned branchling whether query gained a scope or all-status flag
