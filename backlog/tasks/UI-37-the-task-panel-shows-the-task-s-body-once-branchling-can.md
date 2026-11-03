@@ -33,6 +33,8 @@ The task panel (UI-27) shows the task's markdown body, rendered through the safe
 
 Found while building UI-27 (2026-11-02). The pinned branchling 0.2.0 (7d76538) has no read that prints a task's body as JSON: `show --help` says the body is never reprinted ('read the file'), `query --text` matches id and title only, `log` carries history, `resume` is a successor briefing that needs the owner as actor, and `body` (TL-523) is a write. This package may not read task files (AGENTS.md), so the panel shows a Body section saying the body is not available (`body.known: false`) and never shows it as empty. Everything else is ready: markdownBlocks/markdownInlines/safeHref are built and tested on strings, and readTask in src/adapter.mjs needs one more read. Upstream needs a read contract, for example `show <ID> --json --body` adding a `body` string to task-show, or `body <ID> --print --json` with its own kind. File it in limackk/branchling and name it in blocked_by here.
 
+Upstream: TL-542 in the branchling repository (filed 2026-11-03), `show <ID> --json --body` adding a `body` string to task-show, for active and archived tasks.
+
 ## Steps
 
 1. File the upstream issue in limackk/branchling describing the read as a CLI contract (command, flag, envelope kind and the body key) and record its id here
