@@ -29,7 +29,7 @@
  * is then written by `branchling plan add`, every task and its `blocked_by` by
  * one `seed` (which cannot create the plan: its `wave` key names an EXISTING
  * wave), and every status change by `take` and `done`. No task file is ever
- * written here. Every command used is one the pinned branchling (0.2.0, from
+ * written here. Every command used is one the pinned branchling (0.3.0, from
  * package-lock.json) has; check with `node_modules/.bin/branchling --help`.
  */
 

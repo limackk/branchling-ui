@@ -20,12 +20,12 @@ import "./fixtures/private-homes.mjs";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAdapter, listDecisions, run, parseDecideOutput, BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
+import { createAdapter, listDecisions, run, BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
 import { createServer, CAPABILITY_HEADER, MAX_BODY_BYTES } from "../src/server.mjs";
 import { createCache, servedFromCache } from "../src/cache.mjs";
 import { fixtureEnv } from "./fixtures/env.mjs";
@@ -368,15 +368,34 @@ test("adapter.decide records with --choose, --reason and a stated actor, and ref
   await assert.rejects(fx.adapter.decide({ id: "TASK-1", resolves: fx.q1 }), BranchlingUsageError);
 });
 
-test("decide's output is read in exactly its two 0.2 shapes; anything else is a contract mismatch", () => {
-  const recorded = { ok: true, id: "TASK-1", decision: { id: "01M6ED5HQT4XQGR5KGY17S4JER", ts: "2026-11-02T15:13:41.626Z", text: "Yes", actor: "local:me", resolves: "x", chose: null }, chosen: null, openQuestions: [], lifted: null };
-  assert.deepEqual(parseDecideOutput(JSON.stringify(recorded), 0), recorded);
-  assert.throws(() => parseDecideOutput(JSON.stringify({ ok: false, kind: "unknown-event", id: "TASK-1", message: "names no event", details: ["a"] }), 1),
+test("decide reads only the task-decide envelope; the 0.2 bare object is a contract mismatch", async t => {
+  const where = mkdtempSync(join(tmpdir(), "branchling-ui-decide-fake-"));
+  t.after(() => rmSync(where, { recursive: true, force: true }));
+  const fake = (name, out, code) => {
+    const file = join(where, process.platform === "win32" ? `${name}.cmd` : name);
+    if (process.platform === "win32") writeFileSync(file, `@echo ${out}\r\n@exit /b ${code}\r\n`);
+    else writeFileSync(file, `#!/bin/sh\necho '${out}'\nexit ${code}\n`);
+    chmodSync(file, 0o755);
+    return file;
+  };
+  const answer = { id: "TASK-1", resolves: "01M6ED5HQT4XQGR5KGY17S4JER", reason: "Yes" };
+  const decision = { id: "01M6ED5HQT4XQGR5KGY17S4JES", ts: "2026-11-02T15:13:41.626Z", text: "Yes", actor: "local:me", resolves: answer.resolves, chose: null };
+  const recorded = { ok: true, id: "TASK-1", decision, chosen: null, openQuestions: [], lifted: null };
+  const envelope = { schemaVersion: 1, kind: "task-decide", ...recorded, refusalKind: null, refusal: null, details: [] };
+
+  // Positive control: the 0.3 envelope is accepted from the same kind of fake.
+  const ok = await createAdapter({ bin: fake("fake-decide-ok", JSON.stringify(envelope), 0) }).decide(answer);
+  assert.equal(ok.decision.id, decision.id);
+
+  // 0.2.x printed the same keys with no schemaVersion and no kind of its own.
+  await assert.rejects(createAdapter({ bin: fake("fake-decide-02", JSON.stringify(recorded), 0) }).decide(answer), ContractMismatch);
+  // An envelope claiming success with no decision in it.
+  const empty = { ...envelope, decision: null };
+  await assert.rejects(createAdapter({ bin: fake("fake-decide-empty", JSON.stringify(empty), 0) }).decide(answer), ContractMismatch);
+  // A refusal envelope is a BranchlingRefusal carrying branchling's text.
+  const refused = { ...envelope, ok: false, decision: null, refusalKind: "unknown-event", refusal: "names no event", details: ["a"] };
+  await assert.rejects(createAdapter({ bin: fake("fake-decide-refused", JSON.stringify(refused), 1) }).decide(answer),
     err => err instanceof BranchlingRefusal && err.message === "names no event" && err.envelope.refusalKind === "unknown-event" && err.envelope.details[0] === "a");
-  assert.throws(() => parseDecideOutput("not json", 0), ContractMismatch);
-  assert.throws(() => parseDecideOutput(JSON.stringify({ schemaVersion: 1, kind: "task-decide", ok: true }), 0), ContractMismatch);
-  assert.throws(() => parseDecideOutput(JSON.stringify(recorded), 1), ContractMismatch, "ok:true with a failing exit");
-  assert.throws(() => parseDecideOutput(JSON.stringify({ ok: true }), 0), ContractMismatch);
 });
 
 // --- the page --------------------------------------------------------------------------

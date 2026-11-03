@@ -6,8 +6,8 @@
 # a previous session.
 #
 # THE EXECUTABLE UNDER TEST IS THE PINNED DEVDEPENDENCY. `npm ci` installs the
-# build package-lock.json names (an upstream commit until UI-14 lands a
-# release), and `npm test` puts node_modules/.bin first on PATH, so the
+# build package-lock.json names (a registry release, exact version), and
+# `npm test` puts node_modules/.bin first on PATH, so the
 # adapter spawns exactly that one. Testing both ends of
 # SUPPORTED_RANGE is UI-9, not this file.
 name: test

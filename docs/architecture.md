@@ -318,11 +318,10 @@ runs the task's verification unless told not to.
 `{ id, resolves, reason }` and runs `branchling decide` through
 `adapter.decide()`. A refusal (an unknown event, an option out of range)
 comes back as the usual 409 with branchling's text unchanged and its detail
-lines in `envelope.details`. In 0.2, `decide --json` prints no envelope (no
-`schemaVersion`, the refusal kind under `kind`); `parseDecideOutput` in the
-adapter reads exactly those two shapes and fails with a contract mismatch on
-anything else, including a future real envelope, which is then a deliberate
-change there.
+lines in `envelope.details`. Since 0.3.0, `decide --json` prints the usual
+envelope (`kind: "task-decide"`); the adapter reads it like any other write
+and also fails with a contract mismatch on a success that carries no recorded
+decision. 0.2's bare object, with no `schemaVersion`, is refused.
 
 **The actor.** The page cannot authenticate anybody, so the server never
 passes `--actor` and refuses a body that names one. branchling resolves the

@@ -18,7 +18,7 @@
  *
  * branchling 0.2's `log --decisions --json` does not report a question's
  * options (UI-23), so TASK-1 is offered the free-text answer too until it does.
- * Every command used is one the pinned branchling (0.2.0) has. No task file is
+ * Every command used is one the pinned branchling (0.3.0) has. No task file is
  * ever written here.
  */
 

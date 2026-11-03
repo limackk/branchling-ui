@@ -25,8 +25,9 @@ import { delimiter, extname, join } from "node:path";
  *  here, never a silent best effort: a renamed key reads as a missing value. */
 export const SUPPORTED_SCHEMA_VERSIONS = [1];
 
-/** The executable releases this package is tested against: [min, maxExclusive). */
-export const SUPPORTED_RANGE = { min: "0.2.0", maxExclusive: "0.3.0" };
+/** The executable releases this package is tested against: [min, maxExclusive).
+ *  0.3.0 is the first published release with `show` and `deploy` (UI-14). */
+export const SUPPORTED_RANGE = { min: "0.3.0", maxExclusive: "0.4.0" };
 
 export class BranchlingUsageError extends Error {
   constructor(args, code, stderr) {
@@ -286,48 +287,24 @@ export async function readTask(adapter, id) {
 }
 
 /**
- * Reads what `branchling decide --json` prints.
+ * What a recorded `decide --json` must carry beyond the envelope, or it is a
+ * ContractMismatch rather than a success with nothing in it. Measured on
+ * branchling 0.3.0, `decide` prints the envelope every other command prints:
  *
- * WHY NOT parseEnvelope. In the supported range (0.2.x) `decide --json` does
- * not print the envelope every other command prints: there is no
- * `schemaVersion` and no `kind` of its own. A recorded decision is
+ *   { schemaVersion: 1, kind: "task-decide", ok, id,
+ *     decision: { id, ts, text, actor, resolves, chose } | null,
+ *     chosen, openQuestions, lifted, refusalKind, refusal, details }
  *
- *   { ok: true, id, decision: { id, ts, text, actor, resolves, chose }, chosen, openQuestions, lifted }
- *
- * and a refusal is `{ ok: false, kind: "<refusal kind>", id, message, details }`
- * with a non-zero exit (1, or 2 for an unknown task). That is an upstream gap,
- * reported, not a shape to guess around: this function accepts exactly those
- * two shapes, turns the second into a BranchlingRefusal whose envelope carries
- * `refusalKind` and `refusal` as everywhere else (the text unchanged), and
- * fails loudly with ContractMismatch on anything else, including a future
- * `decide` that prints a real envelope, so that change is a deliberate edit
- * here and not a silent best effort.
+ * A refusal sets `refusalKind` and exits 1 (`unknown-event`, `option-range`)
+ * or 2 (`not-found`); a malformed `--resolves` is a usage error, stderr only.
+ * (0.2.x printed a bare object with no schemaVersion, which parseEnvelope now
+ * refuses; that range is no longer supported.)
  */
-export function parseDecideOutput(text, code) {
-  let out;
-  try {
-    out = JSON.parse(text);
-  } catch {
-    throw new ContractMismatch("decide output is not JSON: " + text.slice(0, 200));
+function acceptDecision(envelope) {
+  if (envelope.ok !== true || typeof envelope.id !== "string" || !envelope.decision || typeof envelope.decision.id !== "string") {
+    throw new ContractMismatch("task-decide answered success without a recorded decision");
   }
-  if (!out || typeof out !== "object" || Array.isArray(out)) throw new ContractMismatch("decide output is not an object");
-  if ("schemaVersion" in out) {
-    throw new ContractMismatch("decide now prints an envelope (schemaVersion " + out.schemaVersion + "); the adapter reads only the 0.2 shape and must be updated");
-  }
-  if (out.ok === true && code === 0 && typeof out.id === "string" && out.decision && typeof out.decision.id === "string") {
-    return out;
-  }
-  if (out.ok === false && code !== 0 && typeof out.kind === "string" && typeof out.message === "string") {
-    throw new BranchlingRefusal({
-      kind: "decide",
-      ok: false,
-      id: typeof out.id === "string" ? out.id : null,
-      refusalKind: out.kind,
-      refusal: out.message,
-      details: Array.isArray(out.details) ? out.details.map(String) : [],
-    }, code);
-  }
-  throw new ContractMismatch(`decide output has an unexpected shape (exit ${code}): ` + text.slice(0, 200));
+  return envelope;
 }
 
 /**
@@ -339,7 +316,7 @@ export function parseDecideOutput(text, code) {
  * a broken backlog makes them exit non-zero WITH a normal envelope
  * (`ok: false`, no `refusalKind`), because CI reads the exit code. For a view
  * that failing verdict is the data it exists to show. So these two kinds,
- * and only these, accept it (measured on branchling 0.2.0):
+ * and only these, accept it (measured on branchling 0.2.0, unchanged in 0.3.0):
  *
  *   doctor  exit 1 with `ok: false`: some check has status `error` (also when
  *           `--dir` is not a backlog: `root: null` and one `backlog` check)
@@ -483,10 +460,7 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
         args.push("--reason", word("--reason", reason));
       }
       if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", word("--actor", actor));
-      const full = withDir([...args, "--json"]);
-      const { code, stdout, stderr } = await run(bin, full, { cwd, env });
-      if (!stdout.trim()) throw new BranchlingUsageError(full, code, stderr);
-      return parseDecideOutput(stdout, code);
+      return acceptDecision(await json(args, "task-decide"));
     },
 
     /*
@@ -498,7 +472,7 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
      * Every value is an argv element, never a shell string, and one starting
      * with "-" is refused before branchling runs (argWord).
      *
-     * How each one fails, measured on branchling 0.2.0 (7d76538):
+     * How each one fails, measured on branchling 0.3.0:
      *   take     every failure is an envelope, so a BranchlingRefusal: exit 1
      *            `other-owner` (held), `closed` (a closed task); exit 2
      *            `not-found` (no such task)

@@ -51,6 +51,22 @@ test("the installed executable is inside the supported range", async () => {
   assert.ok(supported, `branchling ${version} is outside the supported range`);
 });
 
+test("only 0.3.x is supported: 0.2.x has no show or deploy, 0.4.0 is untested", async () => {
+  // A fake that prints `branchling <v>` for --version, as the real one does.
+  const fakeVersion = v => {
+    const file = join(root, process.platform === "win32" ? `fake-version-${v}.cmd` : `fake-version-${v}`);
+    if (process.platform === "win32") writeFileSync(file, `@echo branchling ${v}\r\n`);
+    else writeFileSync(file, `#!/bin/sh\necho 'branchling ${v}'\n`);
+    chmodSync(file, 0o755);
+    return file;
+  };
+  const cases = { "0.1.4": false, "0.2.0": false, "0.2.9": false, "0.3.0": true, "0.3.7": true, "0.4.0": false };
+  for (const [v, expected] of Object.entries(cases)) {
+    const answer = await createAdapter({ bin: fakeVersion(v) }).version();
+    assert.deepEqual(answer, { version: v, supported: expected }, `branchling ${v}`);
+  }
+});
+
 test("query returns the fixture task in a task-list envelope", async () => {
   const envelope = await createAdapter({ bin: BIN, dir, cwd: root }).query({ status: "pending" });
   assert.equal(envelope.kind, "task-list");
@@ -280,7 +296,7 @@ test("handoff hands a task to a declared role (task-handoff); an undeclared role
   assert.equal(handed.comment.text, "Ready for review.");
   await assert.rejects(adapter.handoff("TASK-2", { role: ROLES[0], reason: "Not mine." }), err => err instanceof BranchlingRefusal
     && err.envelope.kind === "task-handoff" && err.envelope.refusalKind === "other-owner");
-  // branchling 0.2.0 rejects an undeclared role with stderr only, exit 2.
+  // branchling (0.2.0 and the pinned 0.3.0) rejects an undeclared role with stderr only, exit 2.
   await assert.rejects(adapter.handoff("TASK-4", { role: "designer", reason: "x" }), err => err instanceof BranchlingUsageError
     && err.code === 2 && /designer/.test(err.stderr));
 });

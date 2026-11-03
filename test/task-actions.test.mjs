@@ -186,7 +186,7 @@ test("with no BACKLOG_ACTOR and no user config, the page shows the default actor
     assert.equal(shown.actor, answer.task.owner);
     assert.equal(shown.actor, answer.log.exchanges.at(-1).actor);
     assert.notEqual(shown.actor, ACTOR, "positive control: not the actor of the other tests");
-    assert.equal(shown.actor, "agent:claude", "branchling 0.2.0's default actor, measured");
+    assert.equal(shown.actor, "agent:claude", "branchling's default actor (0.2.0 and 0.3.0), measured");
     assert.ok(shown.actorText.startsWith(`${TASK_ACTIONS_TEXT.recordedActor} agent:claude.`));
     assert.match(shown.actorText, /default actor when neither is set/);
   } finally {

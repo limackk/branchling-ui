@@ -312,7 +312,7 @@ test("an undeclared typed name through the route is 422 rejected-input, never an
   assert.equal(res.status, 422);
   assert.equal(res.json.error.type, "rejected-input");
   assert.deepEqual(res.json.error.input, { release: "nope" });
-  // branchling 0.2.0 gives no declared releases as data: unknown, not empty.
+  // branchling (0.2.0 and 0.3.0) gives no declared releases as data: unknown, not empty.
   assert.deepEqual(res.json.error.declared, { release: null });
   // branchling's own message, verbatim, for a person to read.
   assert.match(res.json.error.detail, /nope/);

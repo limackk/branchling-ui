@@ -15,7 +15,7 @@
  *   node bin/branchling-ui.mjs --dir <root>/backlog --port 4130
  *
  * What it holds (`init`, `new`, `take` and `done`; every command is one the
- * pinned branchling 0.2.0 has):
+ * pinned branchling 0.3.0 has):
  *
  *   TASK-1  pending, nobody's        take it; then release or hand it off
  *   TASK-2  in progress, OTHER_ACTOR  every action on it is refused for

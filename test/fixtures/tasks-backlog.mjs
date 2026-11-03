@@ -10,7 +10,7 @@
  * `--empty` builds an initialised backlog with no task: the empty state.
  *
  * What it holds (one `seed`, then `take`, `ask` and `done`; no file is
- * written by hand, and every command is one the pinned branchling 0.2.0 has):
+ * written by hand, and every command is one the pinned branchling 0.3.0 has):
  *
  *   TASK-1  P0  in_progress  owner agent:fixture  epic Billing   labels ui
  *   TASK-2  P1  pending      owner unassigned     epic Billing   labels gdpr

@@ -29,7 +29,7 @@
  *
  * The question is on TASK-5, the unplanned task, so the plan's waves and
  * what may start now stay exactly as plan-backlog describes them. Every
- * branchling command used is one the pinned branchling (0.2.0) has.
+ * branchling command used is one the pinned branchling (0.3.0) has.
  */
 
 import { execFileSync } from "node:child_process";

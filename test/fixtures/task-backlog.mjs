@@ -9,7 +9,7 @@
  * backlog directory, ready for `node bin/branchling-ui.mjs --dir <it>`.
  *
  * What it holds (one `seed`, then `take`, `ask`, `decide` and `done`; no file
- * is written by hand, and every command is one the pinned branchling 0.2.0 has):
+ * is written by hand, and every command is one the pinned branchling 0.3.0 has):
  *
  *   TASK-1  P1  the task with a history: seeded, taken, asked, decided.
  *               A long body (goal, context, steps). Blocks TASK-2.

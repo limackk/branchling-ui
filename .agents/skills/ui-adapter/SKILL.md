@@ -113,7 +113,9 @@ on purpose:
 
 - **A new call needs a newer branchling.** Raise `SUPPORTED_RANGE.min` to the
   first *published* release that has the command, and move the devDependency
-  with it. A commit pin is a stopgap for development only (see UI-14).
+  with it, to that exact registry version (`npm install --save-dev
+  --save-exact branchling@<version>`). A commit pin is a stopgap for
+  development only; UI-14 replaced the last one with 0.3.0.
 - **A new envelope version.** Add it to `SUPPORTED_SCHEMA_VERSIONS` only after
   reading what changed. A renamed key reads as a missing value, silently.
 - Either change needs a test that fails for a build outside the new promise,
