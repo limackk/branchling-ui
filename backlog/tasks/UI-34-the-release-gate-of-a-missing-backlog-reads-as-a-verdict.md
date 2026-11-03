@@ -33,6 +33,8 @@ When --dir is not a backlog, the health view's release gate section says so as a
 
 Found while building UI-28 on the pinned branchling 0.2.0. `doctor --json` over a directory that is not a backlog exits 1 with a normal envelope (`root: null`, one `backlog` error check), which the health view shows as data. `check --json` over the same directory crashes with a stack trace on stderr, no stdout and exit 1, so the adapter throws BranchlingUsageError and the server answers 500 usage-error. The upstream contract to ask for: a `check` envelope in that case, either `{ ok: false, root: null, failed: ["backlog"], guards: [...] }` as doctor does, or one with a refusalKind such as `no-backlog`. Rejected: detecting the crash from stderr text in this package, which AGENTS.md forbids.
 
+Re-checked on branchling 0.3.0 (2026-11-03): the stack trace is gone, but `check --json` still prints nothing on stdout and exits 1, with the human 'no backlog here' message on stderr, so the adapter still throws BranchlingUsageError. Upstream: TL-541 in the branchling repository (filed 2026-11-03).
+
 ## Steps
 
 1. Re-check on the pinned branchling; if fixed, skip to the last step.
