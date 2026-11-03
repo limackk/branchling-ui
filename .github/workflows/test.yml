@@ -8,8 +8,8 @@
 # THE EXECUTABLE UNDER TEST IS THE PINNED DEVDEPENDENCY. `npm ci` installs the
 # build package-lock.json names (a registry release, exact version), and
 # `npm test` puts node_modules/.bin first on PATH, so the
-# adapter spawns exactly that one. Testing both ends of
-# SUPPORTED_RANGE is UI-9, not this file.
+# adapter spawns exactly that one. Both ends of SUPPORTED_RANGE are the
+# `range-ends` job at the bottom of this file (UI-9).
 name: test
 
 on:
@@ -57,3 +57,66 @@ jobs:
       # test can still leave a dangling reference or an id collision.
       - name: backlog guards
         run: npx --no-install branchling check
+
+  # COMPATIBILITY IS A PROMISE ONLY IF BOTH ENDS OF THE RANGE RUN (UI-9).
+  # SUPPORTED_RANGE in src/adapter.mjs says which branchling releases this
+  # package works with; this job runs the whole suite against the lowest and
+  # the highest of them, installed from npm OUTSIDE node_modules and reached
+  # only through BRANCHLING_BIN.
+  #
+  # The two specs are npm ranges, so no release inside the range needs an edit
+  # here: `lowest` is SUPPORTED_RANGE.min exactly, `highest` is
+  # `>=min <maxExclusive`, which npm resolves to the newest published release
+  # in the range (the next patch the day it ships). The lower bound keeps a
+  # range with no release yet from falling back below min. test/ci-matrix.test.mjs derives
+  # both strings from SUPPORTED_RANGE and fails when they go stale.
+  #
+  # One OS and one Node: what varies here is the branchling build. Portability
+  # across OS and Node is the job above, against the pinned build.
+  #
+  # No `npm ci`: with no branchling in node_modules and none on PATH, a test
+  # that ignored BRANCHLING_BIN would fail here instead of passing quietly.
+  range-ends:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - end: lowest
+            spec: "0.3.0"
+          - end: highest
+            spec: ">=0.3.0 <0.4.0"
+    name: range-ends (${{ matrix.end }}, branchling@${{ matrix.spec }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: install branchling at this end of the range
+        shell: bash
+        env:
+          END: ${{ matrix.end }}
+          SPEC: ${{ matrix.spec }}
+        run: |
+          prefix="$RUNNER_TEMP/branchling-$END"
+          npm install --prefix "$prefix" --no-save --no-package-lock "branchling@$SPEC"
+          echo "BRANCHLING_BIN=$prefix/node_modules/.bin/branchling" >> "$GITHUB_ENV"
+
+      # A reader of the log sees which build ran, and a resolution outside
+      # SUPPORTED_RANGE fails the job: the check is the adapter's own.
+      - name: the resolved version is inside SUPPORTED_RANGE
+        shell: bash
+        run: |
+          "$BRANCHLING_BIN" --version
+          node --input-type=module -e '
+            import { createAdapter, SUPPORTED_RANGE } from "./src/adapter.mjs";
+            const { version, supported } = await createAdapter({ bin: process.env.BRANCHLING_BIN }).version();
+            const range = ">=" + SUPPORTED_RANGE.min + " <" + SUPPORTED_RANGE.maxExclusive;
+            console.log("branchling " + version + " under test; SUPPORTED_RANGE " + range);
+            if (!supported) { console.error(version + " is outside SUPPORTED_RANGE " + range); process.exit(1); }
+          '
+
+      - name: tests
+        shell: bash
+        run: node --test test/*.test.mjs
