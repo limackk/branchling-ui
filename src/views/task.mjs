@@ -30,11 +30,24 @@
  * branchling's message verbatim; no read reports the declared roles, so
  * `declared` is null. The cache passes every write through and invalidates
  * what it holds, so the panel's next read is fresh.
+ *
+ * The panel's field edits (UI-6), one branchling command each:
+ *
+ *   POST /api/task/field     `{ id, field, value, reason? }`
+ *                            `set <ID> <field> <value> [--reason]`
+ *
+ * Behind the same guard, checked by `validateFieldEdit`
+ * (src/view-model/task-fields.mjs, shared with the page): an `actor` or any
+ * other key is a 400 before branchling runs. Which fields `set` edits and
+ * which values it accepts is branchling's answer: status, owner, an unknown
+ * field or a value outside the vocabulary come back as its refusal (409),
+ * text unchanged. The cache passes `set` through as a write.
  */
 
 import { readTask } from "../adapter.mjs";
 import { RequestError, rejectingTypedInput } from "../request-error.mjs";
 import { validateTaskAction } from "../view-model/task-actions.mjs";
+import { FIELD_EDIT_PATH, validateFieldEdit } from "../view-model/task-fields.mjs";
 import { TASK_ID_SHAPE } from "../view-model/tasks.mjs";
 
 /**
@@ -80,6 +93,16 @@ export default {
       handler: ({ adapter, body }) => {
         const { id, role, reason } = checked("handoff", body);
         return rejectingTypedInput({ role }, () => adapter.handoff(id, { role, reason }), async () => ({ role: null }));
+      },
+    },
+    {
+      method: "POST",
+      path: FIELD_EDIT_PATH,
+      handler: ({ adapter, body }) => {
+        const result = validateFieldEdit(body);
+        if (!result.ok) throw new RequestError(result.message);
+        const { id, field, value, reason } = result.value;
+        return adapter.set(id, field, value, { reason });
       },
     },
   ],

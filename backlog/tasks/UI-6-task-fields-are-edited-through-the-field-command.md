@@ -8,8 +8,8 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P2
-status: pending
-owner: unassigned
+status: done
+owner: agent:loop-c
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
@@ -41,4 +41,4 @@ Depends on upstream TL-521 in the branchling repository (a callable field-write 
 
 ## Acceptance criteria
 
-- [ ] Editing a fixture task's priority through the adapter changes the file and appends a history record with the given actor, and a status edit is refused. [proof: field-edit]
+- [x] Editing a fixture task's priority through the adapter changes the file and appends a history record with the given actor, and a status edit is refused. [proof: field-edit]

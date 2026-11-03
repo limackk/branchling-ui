@@ -360,6 +360,36 @@ into `422 rejected-input` (`declared: null`) with branchling's message, which
 names the roles, verbatim. **Freshness.** The cache treats the three calls as
 writes, so the panel's re-read right after one spawns again.
 
+## The task panel's field edits (UI-6)
+
+Every field `branchling set` edits has a pen in the panel's Fields list; it
+opens an edit form in the actions' dialog (value, optional reason, the command
+it will run) and POSTs `{ id, field, value, reason? }` to `/api/task/field`,
+behind the write guard. The route checks the body with `validateFieldEdit`
+(`src/view-model/task-fields.mjs`, shared with the page): an `actor` or any
+other key is a 400 before branchling runs, and no `--actor` is passed. The
+handler calls `adapter.set()`, one `set <ID> <field> <value> [--reason]`
+(kind `task-set`, first shipped in 0.3.0, so `SUPPORTED_RANGE.min` stays).
+The cache passes it through as a write.
+
+**Which fields.** No command returns `set`'s editable fields as data: the
+list is in `set --help` and in the detail line of the refusal for a field it
+does not edit, both prose. `EDITABLE_FIELDS` writes the 0.3.0 list down, and
+`test/field-edit.test.mjs` fails when the pinned executable lists anything
+else. Status and owner are not among them (branchling refuses them,
+`dedicated`): take, done, handoff, release and ask keep them. Rejected:
+reading the refusal's prose at runtime (human output, and a spawn per panel).
+
+**Which values.** No command returns the vocabularies (UI-18), so every value
+is a text box and branchling judges it. Since 0.3.0 every failure of `set` is
+a refusal envelope, `usage` included (a value outside the vocabulary names the
+allowed ones), so it reaches the page as the usual 409 with branchling's text
+unchanged; the form keeps what was typed for a retry. `rejectingTypedInput`
+is not needed. A value starting with `-` is refused before the spawn: `set`
+has no `--` and reads it as a flag, so such a value cannot be set through the
+CLI at all. The reason is optional; 0.3.0 requires none for any field `set`
+edits, and a refusal asking for one would be shown like any other.
+
 ## The overview (UI-29)
 
 The default screen: no `view` (or one not listed) is the overview. It answers

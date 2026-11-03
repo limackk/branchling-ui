@@ -507,6 +507,49 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       ], "task-handoff");
     },
 
+    /**
+     * `set <ID> <field> <value> [--reason "…"] [--actor <ns:name>]`: one field
+     * of one task, validated by branchling against config.yaml and recorded
+     * in the task's history (`task-set`, UI-6). 0.3.0 is the first release
+     * that has it.
+     *
+     * Measured on branchling 0.3.0, every answer is an envelope:
+     *
+     *   { schemaVersion: 1, kind: "task-set", ok, id, file, field,
+     *     value (a string, or an array for a list field), actor,
+     *     changes: [{ id, ts, task, field, from, to, actor, source: "set", reason }],
+     *     refusalKind, refusal, details }
+     *
+     * `changes` is empty when the value was already that. Every failure is a
+     * refusal envelope with exit 2, so a BranchlingRefusal: `dedicated`
+     * (status and owner: take, done, handoff, release and ask own them),
+     * `not-found` (no such task), and `usage` for a field `set` does not edit
+     * (the details name the editable ones), a value outside the vocabulary
+     * (the refusal names the allowed ones), an empty value for a field that
+     * may not be empty, a reserved reason (`unknown`, `proven`).
+     *
+     * `value` may be empty: an empty value clears a field that may be empty;
+     * a list field takes its items comma-separated. A value starting with "-"
+     * is refused here: branchling has no `--` and reads it as a flag
+     * (`unknown flag: -x`), so such a value cannot be set through the CLI at
+     * all. `actor` is passed only when the caller states one; the server
+     * never does.
+     */
+    async set(id, field, value, { reason, actor } = {}) {
+      const base = ["set"];
+      const args = [...base, argWord(base, "the task id", id), argWord(base, "the field", field)];
+      if (typeof value !== "string") throw new BranchlingUsageError(base, 2, "the value must be a string (empty clears the field)");
+      if (value.startsWith("-")) throw new BranchlingUsageError(base, 2, `the value cannot start with "-": branchling would read it as a flag`);
+      args.push(value);
+      if (reason !== undefined && reason !== null && reason !== "") args.push("--reason", argWord(base, "--reason", reason));
+      if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", argWord(base, "--actor", actor));
+      const envelope = await json(args, "task-set");
+      if (envelope.ok !== true || typeof envelope.id !== "string" || typeof envelope.field !== "string" || !Array.isArray(envelope.changes)) {
+        throw new ContractMismatch("task-set answered success without the field it set");
+      }
+      return envelope;
+    },
+
     /** Escape hatch for commands without a typed wrapper yet. */
     raw: json,
   };

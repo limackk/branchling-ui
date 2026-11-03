@@ -36,6 +36,20 @@
  * reads the panel again (the cache was invalidated by the write, so the read
  * is fresh) and says what branchling recorded and as whom. Focus returns to
  * the button that opened the confirmation, or moves to that message.
+ *
+ * FIELD EDITS (UI-6, after mockups/task.html and flows.html "Edit a field").
+ * Every field `branchling set` edits gets a pen button in the Fields list
+ * (fieldEdits in src/view-model/task-fields.mjs says which, and what the box
+ * starts with). It opens the edit form in the same second `<dialog>`: a
+ * labelled text box for the value (the vocabularies are not available as
+ * data, UI-18, so branchling judges the value), an optional reason, and the
+ * command it will run. Saving POSTs `{ id, field, value, reason }` to
+ * /api/task/field; a refusal (a value outside the vocabulary, a reason
+ * branchling wants) is shown in the form with branchling's text unchanged,
+ * what was typed is kept, and the person corrects it and saves again. A
+ * success closes the form, reads the panel again (fresh: the write
+ * invalidated the cache), says what branchling recorded and as whom, and
+ * returns focus to the edited field's pen.
  */
 
 import {
@@ -46,6 +60,9 @@ import { fromApiError, unreachableState } from "/view-model/states.mjs";
 import {
   TASK_ACTIONS, TASK_ACTIONS_TEXT, actionCommand, actionPath, taskActionFailure, taskActionRecorded, validateTaskAction,
 } from "/view-model/task-actions.mjs";
+import {
+  FIELD_EDIT_PATH, FIELD_EDIT_TEXT, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, validateFieldEdit,
+} from "/view-model/task-fields.mjs";
 
 /** The capability a write sends; read from the page, as app.mjs does. */
 const capability = () => document.querySelector('meta[name="branchling-ui-capability"]')?.content || "";
@@ -88,6 +105,7 @@ let opener = null;    // { node, id, cls } of the link that opened the panel
 let stripOnPop = false;
 let confirmBox;       // the confirmation <dialog> of an action
 let recorded = null;  // { id, model } of the last action, shown once over the re-read panel
+let edited = null;    // { id, model } of the last field edit, shown once over the re-read panel
 
 const depthNow = () => (history.state && Number.isInteger(history.state.taskPanel) ? history.state.taskPanel : 0);
 const notify = () => document.dispatchEvent(new Event("branchling-ui:task-panel"));
@@ -214,9 +232,7 @@ function renderReady(model) {
 
   parts.push(actionsSection(model));
 
-  const fields = [el("dl", { class: "kv" }, model.fields.flatMap(f => [el("dt", { text: f.label }), el("dd", {}, [fieldValue(f)])]))];
-  if (!model.fieldsKnown) fields.push(el("p", { class: "task-panel-note", text: TASK_TEXT.fieldsUnknown }));
-  parts.push(section("task-panel-fields", TASK_TEXT.fields, fields));
+  parts.push(fieldsSection(model));
 
   parts.push(section("task-panel-blockers", TASK_TEXT.blockers, [
     el("h4", { text: TASK_TEXT.blockedBy }),
@@ -241,6 +257,143 @@ function renderReady(model) {
     : [el("p", { class: "task-panel-note", text: model.history.emptyText })];
   parts.push(section("task-panel-history", TASK_TEXT.history, history, el("span", { class: "badge plain role-neutral", text: String(model.history.count) })));
   body.replaceChildren(...parts);
+}
+
+/* ---------- fields, and their edits (UI-6) ---------- */
+
+function editButton(edit, model, content) {
+  const button = el("button", {
+    type: "button",
+    class: "editable",
+    "data-edit": edit.key,
+    "aria-label": FIELD_EDIT_TEXT.edit(edit.label, edit.display),
+  }, [content, icon("pen")]);
+  button.lastChild.classList.add("pen");
+  button.addEventListener("click", () => openEdit(edit, model, button));
+  return button;
+}
+
+function fieldsSection(model) {
+  const edits = Array.isArray(model.edits) ? model.edits : [];
+  const editOf = key => edits.find(e => e.key === key) || null;
+  const rows = model.fields.flatMap(f => {
+    const edit = editOf(f.key);
+    return [el("dt", { text: f.label }), el("dd", {}, [edit ? editButton(edit, model, fieldValue(f)) : fieldValue(f)])];
+  });
+  // Editable fields the list above does not show (title, blocked by, …).
+  for (const edit of edits) {
+    if (model.fields.some(f => f.key === edit.key)) continue;
+    const value = edit.known && edit.current ? document.createTextNode(edit.current) : el("span", { class: "task-panel-none", text: edit.known ? TASK_TEXT.none : edit.display });
+    rows.push(el("dt", { text: edit.label }), el("dd", {}, [editButton(edit, model, value)]));
+  }
+  const children = [el("dl", { class: "kv" }, rows)];
+  if (!model.fieldsKnown) children.push(el("p", { class: "task-panel-note", text: TASK_TEXT.fieldsUnknown }));
+  if (edited && edited.id === model.id) children.unshift(recordedNode(edited.model));
+  const aside = edits.length ? el("span", { class: "t-meta" }, [`${FIELD_EDIT_TEXT.sectionNote} `, el("code", { text: "branchling set" })]) : null;
+  return section("task-panel-fields", TASK_TEXT.fields, children, aside);
+}
+
+function editCommandNode(id, field, value, reason) {
+  const code = el("code", {}, fieldCommand(id, field, value, reason).parts.map(p => (p.arg ? el("span", { class: "arg", text: p.text }) : document.createTextNode(p.text))));
+  return el("div", { class: "cmd" }, [code]);
+}
+
+function openEdit(edit, model, opener) {
+  const id = model.id;
+  if (!confirmBox) {
+    confirmBox = el("dialog", { class: "dialog task-action-dialog", "aria-labelledby": "task-action-title" });
+    document.body.append(confirmBox);
+  }
+  const fields = {
+    value: fieldNode("value", FIELD_EDIT_TEXT.valueLabel, el("input", { class: "input", type: "text", autocomplete: "off", spellcheck: "false", maxlength: "2000" }), edit.known ? FIELD_EDIT_TEXT.valueHint : `${FIELD_EDIT_TEXT.valueUnknown} ${FIELD_EDIT_TEXT.valueHint}`),
+    reason: fieldNode("reason", FIELD_EDIT_TEXT.reasonLabel, el("textarea", { class: "textarea", maxlength: "2000", rows: "2" }), FIELD_EDIT_TEXT.reasonHint),
+  };
+  fields.value.control.value = edit.known ? edit.current : "";
+  fields.reason.wrap.querySelector("label").append(" ", el("span", { class: "req", text: FIELD_EDIT_TEXT.reasonOptional }));
+  const feedback = el("div", { class: "task-action-feedback" });
+  const cmd = el("div", {}, [editCommandNode(id, edit.key, fields.value.control.value, "")]);
+  const redraw = () => cmd.replaceChildren(editCommandNode(id, edit.key, fields.value.control.value, fields.reason.control.value));
+  fields.value.control.addEventListener("input", redraw);
+  fields.reason.control.addEventListener("input", redraw);
+  const submit = el("button", { type: "submit", class: "btn btn-primary" }, [icon("pen"), FIELD_EDIT_TEXT.save]);
+  const cancel = el("button", { type: "button", class: "btn btn-ghost", text: FIELD_EDIT_TEXT.cancel });
+  cancel.addEventListener("click", closeConfirm);
+  const form = el("form", { class: "task-action-form task-field-form", novalidate: true }, [
+    el("div", { class: "dialog-head" }, [
+      el("h2", { id: "task-action-title", class: "t-section", text: FIELD_EDIT_TEXT.title(edit.label, id) }),
+      model.title && model.title !== id ? el("p", { class: "t-meta", text: model.title }) : null,
+    ]),
+    el("div", { class: "dialog-body" }, [
+      feedback,
+      fields.value.wrap,
+      fields.reason.wrap,
+      cmd,
+      el("p", { class: "t-meta", text: FIELD_EDIT_TEXT.actorNote }),
+    ]),
+    el("div", { class: "dialog-foot" }, [cancel, submit]),
+  ]);
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    sendEdit(id, edit.key, fields, { form, submit, cancel, feedback });
+  });
+  confirmBox.replaceChildren(form);
+  confirmBox.onclose = () => {
+    // Back to the pen that opened it, or to the same pen redrawn after a save.
+    const target = opener.isConnected ? opener : body.querySelector(`button[data-edit="${CSS.escape(edit.key)}"]`);
+    (target || title)?.focus();
+    confirmBox.dataset.done = "";
+  };
+  confirmBox.showModal();
+  fields.value.control.focus();
+  fields.value.control.select();
+}
+
+async function sendEdit(id, field, fields, { form, submit, cancel, feedback }) {
+  const input = { id, field, value: fields.value.control.value, reason: fields.reason.control.value };
+  const checked = validateFieldEdit(input);
+  for (const f of Object.values(fields)) setFieldError(f, null);
+  feedback.replaceChildren();
+  if (!checked.ok) {
+    const f = fields[checked.field];
+    if (f) { setFieldError(f, checked.message); f.control.focus(); return; }
+    feedback.replaceChildren(failureNode({ state: "error", title: checked.message, detail: "" }));
+    return;
+  }
+  submit.disabled = true;
+  cancel.disabled = true;
+  form.setAttribute("aria-busy", "true");
+  feedback.replaceChildren(el("p", { class: "state state-loading", role: "status", text: FIELD_EDIT_TEXT.sending }));
+  let failure = null;
+  let result = null;
+  try {
+    const res = await fetch(FIELD_EDIT_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-Branchling-UI-Capability": capability() },
+      body: JSON.stringify(checked.value),
+    });
+    const json = await res.json().catch(() => null);
+    if (res.ok) result = json;
+    else failure = fieldEditFailure(json, res.status);
+  } catch (err) {
+    failure = { ...unreachableState("task", err.message), action: "set" };
+  }
+  submit.disabled = false;
+  cancel.disabled = false;
+  form.setAttribute("aria-busy", "false");
+  if (failure) {
+    // What was typed stays; the person corrects it (or adds a reason) and saves again.
+    const node = failureNode(failure);
+    feedback.replaceChildren(node);
+    node.focus();
+    return;
+  }
+  recorded = null;
+  edited = { id, model: fieldEditRecorded(result) };
+  // The write invalidated the cache: this read is fresh.
+  await show(id, { reload: true, keepRecorded: true });
+  if (shownId === id && !(lastModel && lastModel.state === "ready")) body.prepend(recordedNode(edited.model));
+  confirmBox.dataset.done = "1";
+  closeConfirm();
 }
 
 /* ---------- actions: take, release, handoff ---------- */
@@ -405,6 +558,7 @@ async function send(action, id, fields, { form, submit, cancel, feedback }) {
   }
   // The write invalidated the cache: this read is fresh. The recorded
   // message needs it too, for release's actor (its envelope names none).
+  edited = null;
   const answer = await show(id, { reload: true, keepRecorded: true });
   recorded = { id, model: taskActionRecorded(action, result, answer) };
   if (shownId === id) {
@@ -433,7 +587,7 @@ function render(model, retry) {
 async function show(id, { reload = false, keepRecorded = false } = {}) {
   if (!dialog.open) dialog.showModal();
   if (id === shownId && !reload) { title.focus(); return null; }
-  if (!keepRecorded) recorded = null;
+  if (!keepRecorded) { recorded = null; edited = null; }
   shownId = id;
   const mine = ++request;
   if (!TASK_ID_SHAPE.test(id)) {
@@ -457,6 +611,7 @@ async function show(id, { reload = false, keepRecorded = false } = {}) {
           stale: res.headers.get("x-branchling-ui-stale") === "1",
           fetchedAt: res.headers.get("x-branchling-ui-fetched-at"),
         }, location.search);
+        model = { ...model, edits: fieldEdits(json) };
       } catch (err) {
         model = { ...fromApiError("task", { error: { type: "contract-mismatch", message: err.message } }), id };
       }
@@ -486,6 +641,7 @@ function hide() {
   shownId = null;
   opener = null;
   recorded = null;
+  edited = null;
   closeConfirm();
   if (dialog.open) dialog.close();
   body.replaceChildren();
