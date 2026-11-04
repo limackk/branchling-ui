@@ -268,10 +268,16 @@ test("doctor where there is no backlog is a failing verdict naming it, not an er
   assert.deepEqual(doctor.checks.map(c => [c.id, c.status]), [["backlog", "error"]]);
 });
 
-test("check where there is no backlog prints no envelope: a usage error (an upstream gap)", async () => {
-  await assert.rejects(createAdapter({ bin: BIN, dir: join(root, "no-such-backlog"), cwd: root }).check(), BranchlingUsageError);
-  // Positive control: the same call on a backlog answers.
-  assert.equal((await on(healthy).check()).kind, "check");
+test("check where there is no backlog is a failing verdict naming it, as doctor's is", async () => {
+  // Since branchling TL-541; before it stdout was empty and this rejected
+  // with BranchlingUsageError (UI-34).
+  const check = await createAdapter({ bin: BIN, dir: join(root, "no-such-backlog"), cwd: root }).check();
+  assert.equal(check.ok, false);
+  assert.equal(check.root, null);
+  assert.deepEqual(check.failed, ["backlog"]);
+  assert.deepEqual(check.guards.map(g => [g.name, g.ok]), [["backlog", false]]);
+  // Positive control: the same call on a backlog finds its root.
+  assert.ok((await on(healthy).check()).root);
 });
 
 test("only doctor and check may answer a non-zero exit with data", async () => {

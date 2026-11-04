@@ -304,15 +304,39 @@ test("a health read does not throw away the other views' cached answers", async 
   assert.equal(spawns, 2);
 });
 
-test("check where there is no backlog is an error response, not an empty gate", async () => {
+test("check over a directory that is not a backlog is a failing verdict that says so, not a usage error", async () => {
+  // UI-34: before branchling TL-541 this printed nothing on stdout, so the
+  // adapter threw BranchlingUsageError and the route answered 500.
   const adapter = createAdapter({ bin: BIN, dir: join(tmp, "nowhere"), cwd: tmp });
+  const envelope = await adapter.check();
+  assert.equal(envelope.kind, "check");
+  assert.equal(envelope.ok, false);
+  assert.equal(envelope.root, null);
+  assert.deepEqual(envelope.failed, ["backlog"]);
+
+  const model = checkModel(envelope);
+  assert.equal(model.state, "ready");
+  assert.equal(model.verdict, "fail");
+  assert.equal(model.backlogFound, false);
+  assert.deepEqual(model.failed, ["backlog"]);
+  assert.equal(model.failing, 1);
+  assert.match(model.guards[0].output, /does not look like a backlog/);
+  // Positive control: a real backlog is found.
+  assert.equal(checkModel(env.healthy.check).backlogFound, true);
+  assert.equal(checkModel(env.broken.check).backlogFound, true);
+
+  // Both sections now agree on what they say about the same directory.
+  const doctor = doctorModel(await adapter.doctor());
+  assert.equal(doctor.backlogFound, model.backlogFound);
+  assert.equal(healthSummary({ doctor, check: model }).headline, "The setup checks and the release gate fail.");
+
   const server = await createServer({ adapter, port: 0, log: () => {} });
   try {
     const check = await call(server, "/api/health/check");
-    assert.equal(check.status, 500);
-    assert.equal(check.json.error.type, "usage-error");
-    const doctor = await call(server, "/api/health/doctor");
-    assert.equal(doctor.status, 200, "positive control: doctor answers the same backlog with a verdict");
+    assert.equal(check.status, 200, "a verdict, not an error response");
+    assert.deepEqual(check.json, envelope);
+    const doctorRes = await call(server, "/api/health/doctor");
+    assert.equal(doctorRes.status, 200, "positive control: doctor answers the same directory with a verdict");
   } finally {
     await server.close();
   }

@@ -465,7 +465,10 @@ function acceptDecision(envelope) {
  *   doctor  exit 1 with `ok: false`: some check has status `error` (also when
  *           `--dir` is not a backlog: `root: null` and one `backlog` check)
  *   check   exit = the worst guard's exit (>= 1) with `ok: false` and the
- *           failing guards' names in `failed`
+ *           failing guards' names in `failed` (since branchling TL-541, also
+ *           when `--dir` is not a backlog: `root: null`, `failed: ["backlog"]`
+ *           and one `backlog` guard; before it, stdout was empty and the
+ *           call was a BranchlingUsageError)
  *
  * `ok` must agree with the exit code either way: `ok: true` with a non-zero
  * exit, or `ok: false` with exit 0, is a shape this package does not know and

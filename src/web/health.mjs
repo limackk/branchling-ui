@@ -90,7 +90,7 @@ function ranAt(model) {
 
 function renderDoctor(model) {
   const parts = [];
-  if (!model.backlogFound) parts.push(el("p", { class: "quiet", text: "branchling found no backlog where it looked." }));
+  if (!model.backlogFound) parts.push(el("p", { class: "quiet", text: HEALTH_TEXT.noBacklog }));
   if (model.state === "empty") parts.push(el("p", { class: "quiet", text: HEALTH_TEXT.doctorEmpty }));
   else {
     parts.push(el("ul", { class: "tlist health-list" }, model.checks.map(row => el("li", { "data-result": row.result }, [
@@ -109,8 +109,9 @@ function renderDoctor(model) {
 }
 
 function renderCheck(model) {
-  if (model.state === "empty") return [el("p", { class: "quiet", text: HEALTH_TEXT.checkEmpty })];
-  return [el("ul", { class: "tlist health-list" }, model.guards.map(row => el("li", { "data-result": row.result }, [
+  const note = model.backlogFound ? [] : [el("p", { class: "quiet", text: HEALTH_TEXT.noBacklog })];
+  if (model.state === "empty") return [...note, el("p", { class: "quiet", text: HEALTH_TEXT.checkEmpty })];
+  return [...note, el("ul", { class: "tlist health-list" }, model.guards.map(row => el("li", { "data-result": row.result }, [
     resultPill(row),
     el("span", { class: "health-name" }, [el("code", { text: row.name })]),
     el("div", { class: "health-detail" }, [

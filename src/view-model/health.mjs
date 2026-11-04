@@ -52,6 +52,7 @@ export const HEALTH_TEXT = {
   checkCommand: "branchling check",
   checkLoading: "Running the release gate…",
   checkEmpty: "branchling ran no guards.",
+  noBacklog: "branchling found no backlog where it looked.",
   divergentTitle: "Changed on other branches",
   divergentCommand: "branchling stats",
   divergentLoading: "Looking at other branches…",
@@ -175,6 +176,9 @@ export function checkModel(envelope, freshness = {}) {
     verdict: envelope.ok ? "pass" : "fail",
     ok: envelope.ok,
     root: text(envelope.root),
+    // `root: null` (since branchling TL-541): no backlog where it looked,
+    // answered as a failing verdict with one `backlog` guard, as doctor does.
+    backlogFound: text(envelope.root) !== null,
     // The names branchling lists as failed: the field CI acts on.
     failed: Array.isArray(envelope.failed) ? envelope.failed.map(String) : [],
     counts,
