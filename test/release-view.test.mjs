@@ -26,11 +26,10 @@ import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAdapter, run, BranchlingUsageError } from "../src/adapter.mjs";
+import { createAdapter, run, BranchlingRefusal, BranchlingUsageError } from "../src/adapter.mjs";
 import { createServer } from "../src/server.mjs";
 import { releaseModel, findTask } from "../src/view-model/release.mjs";
 import { fromApiError } from "../src/view-model/states.mjs";
-import { RequestError, rejectingTypedInput } from "../src/request-error.mjs";
 import { fixtureEnv, ignoreHomes } from "./fixtures/env.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
@@ -269,15 +268,17 @@ test("--release compares the plan of a release with what shipped", async () => {
   assert.equal(releaseModel(await adapterFor(pipe).deployStatus()).release, null);
 });
 
-test("--target selects one declared target; an undeclared one is a usage error", async () => {
+test("--target selects one declared target; an undeclared one is an unknown-name refusal", async () => {
   const envelope = await adapterFor(pipe).deployStatus({ target: "web" });
   assert.equal(envelope.filter.target, "web");
   assert.equal(releaseModel(envelope).filter.target, "web");
-  await assert.rejects(adapterFor(pipe).deployStatus({ target: "no-such-target" }), BranchlingUsageError);
+  await assert.rejects(adapterFor(pipe).deployStatus({ target: "no-such-target" }),
+    err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "unknown-name" && err.envelope.rejected.value === "no-such-target");
 });
 
-test("an undeclared release is a usage error, never an empty comparison", async () => {
-  await assert.rejects(adapterFor(pipe).deployStatus({ release: "9.9" }), err => err instanceof BranchlingUsageError && /9\.9/.test(err.stderr));
+test("an undeclared release is an unknown-name refusal, never an empty comparison", async () => {
+  await assert.rejects(adapterFor(pipe).deployStatus({ release: "9.9" }),
+    err => err instanceof BranchlingRefusal && err.envelope.refusalKind === "unknown-name" && err.envelope.rejected.value === "9.9");
   // A value shaped like a flag never reaches branchling as one.
   await assert.rejects(adapterFor(pipe).deployStatus({ release: "--count" }), BranchlingUsageError);
   // Positive control: a declared one answers.
@@ -307,50 +308,73 @@ test("the release and target query parameters pass through to branchling", async
   assert.equal(plain.json.release, null);
 });
 
-test("an undeclared typed name through the route is 422 rejected-input, never an empty answer", async () => {
+test("unknown-name: an undeclared release through the route is branchling's own refusal, with the declared releases from data", async () => {
   const res = await call(server, "/api/release?release=nope");
-  assert.equal(res.status, 422);
-  assert.equal(res.json.error.type, "rejected-input");
-  assert.deepEqual(res.json.error.input, { release: "nope" });
-  // branchling (0.2.0 and 0.3.0) gives no declared releases as data: unknown, not empty.
-  assert.deepEqual(res.json.error.declared, { release: null });
-  // branchling's own message, verbatim, for a person to read.
-  assert.match(res.json.error.detail, /nope/);
-  assert.equal(res.json.kind, undefined);
-  assert.equal(res.json.targets, undefined);
+  // A refusal like every other: the server's 409 with the envelope unchanged.
+  assert.equal(res.status, 409);
+  assert.equal(res.json.error.type, "refusal");
+  assert.equal(res.json.error.refusalKind, "unknown-name");
+  const envelope = res.json.error.envelope;
+  assert.equal(envelope.kind, "release-status");
+  assert.deepEqual(envelope.rejected, { flag: "--release", value: "nope" });
+  // The declared releases are data now, not "unknown".
+  assert.deepEqual(envelope.declared, ["1.0", "1.1"]);
+  assert.equal(res.json.kind, undefined, "never an empty pipeline in place of the refusal");
   const model = fromApiError("release", res.json, res.status);
   assert.equal(model.state, "rejected");
+  assert.equal(model.refusalKind, "unknown-name");
   assert.equal(model.title, "No release named \u201cnope\u201d is declared");
+  assert.deepEqual(model.names.map(n => [n.key, n.value, n.known]), [["release", "nope", true]]);
+  assert.deepEqual(model.names[0].declared, ["1.0", "1.1"]);
+  assert.equal(model.names[0].declaredText, "The declared releases: 1.0, 1.1.");
+  // branchling's own sentence, verbatim, for a person to read.
+  assert.equal(model.branchlingSaid, envelope.refusal);
+  assert.match(model.branchlingSaid, /nope/);
 
   // Positive control: the plain call and a declared name still answer 200.
   assert.equal((await call(server, "/api/release")).status, 200);
   assert.equal((await call(server, "/api/release?release=1.1")).status, 200);
 });
 
-test("an undeclared typed target lists the declared targets from branchling's own envelope", async () => {
+test("unknown-name: an undeclared target names only the target, not the declared release beside it", async () => {
   const res = await call(server, "/api/release?target=nope&release=1.1");
-  assert.equal(res.status, 422);
-  assert.deepEqual(res.json.error.input, { target: "nope", release: "1.1" });
-  assert.deepEqual(res.json.error.declared, { target: ["web"], release: null });
+  assert.equal(res.status, 409);
+  assert.equal(res.json.error.refusalKind, "unknown-name");
+  assert.deepEqual(res.json.error.envelope.rejected, { flag: "--target", value: "nope" });
+  assert.deepEqual(res.json.error.envelope.declared, ["web"]);
   const model = fromApiError("release", res.json, res.status);
   assert.equal(model.state, "rejected");
-  // The release cannot be judged without a list, so both names are named.
-  assert.deepEqual(model.names.map(n => n.key), ["target", "release"]);
-  assert.deepEqual(model.names.find(n => n.key === "target").declared, ["web"]);
+  // branchling says which value is at fault, so the interim "both suspects" guess is gone.
+  assert.deepEqual(model.names.map(n => n.key), ["target"]);
+  assert.deepEqual(model.names[0].declared, ["web"]);
+  assert.equal(model.title, "No deploy target named \u201cnope\u201d is declared");
   // Positive control: the declared target answers.
   assert.equal((await call(server, "/api/release?target=web")).status, 200);
 });
 
-test("a usage error on a call with no typed name stays the interface-bug error", async () => {
+test("unknown-name: a backlog that declares nothing answers an empty declared list, not an unknown one", async () => {
+  const srv = await createServer({ adapter: adapterFor(bare), port: 0, log: () => {} });
+  try {
+    const res = await call(srv, "/api/release?release=nope");
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.json.error.envelope.declared, []);
+    const model = fromApiError("release", res.json, res.status);
+    assert.equal(model.state, "rejected");
+    assert.deepEqual(model.names[0].declared, []);
+    assert.equal(model.names[0].declaredText, "This backlog declares no releases.");
+  } finally {
+    await srv.close();
+  }
+});
+
+test("unknown-name: a flag this package built wrongly stays the interface-bug error", async () => {
   const adapter = adapterFor(pipe);
-  // A flag this package built wrongly, against the real executable.
-  await assert.rejects(rejectingTypedInput({}, () => adapter.raw(["deploy", "status", "--no-such-flag"], "release-status")), BranchlingUsageError);
-  await assert.rejects(rejectingTypedInput({ release: "" }, () => adapter.raw(["deploy", "status", "--no-such-flag"], "release-status")), BranchlingUsageError);
-  // The same failure with a typed name becomes rejected-input...
-  await assert.rejects(rejectingTypedInput({ release: "nope" }, () => adapter.deployStatus({ release: "nope" })),
-    err => err instanceof RequestError && err.status === 422 && err.type === "rejected-input");
-  // ...and a refusal or a success passes through untouched.
-  assert.equal((await rejectingTypedInput({ release: "1.1" }, () => adapter.deployStatus({ release: "1.1" }))).release.name, "1.1");
+  // Exit 2, stderr only: a usage error, never mistaken for a typed name.
+  await assert.rejects(adapter.raw(["deploy", "status", "--no-such-flag"], "release-status"), BranchlingUsageError);
+  // Positive control: the undeclared name through the same adapter is a refusal, not a usage error.
+  await assert.rejects(adapter.deployStatus({ release: "nope" }),
+    err => err instanceof BranchlingRefusal && err.code === 1 && err.envelope.refusalKind === "unknown-name");
+  assert.equal((await adapter.deployStatus({ release: "1.1" })).release.name, "1.1");
 });
 
 test("the route on a backlog without targets answers, and the page builds the empty state", async () => {

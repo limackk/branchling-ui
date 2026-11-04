@@ -6,10 +6,12 @@
  *   GET /api/release[?target=<name>][&release=<name>]
  *
  * `target` and `release` pass through to `deploy status --target/--release`.
- * They are names the user typed, so an undeclared one is `422 rejected-input`
- * (src/request-error.mjs, UI-21) with the names and what is declared: never an
- * empty pipeline, and never the interface-bug `500 usage-error`, which stays
- * for a call this package built wrongly.
+ * They are names the user typed. An undeclared one is branchling's own
+ * `unknown-name` refusal (TL-533), so the server's 409 like every other
+ * refusal, carrying the envelope's `rejected { flag, value }` and `declared`;
+ * the page builds the rejected state from those keys (UI-24). It is never an
+ * empty pipeline, and the interface-bug `500 usage-error` stays for a call
+ * this package built wrongly, which branchling still answers with exit 2.
  *
  * Release planning (UI-8) adds one write:
  *
@@ -27,24 +29,8 @@
  * (`set <ID> release <name>`); there is no second route for it.
  */
 
-import { RequestError, rejectingTypedInput } from "../request-error.mjs";
+import { RequestError } from "../request-error.mjs";
 import { DECLARE_PATH, validateDeclare } from "../view-model/release-planning.mjs";
-
-/**
- * The declared names, from branchling's own JSON. The unfiltered envelope
- * names every deploy target; no command of branchling 0.3.0 gives the
- * declared releases as data (measured for UI-8: not deploy status, stats,
- * query, doctor, plan, show, log, audit or where), so that list is `null`
- * (unknown), not empty.
- */
-async function declaredNames(adapter, keys) {
-  const out = { release: null, target: null };
-  if (keys.includes("target")) {
-    const envelope = await adapter.deployStatus();
-    out.target = envelope.targets.map(t => String(t.target));
-  }
-  return out;
-}
 
 export default {
   id: "release",
@@ -58,7 +44,7 @@ export default {
           const value = params.get(key);
           if (value) options[key] = value;
         }
-        return rejectingTypedInput(options, () => adapter.deployStatus(options), keys => declaredNames(adapter, keys));
+        return adapter.deployStatus(options);
       },
     },
     {

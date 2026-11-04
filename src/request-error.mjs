@@ -3,7 +3,8 @@
  *
  *   - a missing or malformed parameter: a handler throws it BEFORE calling
  *     the adapter, so a bad request costs no spawn;
- *   - a name the user typed that branchling rejected (`rejectingTypedInput`):
+ *   - a name the user typed that branchling rejected with a usage error
+ *     rather than a refusal envelope (`rejectingTypedInput`):
  *     `422 rejected-input`, with the names and what is declared.
  *
  * The server answers with its status (4xx only) and
@@ -36,13 +37,18 @@ export class RequestError extends Error {
  * `input` holds a name the user typed, rethrows that as
  * `422 rejected-input` instead of the interface-bug `500 usage-error`.
  *
- * INTERIM (UI-21): branchling 0.2.0 rejects an undeclared vocabulary value
- * (a release, a target, a stage) with stderr only and exit 2, no envelope,
- * so nothing in the answer says WHICH value or why. The judgement here is
- * "a usage error on a call that carried typed names is the names' fault".
- * Once branchling answers with a refusal envelope for it (a `refusalKind`
- * such as `unknown-name`), the adapter throws BranchlingRefusal and this
- * helper is no longer reached; delete it then.
+ * INTERIM (UI-21): branchling rejects a value outside a closed vocabulary
+ * with stderr only and exit 2, no envelope, so nothing in the answer says
+ * WHICH value or why. The judgement here is "a usage error on a call that
+ * carried typed names is the names' fault".
+ *
+ * `deploy status` no longer needs it: since TL-533 an undeclared release,
+ * target or stage is a refusal envelope (`unknown-name`), so the release
+ * route lets the adapter's BranchlingRefusal through and the rejected state
+ * is built from the envelope (UI-24). It stays only for `query` (status,
+ * priority, board) and `handoff --role`, which still answer exit 2 with
+ * stderr only on the unreleased branchling main; delete it once both answer
+ * a refusal envelope.
  *
  * branchling's message goes along verbatim as `detail`, for a person to read.
  * Nothing branches on its wording.

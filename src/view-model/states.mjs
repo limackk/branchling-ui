@@ -1,7 +1,7 @@
 /**
  * The states every view has besides "ready": loading, empty, error, refusal,
- * rejected (a name the user typed that branchling rejected, UI-21) and
- * stale. Plain data, shared by both surfaces, so the web page and the
+ * rejected (a name the user typed that branchling rejected, UI-21 and UI-24)
+ * and stale. Plain data, shared by both surfaces, so the web page and the
  * terminal interface say the same thing in the same situation.
  *
  * `fromApiError` takes the JSON error body the server sends (see
@@ -15,13 +15,15 @@ export function loadingState(view) {
 
 /**
  * @param {string} view
- * @param {{ error?: { type?: string, message?: string, refusalKind?: string|null } }} body
+ * @param {{ error?: { type?: string, message?: string, refusalKind?: string|null, envelope?: object } }} body
  * @param {number} [status] the HTTP status, when there was a response at all
  */
 export function fromApiError(view, body, status) {
   const error = (body && body.error) || {};
   const message = typeof error.message === "string" && error.message ? error.message : "No detail was given.";
   if (error.type === "refusal") {
+    const rejected = unknownNameState(view, error.envelope, status);
+    if (rejected) return rejected;
     // An answer the user may have to act on, not a fault.
     return { view, state: "refusal", title: "branchling declined the request", detail: message, refusalKind: error.refusalKind ?? null };
   }
@@ -115,6 +117,37 @@ export function rejectedInputState(view, error = {}, status) {
   };
 }
 
+/**
+ * branchling's own `unknown-name` refusal (TL-533, UI-24): `deploy status`
+ * with an undeclared `--release`, `--target` or `--env` answers a
+ * `release-status` envelope naming the flag and value it rejected and what
+ * that flag accepts. That is the rejected state, built from the envelope's
+ * keys, never from the wording of `refusal`, which is shown verbatim.
+ *
+ * Unlike the interim `422 rejected-input` guess, the envelope names exactly
+ * the one value at fault, so a second typed name that was fine is not named,
+ * and the declared list is always known (`[]` when nothing is declared).
+ *
+ * Returns null for any other refusal, and for an `unknown-name` envelope
+ * without a well-formed `rejected` (a shape this package does not know),
+ * which then stays a plain refusal rather than a guess.
+ */
+const FLAG_KEYS = { "--release": "release", "--target": "target", "--env": "stage" };
+
+function unknownNameState(view, envelope, status) {
+  if (!envelope || envelope.refusalKind !== "unknown-name") return null;
+  const rejected = envelope.rejected;
+  if (!rejected || typeof rejected.flag !== "string" || typeof rejected.value !== "string") return null;
+  const key = FLAG_KEYS[rejected.flag] || rejected.flag.replace(/^-+/, "");
+  const declared = Array.isArray(envelope.declared) ? envelope.declared.map(String) : null;
+  const model = rejectedInputState(view, {
+    input: { [key]: rejected.value },
+    declared: { [key]: declared },
+    detail: typeof envelope.refusal === "string" ? envelope.refusal : "",
+  }, status);
+  return { ...model, errorType: "refusal", refusalKind: "unknown-name" };
+}
+
 /** The server could not be reached at all (stopped, network error). */
 export function unreachableState(view, message) {
   return { view, state: "error", title: "The local server cannot be reached", detail: String(message || ""), errorType: "unreachable", httpStatus: null };
@@ -128,7 +161,7 @@ export function unreachableState(view, message) {
  * title for the same failure.
  *
  * @param {string} view
- * @param {{ name?: string, message?: string, envelope?: { refusalKind?: string|null } }} err
+ * @param {{ name?: string, message?: string, envelope?: { refusalKind?: string|null, rejected?: object, declared?: string[] } }} err
  */
 export function fromAdapterError(view, err) {
   const types = {
@@ -139,6 +172,10 @@ export function fromAdapterError(view, err) {
   const type = (err && types[err.name]) || "internal";
   const message = String((err && err.message) || err || "");
   const error = { type, message };
-  if (type === "refusal") error.refusalKind = (err.envelope && err.envelope.refusalKind) ?? null;
+  if (type === "refusal") {
+    error.refusalKind = (err.envelope && err.envelope.refusalKind) ?? null;
+    // The terminal reads the same envelope keys the page does (UI-24).
+    if (err.envelope) error.envelope = err.envelope;
+  }
   return fromApiError(view, { error });
 }

@@ -100,11 +100,15 @@ test("declaring a release makes it selectable, and planning a task for it is vis
   const fx = await fixture();
 
   // Before: 1.1 is not a release branchling knows; 1.0 is (positive control).
-  for (const read of [() => fx.adapter.deployStatus({ release: "1.1" }), () => fx.adapter.query({ release: "1.1" })]) {
-    const err = await failure(read());
-    assert.ok(err instanceof BranchlingUsageError, `expected a usage error before declaring, got ${err}`);
-    assert.match(err.stderr, /1\.1/);
-  }
+  // deploy status answers its own unknown-name refusal (TL-533, UI-24); query still a usage error.
+  const refused = await failure(fx.adapter.deployStatus({ release: "1.1" }));
+  assert.ok(refused instanceof BranchlingRefusal, `expected a refusal before declaring, got ${refused}`);
+  assert.equal(refused.envelope.refusalKind, "unknown-name");
+  assert.deepEqual(refused.envelope.rejected, { flag: "--release", value: "1.1" });
+  assert.ok(refused.envelope.declared.includes("1.0"));
+  const listed = await failure(fx.adapter.query({ release: "1.1" }));
+  assert.ok(listed instanceof BranchlingUsageError, `expected a usage error before declaring, got ${listed}`);
+  assert.match(listed.stderr, /1\.1/);
   assert.equal((await fx.adapter.deployStatus({ release: "1.0" })).release.name, "1.0");
   assert.deepEqual(ids(await fx.adapter.query({ release: "1.0" })), ["TASK-4"]);
 
@@ -213,7 +217,8 @@ test("through the cache, declare is a write: the next release read spawns and se
   // write does, not about the racy-timestamp window (test/cache.test.mjs).
   const cache = createCache(fx.adapter, { changes: createFileChanges({ dir: fx.dir, cwd: fx.root, racyMs: 0 }) });
   const before = await failure(cache.deployStatus({ release: "1.1" }));
-  assert.ok(before instanceof BranchlingUsageError);
+  assert.ok(before instanceof BranchlingRefusal);
+  assert.equal(before.envelope.refusalKind, "unknown-name");
   const warm = await cache.deployStatus({ release: "1.0" });
   assert.equal((await cache.deployStatus({ release: "1.0" })).fromCache, true, "an unchanged backlog is answered from memory");
   assert.equal(warm.fromCache, false);
@@ -238,9 +243,9 @@ test("POST /api/release/declare declares through branchling, and the release rea
   const srv = await serve(fx);
 
   const before = await srv.get("/api/release?release=1.1");
-  assert.equal(before.status, 422, before.text);
-  assert.equal(before.json.error.type, "rejected-input");
-  assert.equal(before.json.error.declared.release, null, "no read lists the declared releases");
+  assert.equal(before.status, 409, before.text);
+  assert.equal(before.json.error.refusalKind, "unknown-name");
+  assert.ok(!before.json.error.envelope.declared.includes("1.1"), "the declared releases are data, and 1.1 is not among them yet");
 
   const res = await srv.post(DECLARE_PATH, { name: " 1.1 ", reason: " The second release. " });
   assert.equal(res.status, 200, res.text);

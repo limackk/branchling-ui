@@ -596,8 +596,11 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
     log: (id, { decisions = false } = {}) => json(decisions ? ["log", id, "--decisions"] : ["log", id], "task-log"),
     /**
      * `deploy status`, optionally for one target (`--target`) or compared with
-     * one planned release (`--release`). An undeclared target or release is a
-     * usage error from branchling (no envelope), never an empty pipeline.
+     * one planned release (`--release`). An undeclared target or release is
+     * a refusal envelope, exit 1 (TL-533): `refusalKind: "unknown-name"`,
+     * `rejected: { flag, value }` and `declared` (what that flag accepts, []
+     * when nothing is), so a BranchlingRefusal, never an empty pipeline. A
+     * flag that does not exist or lacks its value stays exit 2, stderr only.
      */
     async deployStatus({ target, release } = {}) {
       const args = ["deploy", "status"];

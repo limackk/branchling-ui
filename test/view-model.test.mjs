@@ -233,6 +233,56 @@ test("a rejected typed name lists the declared names branchling gave as data", (
   }
 });
 
+// --- UI-24: branchling's own unknown-name refusal ---------------------------
+// The envelope is the shape TL-533 promises; test/release-view proves the real
+// executable and route produce it.
+
+const UNKNOWN_RELEASE = {
+  schemaVersion: 1, kind: "release-status", ok: false, targets: [],
+  refusalKind: "unknown-name",
+  refusal: "`nope` is not a declared release (declared: 1.0, 1.1)",
+  rejected: { flag: "--release", value: "nope" },
+  declared: ["1.0", "1.1"],
+};
+
+test("unknown-name: the refusal envelope is the rejected state, with the declared names from data", () => {
+  const body = { error: { type: "refusal", refusalKind: "unknown-name", message: UNKNOWN_RELEASE.refusal, envelope: UNKNOWN_RELEASE } };
+  const model = fromApiError("release", body, 409);
+  assert.equal(model.state, "rejected");
+  assert.equal(model.refusalKind, "unknown-name");
+  assert.equal(model.httpStatus, 409);
+  assert.equal(model.title, "No release named \u201cnope\u201d is declared");
+  assert.deepEqual(model.names.map(n => [n.key, n.value, n.known, n.isDeclared]), [["release", "nope", true, false]]);
+  assert.deepEqual(model.names[0].declared, ["1.0", "1.1"]);
+  assert.equal(model.branchlingSaid, UNKNOWN_RELEASE.refusal);
+  assert.ok(isPlainData(model));
+
+  // Each flag maps to the noun the page uses for it.
+  const target = fromApiError("release", { error: { type: "refusal", refusalKind: "unknown-name", envelope: { ...UNKNOWN_RELEASE, rejected: { flag: "--target", value: "x" }, declared: [] } } }, 409);
+  assert.equal(target.title, "No deploy target named \u201cx\u201d is declared");
+  assert.equal(target.names[0].declaredText, "This backlog declares no deploy targets.");
+  const env = fromApiError("release", { error: { type: "refusal", refusalKind: "unknown-name", envelope: { ...UNKNOWN_RELEASE, rejected: { flag: "--env", value: "x" }, declared: ["staging"] } } }, 409);
+  assert.equal(env.names[0].key, "stage");
+
+  // The terminal, which calls the adapter directly, gets the same state.
+  const tui = fromAdapterError("release", new BranchlingRefusal(UNKNOWN_RELEASE, 1));
+  assert.equal(tui.state, "rejected");
+  assert.deepEqual(tui.names[0].declared, ["1.0", "1.1"]);
+});
+
+test("unknown-name: an envelope without a well-formed rejected key stays a plain refusal, never a guess", () => {
+  for (const envelope of [
+    { ...UNKNOWN_RELEASE, rejected: undefined },
+    { ...UNKNOWN_RELEASE, rejected: { flag: "--release" } },
+    { ...UNKNOWN_RELEASE, refusalKind: "other-owner" },
+  ]) {
+    const model = fromApiError("release", { error: { type: "refusal", refusalKind: envelope.refusalKind, message: "m", envelope } }, 409);
+    assert.equal(model.state, "refusal");
+  }
+  // A refusal body with no envelope at all (an older server) is a refusal too.
+  assert.equal(fromApiError("release", { error: { type: "refusal", refusalKind: "unknown-name", message: "m" } }, 409).state, "refusal");
+});
+
 test("the stats sentences are plain text shared by both surfaces", () => {
   assert.ok(isPlainData(STATS_TEXT));
   for (const s of strings(STATS_TEXT)) {
