@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: plan-refusal
-    bash: "npm test -- --test-name-pattern='contradict|unparsable'"
+    bash: "node --test --test-name-pattern='contradict|unparsable' test/*.test.mjs"
 ---
 
 

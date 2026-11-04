@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: tasks-scope
-    bash: "npm test -- --test-name-pattern='scope'"
+    bash: "node --test --test-name-pattern='scope' test/*.test.mjs"
 ---
 
 ## Goal

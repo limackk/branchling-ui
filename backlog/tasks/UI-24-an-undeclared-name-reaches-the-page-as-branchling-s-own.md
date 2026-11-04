@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: unknown-name-refusal
-    bash: "npm test -- --test-name-pattern='unknown-name'"
+    bash: "node --test --test-name-pattern='unknown-name' test/*.test.mjs"
 ---
 
 ## Goal

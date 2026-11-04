@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: check-no-backlog
-    bash: "npm test -- --test-name-pattern='not a backlog'"
+    bash: "node --test --test-name-pattern='not a backlog' test/*.test.mjs"
 ---
 
 ## Goal

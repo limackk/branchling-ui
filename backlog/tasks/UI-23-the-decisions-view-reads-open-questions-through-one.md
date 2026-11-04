@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: decisions-contract
-    bash: "npm test -- --test-name-pattern='decisions|decide' && ! grep -q parseDecideOutput src/adapter.mjs"
+    bash: "node --test --test-name-pattern='decisions|decide' test/*.test.mjs && ! grep -q parseDecideOutput src/adapter.mjs"
 ---
 
 

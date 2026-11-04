@@ -22,7 +22,7 @@ blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
   - id: set-fields-data
-    bash: "npm test -- --test-name-pattern='fields from branchling'"
+    bash: "node --test --test-name-pattern='fields from branchling' test/*.test.mjs"
 ---
 
 ## Goal
