@@ -38,15 +38,17 @@
  * the button that opened the confirmation, or moves to that message.
  *
  * FIELD EDITS (UI-6, after mockups/task.html and flows.html "Edit a field").
- * Every field `branchling set` edits gets a pen button in the Fields list
- * (fieldEdits in src/view-model/task-fields.mjs says which, and what the box
- * starts with). It opens the edit form in the same second `<dialog>`: a
- * labelled text box for the value (the vocabularies are not available as
- * data, UI-18, so branchling judges the value), an optional reason, and the
- * command it will run. Saving POSTs `{ id, field, value, reason }` to
- * /api/task/field; a refusal (a value outside the vocabulary, a reason
- * branchling wants) is shown in the form with branchling's text unchanged,
- * what was typed is kept, and the person corrects it and saves again. A
+ * Every field `branchling set --fields` reports (UI-39) gets a pen button in
+ * the Fields list (fieldEdits in src/view-model/task-fields.mjs says which,
+ * and what the box starts with); a build that cannot report them gets a note
+ * and no pens. It opens the edit form in the same second `<dialog>`: a
+ * labelled text box for the value (a fixed vocabulary is offered as
+ * suggestions; the config.yaml ones are UI-18, so branchling judges the
+ * value), an optional reason, and the command it will run. Saving POSTs
+ * `{ id, field, value, reason }` to /api/task/field; a refusal is shown in
+ * the form with branchling's text unchanged, a value outside the vocabulary
+ * or a missing reason also marks the box to fix, what was typed is kept,
+ * and the person corrects it and saves again. A
  * success closes the form, reads the panel again (fresh: the write
  * invalidated the cache), says what branchling recorded and as whom, and
  * returns focus to the edited field's pen.
@@ -61,7 +63,7 @@ import {
   TASK_ACTIONS, TASK_ACTIONS_TEXT, actionCommand, actionPath, taskActionFailure, taskActionRecorded, validateTaskAction,
 } from "/view-model/task-actions.mjs";
 import {
-  FIELD_EDIT_PATH, FIELD_EDIT_TEXT, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, validateFieldEdit,
+  FIELD_EDIT_PATH, FIELD_EDIT_TEXT, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, validateFieldEdit,
 } from "/view-model/task-fields.mjs";
 
 /** The capability a write sends; read from the page, as app.mjs does. */
@@ -288,6 +290,7 @@ function fieldsSection(model) {
   }
   const children = [el("dl", { class: "kv" }, rows)];
   if (!model.fieldsKnown) children.push(el("p", { class: "task-panel-note", text: TASK_TEXT.fieldsUnknown }));
+  if (model.editsNote) children.push(el("p", { class: "task-panel-note", text: model.editsNote }));
   if (edited && edited.id === model.id) children.unshift(recordedNode(edited.model));
   const aside = edits.length ? el("span", { class: "t-meta" }, [`${FIELD_EDIT_TEXT.sectionNote} `, el("code", { text: "branchling set" })]) : null;
   return section("task-panel-fields", TASK_TEXT.fields, children, aside);
@@ -305,10 +308,16 @@ function openEdit(edit, model, opener) {
     document.body.append(confirmBox);
   }
   const fields = {
-    value: fieldNode("value", FIELD_EDIT_TEXT.valueLabel, el("input", { class: "input", type: "text", autocomplete: "off", spellcheck: "false", maxlength: "2000" }), edit.known ? FIELD_EDIT_TEXT.valueHint : `${FIELD_EDIT_TEXT.valueUnknown} ${FIELD_EDIT_TEXT.valueHint}`),
+    value: fieldNode("value", FIELD_EDIT_TEXT.valueLabel, el("input", { class: "input", type: "text", autocomplete: "off", spellcheck: "false", maxlength: "2000" }), edit.hint),
     reason: fieldNode("reason", FIELD_EDIT_TEXT.reasonLabel, el("textarea", { class: "textarea", maxlength: "2000", rows: "2" }), FIELD_EDIT_TEXT.reasonHint),
   };
   fields.value.control.value = edit.known ? edit.current : "";
+  // A vocabulary the tool fixes (executor) is offered; branchling still judges what is sent.
+  if (edit.values && edit.values.length) {
+    const list = el("datalist", { id: "task-action-value-options" }, edit.values.map(v => el("option", { value: v })));
+    fields.value.control.setAttribute("list", list.id);
+    fields.value.wrap.append(list);
+  }
   fields.reason.wrap.querySelector("label").append(" ", el("span", { class: "req", text: FIELD_EDIT_TEXT.reasonOptional }));
   const feedback = el("div", { class: "task-action-feedback" });
   const cmd = el("div", {}, [editCommandNode(id, edit.key, fields.value.control.value, "")]);
@@ -384,7 +393,14 @@ async function sendEdit(id, field, fields, { form, submit, cancel, feedback }) {
     // What was typed stays; the person corrects it (or adds a reason) and saves again.
     const node = failureNode(failure);
     feedback.replaceChildren(node);
-    node.focus();
+    const target = failure.fix && fields[failure.fix.field];
+    if (target) {
+      // The box to fix is named and focused; the refusal above keeps branchling's own words.
+      setFieldError(target, failure.fix.message);
+      target.control.focus();
+    } else {
+      node.focus();
+    }
     return;
   }
   recorded = null;
@@ -614,7 +630,7 @@ async function show(id, { reload = false, keepRecorded = false, quiet = false } 
           stale: res.headers.get("x-branchling-ui-stale") === "1",
           fetchedAt: res.headers.get("x-branchling-ui-fetched-at"),
         }, location.search);
-        model = { ...model, edits: fieldEdits(json) };
+        model = { ...model, edits: fieldEdits(json), editsNote: fieldEditsNote(json) };
       } catch (err) {
         model = { ...fromApiError("task", { error: { type: "contract-mismatch", message: err.message } }), id };
       }

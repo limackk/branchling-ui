@@ -201,6 +201,7 @@ test("the panel route answers from the real executable, and a bad id costs no sp
     show: id => { spawns++; return adapter.show(id); },
     log: (...a) => { spawns++; return adapter.log(...a); },
     query: (...a) => { spawns++; return adapter.query(...a); },
+    setFields: () => { spawns++; return adapter.setFields(); },
   };
   const server = await createServer({ adapter: counted, port: 0, log: () => {} });
   try {
@@ -214,7 +215,7 @@ test("the panel route answers from the real executable, and a bad id costs no sp
     assert.equal(res.status, 200);
     assert.equal(res.json.kind, "task-panel");
     assert.equal(res.json.id, "TASK-1");
-    assert.equal(spawns, 4, "positive control: show, log and two queries");
+    assert.equal(spawns, 5, "positive control: show, log, two queries and set --fields");
     assert.deepEqual(taskPanelModel(res.json).history.entries.map(e => e.source), ["seed", "take", "ask", "ask", "decide"]);
     // The plan view's show route lives on in the shared view module.
     const shown = await call(server, "/api/task?id=TASK-2");

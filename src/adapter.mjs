@@ -405,12 +405,18 @@ export async function listDecisions(adapter) {
  *                                     be found too
  *   query --blocked-by <ID>           the tasks this one blocks (active ones,
  *                                     branchling's default scope)
+ *   set --fields                      the fields `set` edits, as data (TL-543):
+ *                                     which pens the panel draws, in
+ *                                     branchling's order. Lifted to `fields`:
+ *                                     the array, or null from a build that
+ *                                     cannot describe them (see `setFields`)
  *
  * No read prints the body (`show` leaves it out on purpose), so there is no
  * `body` key; see src/view-model/task.mjs. Any failure rejects the whole
  * answer, never a smaller one.
  *
- *   { kind: "task-panel", composed: true, id, show, log, task: <row>|null, blocks: [<row>] }
+ *   { kind: "task-panel", composed: true, id, show, log, task: <row>|null, blocks: [<row>],
+ *     fields: [{ name, list, clearable, vocabulary, suggestions, values }]|null }
  *
  * @param {{ show: Function, log: Function, query: Function }} adapter
  * @param {string} id a task id, already checked by the caller
@@ -419,15 +425,17 @@ export async function readTask(adapter, id) {
   if (typeof id !== "string" || !id || id.startsWith("-")) throw new BranchlingUsageError(["show", String(id)], 2, "a task id is required");
   const show = await adapter.show(id);
   const status = typeof show.status === "string" && /^[A-Za-z0-9_][A-Za-z0-9_ -]*$/.test(show.status) ? show.status : null;
-  const [log, list, blocking] = await Promise.all([
+  const [log, list, blocking, described] = await Promise.all([
     adapter.log(id),
     adapter.query(status ? { text: id, status } : { text: id }),
     adapter.query({ "blocked-by": id }),
+    adapter.setFields(),
   ]);
   const rows = Array.isArray(list.tasks) ? list.tasks : [];
   const task = rows.find(t => t && t.id === id) || null;
   const blocks = (Array.isArray(blocking.tasks) ? blocking.tasks : []).filter(t => t && typeof t.id === "string" && t.id);
-  return { kind: "task-panel", composed: true, id, show, log, task, blocks };
+  const fields = described ? described.fields : null;
+  return { kind: "task-panel", composed: true, id, show, log, task, blocks, fields };
 }
 
 /**
@@ -491,6 +499,17 @@ export function acceptVerdict(envelope, code) {
   throw new ContractMismatch(`${envelope.kind} answered ok: ${envelope.ok} with exit ${code}`);
 }
 
+const stringOrNull = v => v === null || (typeof v === "string" && v !== "");
+
+/** One entry of `set --fields --json` as TL-543 shipped it; anything else is not guessed at. */
+function isSetFieldDescription(f) {
+  return Boolean(f) && typeof f === "object" && !Array.isArray(f)
+    && typeof f.name === "string" && /^[a-z][a-z0-9_]*$/.test(f.name)
+    && typeof f.list === "boolean" && typeof f.clearable === "boolean"
+    && stringOrNull(f.vocabulary) && stringOrNull(f.suggestions)
+    && (f.values === null || (Array.isArray(f.values) && f.values.every(v => typeof v === "string")));
+}
+
 /**
  * A value a writing call puts on branchling's argv: a non-empty string that
  * cannot be read as a flag. Checked here as well as by the route, so no
@@ -510,6 +529,8 @@ function argWord(base, name, value) {
  */
 export function createAdapter({ dir, bin, cwd, env } = {}) {
   const withDir = args => (dir ? [...args, "--dir", dir] : args);
+  /** Learned once: the executable refuses `set --fields` (a build before TL-543). */
+  let setFieldsFlagUnknown = false;
 
   /**
    * `opts.verdict`: the command is one of VERDICT_KINDS, whose failing answer
@@ -705,12 +726,14 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
      *     refusalKind, refusal, details }
      *
      * `changes` is empty when the value was already that. Every failure is a
-     * refusal envelope with exit 2, so a BranchlingRefusal: `dedicated`
-     * (status and owner: take, done, handoff, release and ask own them),
-     * `not-found` (no such task), and `usage` for a field `set` does not edit
-     * (the details name the editable ones), a value outside the vocabulary
-     * (the refusal names the allowed ones), an empty value for a field that
-     * may not be empty, a reserved reason (`unknown`, `proven`).
+     * refusal envelope, so a BranchlingRefusal: `dedicated` (status and
+     * owner: take, done, handoff, release and ask own them), `not-found` (no
+     * such task), `reason-required` (a reason the backlog demands), and
+     * `usage` for a field `set` does not edit, an empty value for a field
+     * that may not be empty, a reserved reason (`unknown`, `proven`). A value
+     * outside the field's vocabulary is `unknown-value` (TL-543, exit 1) with
+     * `rejected: { field, value }` and `declared`, the values it accepts; a
+     * build before TL-543 refuses it as `usage`, its text naming the same.
      *
      * `value` may be empty: an empty value clears a field that may be empty;
      * a list field takes its items comma-separated. The id, the field and the
@@ -731,6 +754,45 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       const envelope = await json(args, "task-set", { literal });
       if (envelope.ok !== true || typeof envelope.id !== "string" || typeof envelope.field !== "string" || !Array.isArray(envelope.changes)) {
         throw new ContractMismatch("task-set answered success without the field it set");
+      }
+      return envelope;
+    },
+
+    /**
+     * `set --fields`: the fields `set` edits, as data (`task-set-fields`,
+     * TL-543), so the panel draws a pen for exactly those and never keeps a
+     * list of its own that could fall behind the executable:
+     *
+     *   { schemaVersion: 1, kind: "task-set-fields", root,
+     *     fields: [{ name, list, clearable, vocabulary, suggestions, values }] }
+     *
+     * `vocabulary` is the config.yaml key a value must come from, or null;
+     * `suggestions` a key whose values are offered but not enforced, or null;
+     * `values` a vocabulary the tool fixes itself (executor), or null.
+     *
+     * TL-543 is merged upstream after the 0.3.0 release, whose `set` answers
+     * the flag with a `task-set` refusal (`usage`, "unknown flag: --fields",
+     * exit 2). That refusal, and only that one, means "this build cannot
+     * describe its fields": the answer is null, which the panel shows as "no
+     * field edits with this build" rather than guessing a list, and it is
+     * remembered for the life of the adapter, so an older build costs one
+     * spawn per adapter, not one per panel. Any other failure throws, and a
+     * field that is not of the shape above is a ContractMismatch.
+     */
+    async setFields() {
+      if (setFieldsFlagUnknown) return null;
+      let envelope;
+      try {
+        envelope = await json(["set", "--fields"], null);
+      } catch (err) {
+        const refused = err instanceof BranchlingRefusal ? err.envelope : null;
+        if (!refused || refused.kind !== "task-set" || refused.refusalKind !== "usage" || !/unknown flag: --fields\b/.test(String(refused.refusal))) throw err;
+        setFieldsFlagUnknown = true;
+        return null;
+      }
+      if (envelope.kind !== "task-set-fields") throw new ContractMismatch(`expected kind "task-set-fields", got "${envelope.kind}"`);
+      if (!Array.isArray(envelope.fields) || !envelope.fields.every(isSetFieldDescription)) {
+        throw new ContractMismatch("task-set-fields answered a field that is not { name, list, clearable, vocabulary, suggestions, values }");
       }
       return envelope;
     },

@@ -8,15 +8,15 @@ epic: ""                           # free text — the group this task counts to
 release: ""                        # the release it is PLANNED for (a value from `releases:` in config.yaml). Empty = none
 target: []                         # the deploy targets in ANOTHER repository it ships from (`deploy_targets` with `repository:`). Empty = none
 priority: P3
-status: blocked
-owner: unassigned
+status: done
+owner: agent:lane-u1
 role: ""                           # WHO MAY take it (a value from `roles:` in config.yaml); `owner:` is who holds it NOW. Empty = anybody
 executor: ""                       # human | agent — WHICH SPECIES may be HANDED it. `next` and `run` skip what they are not; `take <ID>` still works. Empty = either
 conflict_group: []                 # the AREA it touches (e.g. a module): `next` and `run` hold it back while a task of the same group is in progress. Empty = `conflict_group_from`, or none
 estimate: 2h
 confidence: medium                 # how much you trust the estimate
 created: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 blocked_by: []                     # ids of tasks that MUST be closed before this one starts
 blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
@@ -35,6 +35,8 @@ Found while building UI-6 on branchling 0.3.0. (1) No command returns the fields
 
 Re-checked on branchling 0.3.0 (2026-11-03). Gap 3 is closed upstream: `set` accepts `--` before its positionals (scripts/set-field.mjs), and the adapter now passes the id, the field and the value after it, so a value that starts with '-' is set as written (the id, the field, the reason and the actor are still refused). A missing reason already answers refusalKind `reason-required`; only an out-of-vocabulary value is still `usage`. Upstream: TL-543 in the branchling repository (filed 2026-11-03) for gaps 1, 2 and the `unknown-value` kind.
 
+Built on branchling main (2026-11-04), where TL-543 is merged but not released. `set --fields --json` drives the pens through readTask's `fields`; EDITABLE_FIELDS is gone (FIELD_LABELS is presentation only); confidence and blocks start from `show`; `unknown-value` and `reason-required` mark the box to fix. A build without `--fields` (0.3.0 as published) gives `fields: null` and a note instead of pens. The pin, SUPPORTED_RANGE and package-lock stay at 0.3.0 until a release carries TL-543, so the verification passes only with BRANCHLING_BIN pointing at branchling main.
+
 ## Steps
 
 1. Re-check each gap on the pinned branchling and drop what a newer pin already fixed.
@@ -43,4 +45,4 @@ Re-checked on branchling 0.3.0 (2026-11-03). Gap 3 is closed upstream: `set` acc
 
 ## Acceptance criteria
 
-- [ ] The editable fields and their current values come from branchling's own JSON. [proof: set-fields-data]
+- [x] The editable fields and their current values come from branchling's own JSON. [proof: set-fields-data]

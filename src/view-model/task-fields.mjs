@@ -9,28 +9,32 @@
  * handoff, release and ask own them (branchling refuses them with
  * `refusalKind: "dedicated"`), so they keep the panel's actions.
  *
- * WHICH FIELDS. EDITABLE_FIELDS is the list branchling 0.3.0's `set` names
- * as editable. No command returns that list as data: `set --help` is prose,
- * and the only other place it appears is the detail line of the refusal for
- * a field `set` does not edit ("editable: title, priority, …"), which is text
- * for a person. So it is written down here, and test/field-edit.test.mjs
- * fails the day the pinned executable lists anything else. A field branchling
- * stops accepting is refused by branchling all the same; nothing here
- * decides whether an edit is allowed, only which pens are drawn.
+ * WHICH FIELDS. branchling says, as data: `set --fields --json` (TL-543)
+ * lists every field `set` edits, in its own order, each with whether it is
+ * a list, whether it may be cleared, the config.yaml key its value must come
+ * from, a key its values are only suggested from, and a vocabulary the tool
+ * fixes itself (executor's human | agent). readTask composes that list into
+ * the panel's answer as `fields`, and a pen is drawn for each entry and for
+ * nothing else; no list of field names is kept here. FIELD_LABELS is
+ * presentation only: a field it does not name is still offered, under its
+ * own name, and a label for a field branchling stops reporting draws
+ * nothing. A build before TL-543 cannot describe its fields (`fields: null`),
+ * and the panel then says so and draws no pens rather than guessing a list.
  *
- * WHICH VALUES. The vocabularies (priorities, types, roles, releases, …) are
- * in config.yaml, which this package may not read, and no command returns
- * them as data (UI-18). So every value is typed as text, and a value outside
- * the vocabulary comes back as branchling's refusal, whose text names the
- * allowed values; it is shown unchanged, the form keeps what was typed, and
- * the person can correct it and send again.
+ * WHICH VALUES. The box starts from the task's current value, which `show`
+ * and the task's `query` row both carry for every field `set` edits since
+ * TL-543 (confidence and the declared blocks included). A field with
+ * `values` offers them as suggestions; the other vocabularies are in
+ * config.yaml, which this package may not read, and come with UI-18. Every
+ * value is still typed as text and judged by branchling: a value outside the
+ * vocabulary is refused as `unknown-value`, naming the declared values, and
+ * the form says which input to fix, keeps what was typed, and lets the
+ * person send again.
  *
  * THE REASON is optional: `set` takes `--reason` and records it in the
- * history (`unknown` when none is given, branchling's own word). It is
- * required "where reason_required_statuses demands it", which concerns
- * entering a status, and status is not set here; no edit of 0.3.0 was found
- * that requires one. If branchling ever refuses for want of a reason, that
- * refusal is shown and the person adds one and sends again.
+ * history (`unknown` when none is given, branchling's own word). When the
+ * backlog demands one, branchling refuses with `reason-required`, and the
+ * form marks the reason box rather than the value.
  *
  * THE ACTOR is never taken from the page (docs/architecture.md, "The
  * actor"): `actor` in a request is refused by name, and the recorded actor
@@ -40,27 +44,30 @@
 import { taskActionFailure, TASK_ACTIONS_TEXT } from "./task-actions.mjs";
 import { TASK_ID_SHAPE } from "./tasks.mjs";
 
-/** The fields `set` edits in branchling 0.3.0, in its own order, with the panel's labels. */
-export const EDITABLE_FIELDS = Object.freeze([
-  ["title", "Title"],
-  ["priority", "Priority"],
-  ["type", "Type"],
-  ["role", "Role"],
-  ["estimate", "Estimate"],
-  ["confidence", "Confidence"],
-  ["board", "Board"],
-  ["epic", "Epic"],
-  ["release", "Release"],
-  ["labels", "Labels"],
-  ["target", "Targets"],
-  ["blocked_by", "Blocked by"],
-  ["blocks", "Blocks (declared)"],
-  ["executor", "Executor"],
-  ["related_docs", "Related docs"],
-  ["conflict_group", "Conflict group"],
-].map(([key, label]) => Object.freeze({ key, label })));
-
-const EDITABLE_KEYS = EDITABLE_FIELDS.map(f => f.key);
+/**
+ * The panel's names for the fields `set` edits. Presentation, not
+ * membership: which fields are offered is `set --fields` (see the header).
+ * `blocks` is "declared" because the panel's Blocks section is the other
+ * direction, the tasks naming this one in their `blocked_by`.
+ */
+export const FIELD_LABELS = Object.freeze({
+  title: "Title",
+  priority: "Priority",
+  type: "Type",
+  role: "Role",
+  estimate: "Estimate",
+  confidence: "Confidence",
+  board: "Board",
+  epic: "Epic",
+  release: "Release",
+  labels: "Labels",
+  target: "Targets",
+  blocked_by: "Blocked by",
+  blocks: "Blocks (declared)",
+  executor: "Executor",
+  related_docs: "Related docs",
+  conflict_group: "Conflict group",
+});
 
 /** Limits on a request, checked before branchling is called. */
 export const FIELD_EDIT_LIMITS = { id: 64, field: 64, value: 2000, reason: 2000 };
@@ -79,8 +86,17 @@ export const FIELD_EDIT_TEXT = {
   edit: (label, display) => `${label}: ${display}. Edit`,
   title: (label, id) => `Change ${label.toLowerCase()} of ${id}`,
   valueLabel: "New value",
-  valueHint: "Checked by branchling against this backlog's config.yaml. A list takes its items comma-separated; an empty value clears a field that may be empty.",
-  valueUnknown: "branchling does not report this field's current value in any read, so the box starts empty.",
+  valueHint: "Checked by branchling against this backlog's config.yaml.",
+  listHint: "A list: items comma-separated.",
+  clearableHint: "An empty value clears it.",
+  requiredHint: "It may not be empty.",
+  valuesHint: values => `One of: ${values.join(", ")}.`,
+  valueUnknown: "branchling did not report this field's current value, so the box starts empty.",
+  unavailable: "This build of branchling cannot describe the fields its set command edits (set --fields), so no field can be edited here. A newer branchling can.",
+  unknownValue: (value, label, declared) => declared.length
+    ? `${label} cannot be "${value}" in this backlog. Use one of: ${declared.join(", ")}.`
+    : `${label} cannot be "${value}" in this backlog, which declares no values for it.`,
+  reasonRequired: "branchling requires a reason for this change. Write one here and save again.",
   reasonLabel: "Why",
   reasonOptional: "(optional, recorded in history)",
   reasonHint: "Recorded with the change. If branchling asks for a reason, add one here and save again.",
@@ -97,10 +113,12 @@ export const FIELD_EDIT_TEXT = {
   notReported: "not reported",
 };
 
-/** The panel label of a field, or the field's own name with spaces. */
+/** The panel label of a field, or the field's own name, capitalised, with spaces. */
 export function fieldLabel(key) {
-  const known = EDITABLE_FIELDS.find(f => f.key === key);
-  return known ? known.label : String(key).replace(/_/g, " ");
+  const name = String(key);
+  if (Object.prototype.hasOwnProperty.call(FIELD_LABELS, name)) return FIELD_LABELS[name];
+  const spaced = name.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function badText(value, name, max, { leadingDash = false } = {}) {
@@ -167,38 +185,64 @@ function listOf(value) {
   return Array.isArray(value) ? value.filter(v => typeof v === "string" && v) : null;
 }
 
+const own = (object, key) => Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+
+/** What the value box says under itself, from branchling's description of the field. */
+function valueHint(field, known) {
+  const parts = [];
+  if (!known) parts.push(FIELD_EDIT_TEXT.valueUnknown);
+  parts.push(FIELD_EDIT_TEXT.valueHint);
+  if (field.list) parts.push(FIELD_EDIT_TEXT.listHint);
+  if (field.values && field.values.length) parts.push(FIELD_EDIT_TEXT.valuesHint(field.values));
+  parts.push(field.clearable ? FIELD_EDIT_TEXT.clearableHint : FIELD_EDIT_TEXT.requiredHint);
+  return parts.join(" ");
+}
+
 /**
  * The fields a pen is drawn for, with what the edit box starts with, from the
- * composed `task-panel` answer (readTask). `title` and `priority` come from
- * `show`, the rest from the task's `query` row. `confidence` and the declared
- * `blocks` are in no read of 0.3.0 (`query` rows leave them out, and the
- * panel's "Blocks" is the other direction, `query --blocked-by`), so they are
- * `known: false` and start empty.
+ * composed `task-panel` answer (readTask): one entry per field branchling's
+ * `set --fields` reported (`answer.fields`), in its order, and no other. The
+ * current value comes from `show`, else from the task's `query` row; a field
+ * neither carries is `known: false` and starts empty. `fields: null` (a build
+ * before TL-543) gives no pens; fieldEditsNote says why.
  *
- *   [{ key, label, known, list, current, display }]
+ *   [{ key, label, known, list, clearable, vocabulary, suggestions, values,
+ *      current, display, hint }]
  */
 export function fieldEdits(answer) {
   if (!answer || answer.kind !== "task-panel" || typeof answer.id !== "string") {
     throw new TypeError("fieldEdits needs a task-panel answer");
   }
+  if (answer.fields === null) return [];
+  if (!Array.isArray(answer.fields)) throw new TypeError("fieldEdits needs the fields set --fields reported, or null");
   const show = answer.show || {};
   const row = answer.task && typeof answer.task === "object" && answer.task.id === answer.id ? answer.task : null;
-  return EDITABLE_FIELDS.map(({ key, label }) => {
-    let raw;
-    if (key === "title" || key === "priority") raw = show[key];
-    else if (row && Object.prototype.hasOwnProperty.call(row, key)) raw = row[key];
+  return answer.fields.filter(f => f && typeof f.name === "string" && f.name).map(f => {
+    const key = f.name;
+    const raw = own(show, key) ? show[key] : own(row, key) ? row[key] : undefined;
     const list = listOf(raw);
     const known = raw !== undefined && raw !== null;
     const current = list ? list.join(", ") : str(raw);
-    return {
+    const values = Array.isArray(f.values) ? f.values.filter(v => typeof v === "string" && v) : null;
+    const field = {
       key,
-      label,
+      label: fieldLabel(key),
       known,
-      list: list !== null,
+      list: f.list === true,
+      clearable: f.clearable === true,
+      vocabulary: str(f.vocabulary) || null,
+      suggestions: str(f.suggestions) || null,
+      values,
       current,
       display: !known ? FIELD_EDIT_TEXT.notReported : current || FIELD_EDIT_TEXT.empty,
     };
+    return { ...field, hint: valueHint(field, known) };
   });
+}
+
+/** The sentence the Fields section shows when no field can be edited with this build, else null. */
+export function fieldEditsNote(answer) {
+  return answer && answer.kind === "task-panel" && answer.fields === null ? FIELD_EDIT_TEXT.unavailable : null;
 }
 
 function shown(value) {
@@ -243,13 +287,32 @@ export function fieldEditRecorded(result) {
 /**
  * A failed edit, built the way the panel's actions build theirs
  * (taskActionFailure): a refusal is branchling's text unchanged with its
- * detail lines and kind (a value outside the vocabulary names the allowed
- * ones; status and owner name the commands that own them) and says nothing
- * was written; anything else is an error from states.mjs.
+ * detail lines and kind, and says nothing was written; anything else is an
+ * error from states.mjs.
+ *
+ * Two refusals name the input to fix, as `fix: { field, message, declared }`
+ * (`field` is the form's input, `value` or `reason`), so the form can mark
+ * that box instead of only showing the refusal above it:
+ *
+ *   unknown-value    a value outside the field's vocabulary (TL-543), with
+ *                    `rejected: { field, value }` and `declared`, the values
+ *                    it accepts
+ *   reason-required  the backlog demands a reason for this change
+ *
+ * Every other refusal has `fix: null`; branchling's text says what is wrong.
  */
 export function fieldEditFailure(body, status) {
-  return taskActionFailure("set", body, status);
+  const model = taskActionFailure("set", body, status);
+  if (model.state !== "refusal") return model;
+  const envelope = (body && body.error && body.error.envelope) || {};
+  let fix = null;
+  if (model.refusalKind === "unknown-value") {
+    const rejected = envelope.rejected && typeof envelope.rejected === "object" ? envelope.rejected : {};
+    const declared = Array.isArray(envelope.declared) ? envelope.declared.filter(v => typeof v === "string") : [];
+    const field = str(rejected.field) || str(envelope.field);
+    fix = { field: "value", message: FIELD_EDIT_TEXT.unknownValue(str(rejected.value), fieldLabel(field || "value"), declared), declared };
+  } else if (model.refusalKind === "reason-required") {
+    fix = { field: "reason", message: FIELD_EDIT_TEXT.reasonRequired, declared: [] };
+  }
+  return { ...model, fix };
 }
-
-/** Whether `key` is one of the fields a pen is drawn for. */
-export const isEditableField = key => EDITABLE_KEYS.includes(key);

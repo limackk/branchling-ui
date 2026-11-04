@@ -104,7 +104,7 @@
  * the fingerprint changes for every entry on any write anyway.
  *
  * WHAT A CACHED CALL RETURNS. The reading methods (query, stats, plan, show,
- * log, deployStatus) resolve to a frozen
+ * log, deployStatus, setFields) resolve to a frozen
  *
  *   { envelope, answeredAt, fromCache }
  *
@@ -132,8 +132,14 @@ import { join, relative, resolve } from "node:path";
 /** Timestamps younger than this (ms) are too close to "now" to be trusted. */
 export const RACY_MS = 2000;
 
-/** The adapter methods whose answers are cached. */
-export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus"];
+/**
+ * The adapter methods whose answers are cached. `setFields` (`set --fields`,
+ * UI-39) is a read despite its command's name: it writes nothing and answers
+ * from config.yaml, which sits inside the backlog directory the fingerprint
+ * walks. Left out of this list it would pass through as a write and empty
+ * the cache on every panel read.
+ */
+export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus", "setFields"];
 
 /**
  * Methods that pass through without invalidating: they do not change a backlog.

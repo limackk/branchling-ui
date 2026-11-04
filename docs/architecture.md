@@ -456,23 +456,33 @@ handler calls `adapter.set()`, one `set <ID> <field> <value> [--reason]`
 (kind `task-set`, first shipped in 0.3.0, so `SUPPORTED_RANGE.min` stays).
 The cache passes it through as a write.
 
-**Which fields.** No command returns `set`'s editable fields as data: the
-list is in `set --help` and in the detail line of the refusal for a field it
-does not edit, both prose. `EDITABLE_FIELDS` writes the 0.3.0 list down, and
-`test/field-edit.test.mjs` fails when the pinned executable lists anything
-else. Status and owner are not among them (branchling refuses them,
-`dedicated`): take, done, handoff, release and ask keep them. Rejected:
-reading the refusal's prose at runtime (human output, and a spawn per panel).
+**Which fields.** branchling's answer, as data: `set --fields --json` (kind
+`task-set-fields`, TL-543) lists every field `set` edits, each with `list`,
+`clearable`, `vocabulary` (the config.yaml key a value must come from),
+`suggestions` and `values` (a vocabulary the tool fixes, such as executor's).
+`readTask` composes it into the panel's answer as `fields`, and a pen is drawn
+for each entry and for no other (UI-39). The cache treats `setFields` as a
+read. Status and owner are not among them (branchling refuses them,
+`dedicated`): take, done, handoff, release and ask keep them. A build before
+TL-543 refuses the flag as `usage`; the adapter reads that one refusal as
+`fields: null`, remembered per adapter, and the panel says no field can be
+edited with that build instead of guessing a list. Rejected: a list written
+down here (it fell behind the executable silently), and reading the prose
+`editable:` line of a usage refusal at runtime (human output, and a write
+command spawned per panel).
 
-**Which values.** No command returns the vocabularies (UI-18), so every value
-is a text box and branchling judges it. Since 0.3.0 every failure of `set` is
-a refusal envelope, `usage` included (a value outside the vocabulary names the
-allowed ones), so it reaches the page as the usual 409 with branchling's text
-unchanged; the form keeps what was typed for a retry. `rejectingTypedInput`
-is not needed. A value starting with `-` is refused before the spawn: `set`
-has no `--` and reads it as a flag, so such a value cannot be set through the
-CLI at all. The reason is optional; 0.3.0 requires none for any field `set`
-edits, and a refusal asking for one would be shown like any other.
+**Which values.** The box starts from the current value: `show` and the
+task's `query` row carry every field `set` edits since TL-543, confidence and
+the declared blocks included. A fixed vocabulary (`values`) is offered as
+suggestions; the config.yaml vocabularies are UI-18, so every value is still a
+text box and branchling judges it. Every failure of `set` is a refusal
+envelope, so it reaches the page as the usual 409 with branchling's text
+unchanged, and the form keeps what was typed for a retry. Two refusals also
+mark the box to fix: `unknown-value` (with `rejected` and `declared`) marks the
+value and names the declared values, `reason-required` marks the reason.
+`rejectingTypedInput` is not needed. A value starting with `-` is set as
+written: the adapter passes the id, the field and the value after `set`'s
+`--`. The reason is optional unless the backlog demands one.
 
 ## Release planning (UI-8)
 

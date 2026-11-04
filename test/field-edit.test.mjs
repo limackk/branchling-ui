@@ -6,24 +6,29 @@
  * starts at P2; TASK-1 pending and nobody's). Requests go through node:http,
  * because fetch cannot set the Host header the guard judges.
  *
+ * Which fields are edited, and what their boxes start with, is branchling's
+ * own data (UI-39): `set --fields --json` (TL-543) composed into the panel's
+ * answer by readTask. The tests named "fields from branchling" are the
+ * task's verification.
+ *
  * A test that writes builds its own fixture, so the order does not matter.
  */
 
 import "./fixtures/private-homes.mjs";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAdapter, BranchlingRefusal, BranchlingUsageError, readTask } from "../src/adapter.mjs";
+import { createAdapter, BranchlingRefusal, BranchlingUsageError, ContractMismatch, readTask } from "../src/adapter.mjs";
 import { createServer, CAPABILITY_HEADER } from "../src/server.mjs";
 import { createCache, servedFromCache } from "../src/cache.mjs";
 import { taskPanelModel } from "../src/view-model/task.mjs";
 import {
-  EDITABLE_FIELDS, FIELD_EDIT_LIMITS, FIELD_EDIT_PATH,
-  fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, validateFieldEdit,
+  FIELD_EDIT_LIMITS, FIELD_EDIT_PATH, FIELD_EDIT_TEXT, FIELD_LABELS,
+  fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, fieldLabel, validateFieldEdit,
 } from "../src/view-model/task-fields.mjs";
 import { BIN, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
 
@@ -163,7 +168,10 @@ test("an unknown field, a value outside the vocabulary and an unknown task are b
 
   const value = await fx.adapter.set("TASK-1", "priority", "PX").then(() => null, err => err);
   assert.ok(value instanceof BranchlingRefusal);
-  assert.equal(value.envelope.refusalKind, "usage");
+  assert.equal(value.envelope.refusalKind, "unknown-value", "TL-543: not `usage` any more");
+  assert.equal(value.code, 1);
+  assert.deepEqual(value.envelope.rejected, { field: "priority", value: "PX" });
+  assert.deepEqual(value.envelope.declared, ["P0", "P1", "P2", "P3"]);
   assert.match(value.message, /PX.*P0, P1, P2, P3/, "branchling's refusal names the allowed values");
 
   const missing = await fx.adapter.set("TASK-99", "priority", "P1").then(() => null, err => err);
@@ -174,16 +182,99 @@ test("an unknown field, a value outside the vocabulary and an unknown task are b
   assert.equal((await fx.adapter.set("TASK-1", "priority", "P0")).value, "P0");
 });
 
-test("EDITABLE_FIELDS is exactly the list the pinned branchling's set names as editable", async () => {
+test("the fields from branchling: set --fields lists what set edits, as data, and agrees with the usage refusal's prose", async () => {
   const fx = await fixture();
+  const described = await fx.adapter.setFields();
+  assert.equal(described.kind, "task-set-fields");
+  const names = described.fields.map(f => f.name);
+  assert.ok(names.length > 0, "positive control: a non-empty list, so the checks below have something to judge");
+  assert.ok(!names.includes("status") && !names.includes("owner"), "take, done, handoff, release and ask own them");
+  for (const f of described.fields) {
+    assert.deepEqual(Object.keys(f).sort(), ["clearable", "list", "name", "suggestions", "values", "vocabulary"], f.name);
+  }
+  const of = name => described.fields.find(f => f.name === name);
+  assert.equal(of("labels").list, true);
+  assert.equal(of("priority").vocabulary, "priorities");
+  assert.equal(of("priority").clearable, false);
+  assert.deepEqual(of("executor").values, ["human", "agent"]);
+  // The same list branchling names in prose; a TEST may read prose, product code does not.
   const err = await fx.adapter.set("TASK-1", "nonsense", "x").then(() => null, e => e);
   assert.ok(err instanceof BranchlingRefusal);
-  // A test may read branchling's prose; product code does not.
   const line = err.envelope.details.find(d => d.startsWith("editable:"));
   assert.ok(line, `no editable: line in ${JSON.stringify(err.envelope.details)}`);
-  const listed = line.slice("editable:".length).split(",").map(s => s.trim()).filter(Boolean);
-  assert.deepEqual(EDITABLE_FIELDS.map(f => f.key), listed);
-  assert.ok(!listed.includes("status") && !listed.includes("owner"));
+  assert.deepEqual(names, line.slice("editable:".length).split(",").map(s => s.trim()).filter(Boolean));
+  // No list of names is kept in the view model any more: only labels, which decide no membership.
+  const model = readFileSync(new URL("../src/view-model/task-fields.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(model, /EDITABLE_FIELDS/);
+});
+
+/**
+ * A build before TL-543 (branchling 0.3.0 as published): `set --fields` is a
+ * `task-set` usage refusal naming the unknown flag; anything else is answered
+ * with `answer`. Every spawn appends a line to `calls`, so the test counts them.
+ */
+function stubBin(root, name, answer) {
+  const refusal = '{"schemaVersion":1,"kind":"task-set","ok":false,"refusalKind":"usage","refusal":"unknown flag: --fields","details":["available: --dir --actor --reason --json"]}';
+  const calls = join(root, `${name}-calls`);
+  const file = join(root, process.platform === "win32" ? `${name}.cmd` : name);
+  if (process.platform === "win32") {
+    writeFileSync(file, [
+      "@echo off",
+      `echo %*>>"${calls}"`,
+      answer === null ? `for %%a in (%*) do if "%%~a"=="--fields" (echo ${refusal}& exit /b 2)` : "",
+      `echo ${answer === null ? refusal : answer}`,
+      answer === null ? "exit /b 2" : "",
+      "",
+    ].join("\r\n"));
+  } else {
+    writeFileSync(file, [
+      "#!/bin/sh",
+      `echo "$*" >> '${calls}'`,
+      `echo '${answer === null ? refusal : answer}'`,
+      answer === null ? "exit 2" : "",
+      "",
+    ].join("\n"));
+  }
+  chmodSync(file, 0o755);
+  return { file, calls: () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split(/\r?\n/) : []) };
+}
+
+test("the fields from branchling: a build without set --fields gives no pens and says why, asked once", async () => {
+  const root = mkdtempSync(join(tmpdir(), "branchling-ui-pre-fields-"));
+  roots.push(root);
+  const stub = stubBin(root, "pre-fields", null);
+  const old = createAdapter({ bin: stub.file, dir: root });
+  assert.equal(await old.setFields(), null);
+  assert.equal(await old.setFields(), null);
+  assert.equal(stub.calls().length, 1, "the refusal is remembered: no second spawn");
+  const answer = { kind: "task-panel", composed: true, id: "TASK-1", show: { title: "t", priority: "P1" }, log: {}, task: null, blocks: [], fields: null };
+  assert.deepEqual(fieldEdits(answer), [], "no list is guessed");
+  assert.equal(fieldEditsNote(answer), FIELD_EDIT_TEXT.unavailable);
+  // Positive control: an answer that carries fields has pens and no note.
+  const described = { ...answer, fields: [{ name: "title", list: false, clearable: false, vocabulary: null, suggestions: null, values: null }] };
+  assert.deepEqual(fieldEdits(described).map(e => e.key), ["title"]);
+  assert.equal(fieldEditsNote(described), null);
+  assert.throws(() => fieldEdits({ ...answer, fields: undefined }), TypeError, "an answer without the key is not read as an old build");
+});
+
+test("the fields from branchling: any other failure throws, and a field of another shape is a contract mismatch", async () => {
+  const root = mkdtempSync(join(tmpdir(), "branchling-ui-bad-fields-"));
+  roots.push(root);
+  // A bin that does not exist is not "an old build".
+  await assert.rejects(createAdapter({ bin: join(root, "no-such-bin"), dir: root }).setFields(), err => !(err instanceof ContractMismatch) && err !== null);
+  for (const fields of [
+    [{ name: "title", list: "no", clearable: false, vocabulary: null, suggestions: null, values: null }],
+    [{ name: "Title", list: false, clearable: false, vocabulary: null, suggestions: null, values: null }],
+    [{ name: "executor", list: false, clearable: true, vocabulary: null, suggestions: null, values: "human" }],
+    [{ list: false }],
+    "title",
+  ]) {
+    const stub = stubBin(root, `bad-${Math.random().toString(36).slice(2)}`, JSON.stringify({ schemaVersion: 1, kind: "task-set-fields", root, fields }));
+    await assert.rejects(createAdapter({ bin: stub.file, dir: root }).setFields(), ContractMismatch, JSON.stringify(fields));
+  }
+  // Positive control: the same stub with a well-formed field is accepted.
+  const good = stubBin(root, "good", JSON.stringify({ schemaVersion: 1, kind: "task-set-fields", root, fields: [{ name: "title", list: false, clearable: false, vocabulary: null, suggestions: null, values: null }] }));
+  assert.deepEqual((await createAdapter({ bin: good.file, dir: root }).setFields()).fields.map(f => f.name), ["title"]);
 });
 
 test("a list field takes comma-separated items and an empty value clears it; an unchanged value records nothing", async () => {
@@ -235,14 +326,20 @@ test("the adapter refuses an id, a field, a reason or an actor starting with '-'
 
 test("POST /api/task/field sets a field through branchling, and the panel read after it is fresh", async () => {
   const fx = await fixture();
-  const calls = { show: 0 };
-  const counting = { ...fx.adapter, show: (...args) => { calls.show++; return fx.adapter.show(...args); } };
+  const calls = { show: 0, setFields: 0 };
+  const counting = {
+    ...fx.adapter,
+    show: (...args) => { calls.show++; return fx.adapter.show(...args); },
+    setFields: () => { calls.setFields++; return fx.adapter.setFields(); },
+  };
   const { server, post, panel } = await serve(fx, counting, { token: async () => "unchanged" });
   try {
     assert.equal(taskPanelModel(await panel("TASK-1")).priority, "P2");
     const spawned = calls.show;
+    assert.equal(calls.setFields, 1, "the panel read asks set --fields");
     await panel("TASK-1");
     assert.equal(calls.show, spawned, "positive control: an unchanged backlog is answered from the cache");
+    assert.equal(calls.setFields, 1, "set --fields is a cached read, not a write that empties the cache");
 
     const res = await post({ id: "TASK-1", field: "priority", value: "P1", reason: "the audit depends on it" });
     assert.equal(res.status, 200, res.text);
@@ -322,13 +419,24 @@ test("a refused edit is the server's 409 with branchling's text unchanged, which
     assert.equal(statusModel.detail, status.json.error.envelope.refusal);
     assert.deepEqual(statusModel.details, status.json.error.envelope.details);
 
+    assert.equal(statusModel.fix, null, "a dedicated field names no box to fix");
+
     const value = await post({ id: "TASK-1", field: "priority", value: "PX" });
     assert.equal(value.status, 409, value.text);
+    assert.equal(value.json.error.refusalKind, "unknown-value");
     const valueModel = fieldEditFailure(value.json, value.status);
     assert.equal(valueModel.state, "refusal");
-    assert.match(valueModel.detail, /allowed: P0, P1, P2, P3/);
+    assert.match(valueModel.detail, /allowed: P0, P1, P2, P3/, "branchling's own text, unchanged");
     assert.match(valueModel.nothingWritten, /Nothing was written/);
+    assert.deepEqual(valueModel.fix, {
+      field: "value",
+      message: 'Priority cannot be "PX" in this backlog. Use one of: P0, P1, P2, P3.',
+      declared: ["P0", "P1", "P2", "P3"],
+    });
     for (const s of strings(valueModel)) assert.ok(!/[<\x1b]/.test(s), s);
+
+    // Positive control: the allowed value passes the same route.
+    assert.equal((await post({ id: "TASK-1", field: "priority", value: "P0" })).status, 200);
   } finally {
     await server.close();
   }
@@ -367,11 +475,17 @@ test("fieldCommand names the set command and never an --actor", () => {
   assert.ok(!fieldCommand("TASK-1", "epic", "x", "y").text.includes("--actor"));
 });
 
-test("fieldEdits offers every field set edits, never status or owner, with the current values the reads give", async () => {
+test("the fields from branchling: fieldEdits draws a pen for each field set --fields reports, in its order, with the current values", async () => {
   const fx = await fixture();
   await fx.adapter.set("TASK-1", "labels", "billing, risk");
-  const edits = fieldEdits(await readTask(fx.adapter, "TASK-1"));
-  assert.deepEqual(edits.map(e => e.key), EDITABLE_FIELDS.map(f => f.key));
+  await fx.adapter.set("TASK-1", "confidence", "high");
+  await fx.adapter.set("TASK-1", "blocks", "TASK-4");
+  const answer = await readTask(fx.adapter, "TASK-1");
+  const described = await fx.adapter.setFields();
+  assert.deepEqual(answer.fields, described.fields, "readTask composes set --fields unchanged");
+  const edits = fieldEdits(answer);
+  assert.ok(edits.length > 0, "positive control");
+  assert.deepEqual(edits.map(e => e.key), described.fields.map(f => f.name));
   assert.ok(!edits.some(e => e.key === "status" || e.key === "owner"));
   const of = key => edits.find(e => e.key === key);
   assert.equal(of("priority").current, "P2");
@@ -379,10 +493,42 @@ test("fieldEdits offers every field set edits, never status or owner, with the c
   assert.deepEqual([of("labels").list, of("labels").current], [true, "billing, risk"]);
   assert.equal(of("epic").known, true);
   assert.equal(of("epic").display, "(empty)");
-  // No read of 0.3.0 carries these two; the model says so instead of showing them empty.
-  assert.equal(of("confidence").known, false);
-  assert.equal(of("blocks").known, false);
+  // TL-543: both are in the reads now, so the box starts from the value.
+  assert.deepEqual([of("confidence").known, of("confidence").current], [true, "high"]);
+  assert.deepEqual([of("blocks").known, of("blocks").current], [true, "TASK-4"]);
+  assert.ok(edits.every(e => e.known), edits.filter(e => !e.known).map(e => e.key).join(", "));
+  // What branchling says about each field reaches the box's hint.
+  assert.deepEqual(of("executor").values, ["human", "agent"]);
+  assert.match(of("executor").hint, /One of: human, agent\./);
+  assert.match(of("labels").hint, /comma-separated/);
+  assert.match(of("priority").hint, /may not be empty/);
+  assert.match(of("epic").hint, /empty value clears it/);
   for (const s of strings(edits)) assert.ok(!/[<\x1b]/.test(s), s);
+});
+
+test("the fields from branchling: a field the panel has no label for is offered all the same, under its own name", async () => {
+  const fx = await fixture();
+  const answer = await readTask(fx.adapter, "TASK-1");
+  const future = { name: "due_date", list: false, clearable: true, vocabulary: null, suggestions: null, values: null };
+  assert.equal(FIELD_LABELS[future.name], undefined, "the fixture field really is unlabelled");
+  const edits = fieldEdits({ ...answer, fields: [...answer.fields, future] });
+  const added = edits.at(-1);
+  assert.deepEqual([added.key, added.label, added.known, added.display], ["due_date", "Due date", false, "not reported"]);
+  // And a label for a field branchling does not report draws nothing.
+  const fewer = fieldEdits({ ...answer, fields: answer.fields.filter(f => f.name !== "epic") });
+  assert.ok(!fewer.some(e => e.key === "epic"));
+  assert.equal(fieldLabel("epic"), "Epic", "the label is still there; only membership changed");
+});
+
+test("a missing reason marks the reason box, an unknown value the value box, and other refusals neither", () => {
+  const refusal = (refusalKind, extra = {}) => ({
+    error: { type: "refusal", refusalKind, message: "m", envelope: { kind: "task-set", ok: false, refusalKind, refusal: "m", details: [], ...extra } },
+  });
+  assert.deepEqual(fieldEditFailure(refusal("reason-required"), 409).fix, { field: "reason", message: FIELD_EDIT_TEXT.reasonRequired, declared: [] });
+  const unknown = fieldEditFailure(refusal("unknown-value", { rejected: { field: "executor", value: "robot" }, declared: ["human", "agent"] }), 409);
+  assert.deepEqual(unknown.fix, { field: "value", message: 'Executor cannot be "robot" in this backlog. Use one of: human, agent.', declared: ["human", "agent"] });
+  assert.equal(fieldEditFailure(refusal("usage"), 409).fix, null);
+  assert.equal(fieldEditFailure({ error: { type: "unreachable", message: "x" } }, 502).fix, undefined, "not a refusal: no fix key at all");
 });
 
 test("fieldEditRecorded says when branchling recorded nothing because the value already was that", () => {

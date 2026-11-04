@@ -150,7 +150,9 @@ test("declaring a release makes it selectable, and planning a task for it is vis
   const undeclared = await failure(fx.adapter.set("TASK-3", "release", "9.9"));
   assert.ok(undeclared instanceof BranchlingRefusal, `expected a refusal, got ${undeclared}`);
   assert.equal(undeclared.envelope.kind, "task-set");
-  assert.equal(undeclared.envelope.refusalKind, "usage");
+  // TL-543: a value outside the field's vocabulary is its own refusal kind,
+  // no longer folded into `usage`.
+  assert.equal(undeclared.envelope.refusalKind, "unknown-value");
   assert.match(undeclared.envelope.refusal, /9\.9/);
   assert.equal((await fx.adapter.query({ release: "" })).tasks.find(t => t.id === "TASK-3").release, "");
 });
