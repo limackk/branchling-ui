@@ -86,9 +86,11 @@ before(async () => {
   }
 });
 
+// Under a name filter that matches nothing here, node:test can run this hook
+// without the `before` that sets these paths (UI-41).
 after(() => {
-  rmSync(root, { recursive: true, force: true });
-  rmSync(shimDir, { recursive: true, force: true });
+  if (root) rmSync(root, { recursive: true, force: true });
+  if (shimDir) rmSync(shimDir, { recursive: true, force: true });
 });
 
 test("the counting shim counts each real spawn", async () => {

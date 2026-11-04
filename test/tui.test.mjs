@@ -399,8 +399,10 @@ before(async () => {
   ({ top: root, backlog: dir } = await makeFixture("branchling-ui-tui-"));
 });
 
+// Under a name filter that matches nothing here, node:test can run this hook
+// without the `before` that sets `root` (UI-41).
 after(() => {
-  rmSync(root, { recursive: true, force: true });
+  if (root) rmSync(root, { recursive: true, force: true });
 });
 
 test("the real stats envelope goes through the view model into an 80-column screen", async () => {

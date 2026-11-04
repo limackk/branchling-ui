@@ -7,7 +7,7 @@
  */
 
 import "./fixtures/private-homes.mjs";
-import { test, before, after } from "node:test";
+import { lazyFixture } from "./fixtures/lazy-fixture.mjs";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { request } from "node:http";
@@ -75,16 +75,16 @@ const listed = async path => {
   return res.json;
 };
 
-before(async () => {
+// Built by the first test that runs, never by a file a name filter left
+// empty: see test/fixtures/lazy-fixture.mjs (UI-41).
+const { test } = lazyFixture(async () => {
   tmp = mkdtempSync(join(tmpdir(), "branchling-ui-tasks-view-"));
   fixture = await buildTasksBacklog(join(tmp, "tasks"));
   calls = { query: 0 };
   server = await serve(fixture, calls);
   emptyFixture = await buildEmptyBacklog(join(tmp, "empty"));
   emptyServer = await serve(emptyFixture, { query: 0 });
-});
-
-after(async () => {
+}, async () => {
   await server?.close();
   await emptyServer?.close();
   rmSync(tmp, { recursive: true, force: true });

@@ -18,7 +18,7 @@
  */
 
 import "./fixtures/private-homes.mjs";
-import { test, before, after } from "node:test";
+import { lazyFixture } from "./fixtures/lazy-fixture.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -90,7 +90,9 @@ function call(srv, path) {
 
 const adapterFor = fx => createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root });
 
-before(async () => {
+// Built by the first test that runs, never by a file a name filter left
+// empty: see test/fixtures/lazy-fixture.mjs (UI-41).
+const { test } = lazyFixture(async () => {
   pipe = await fixture("branchling-ui-release-");
   appendFileSync(join(pipe.dir, "config.yaml"), [
     "",
@@ -123,9 +125,7 @@ before(async () => {
   await branchling(bare.root, ["new", "--title", "Fixture task", "--priority", "P1", "--dir", bare.dir], { input: BODY });
 
   server = await createServer({ adapter: adapterFor(pipe), port: 0, log: () => {} });
-});
-
-after(async () => {
+}, async () => {
   await server?.close();
   for (const fx of [pipe, bare]) if (fx) rmSync(fx.root, { recursive: true, force: true });
 });

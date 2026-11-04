@@ -6,7 +6,7 @@
  */
 
 import "./fixtures/private-homes.mjs";
-import { test, before, after } from "node:test";
+import { lazyFixture } from "./fixtures/lazy-fixture.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -51,7 +51,9 @@ function call(srv, { method = "GET", path = "/", headers = {} } = {}) {
   });
 }
 
-before(async () => {
+// Built by the first test that runs, never by a file a name filter left
+// empty: see test/fixtures/lazy-fixture.mjs (UI-41).
+const { test } = lazyFixture(async () => {
   root = mkdtempSync(join(tmpdir(), "branchling-ui-server-"));
   dir = join(root, "backlog");
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
@@ -62,9 +64,7 @@ before(async () => {
   });
   await branchling(["new", "--title", "Fixture task", "--priority", "P1", "--dir", dir], { input: body });
   server = await createServer({ adapter: createAdapter({ bin: BIN, dir, cwd: root }), port: 0 });
-});
-
-after(async () => {
+}, async () => {
   await server?.close();
   rmSync(root, { recursive: true, force: true });
 });
