@@ -1,0 +1,2 @@
+{"id":"01M6KBXTW9EM1GYHY92MDH7H4T","ts":"2026-11-04T13:28:12.425Z","task":"UI-51","field":"__created__","from":"","to":"Typed input is judged by branchling's own refusal","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6KBY9YZQQM5NSX3QAAZPGJ4","ts":"2026-11-04T13:28:27.871Z","task":"UI-51","field":"__adopted__","from":"","to":["title","status","priority","type","owner","estimate","confidence","board","created"],"actor":"agent:coordinator","source":"manual","reason":"Waits on upstream TL-559 being released and pinned"}
