@@ -743,8 +743,8 @@ for (const view of VIEWS) {
       log: async () => ({ schemaVersion: 1, kind: "task-log", exchanges: [] }),
     };
     if (view === "decisions") {
-      // The composed answer is built by listDecisions; a row it cannot use is refused as a contract mismatch.
-      malformed.query = async () => ({ schemaVersion: 1, kind: "task-list", tasks: [{ id: "-x" }] });
+      // listDecisions refuses an entry it cannot use as a contract mismatch.
+      malformed.openQuestions = async () => ({ schemaVersion: 1, kind: "open-questions", questions: [{ task: "-x" }] });
     }
     const s = session({ adapter: malformed, screen: view, env: { NO_COLOR: "1" } });
     if (view === "decisions") {
@@ -828,6 +828,7 @@ test("keys switch screens, tab cycles through them, and switching back shows the
     // The plan fixture has no question: its decisions screen is the empty one.
     query: () => realAdapter("plan").query(),
     log: (id, o) => realAdapter("plan").log(id, o),
+    openQuestions: () => realAdapter("plan").openQuestions(),
     deployStatus: () => realAdapter("release").deployStatus(),
   };
   const s = session({ adapter, env: { NO_COLOR: "1" } });

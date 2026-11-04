@@ -407,10 +407,10 @@ test("the static page's pre-script placeholders match STATS_TEXT", () => {
 
 test("answerCommands gives the exact branchling decide commands, quoted for a shell, never with --actor", () => {
   const plain = answerCommands("TASK-1", "01M6EZ150NDP3Y6QZPJY4PZW6R");
-  assert.equal(plain.reason, `branchling decide TASK-1 --resolves 01M6EZ150NDP3Y6QZPJY4PZW6R --reason "${DECISIONS_TEXT.reasonPlaceholder}"`);
+  assert.equal(plain.reason, `branchling decide TASK-1 --resolves 01M6EZ150NDP3Y6QZPJY4PZW6R --reason "${DECISIONS_TEXT.reasonPlaceholder}" --require-actor`);
   assert.equal(plain.choose, null, "no options known, no --choose");
   const menu = answerCommands("TASK-1", "Q1", { optionsKnown: true, options: [{ number: 1 }] });
-  assert.equal(menu.choose, "branchling decide TASK-1 --resolves Q1 --choose N");
+  assert.equal(menu.choose, "branchling decide TASK-1 --resolves Q1 --choose N --require-actor");
   assert.equal(answerCommands("TASK-1", "Q1", { optionsKnown: true, options: [] }).choose, null, "positive control: an empty menu offers no --choose");
   for (const c of [plain.reason, menu.choose, menu.reason]) assert.doesNotMatch(c, /--actor/);
   // Data from a backlog cannot break out of its word.

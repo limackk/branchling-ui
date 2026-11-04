@@ -296,8 +296,9 @@ Rejected:
 
 Not in the shell yet: the mockups' top bar (search, the freshness indicator,
 the scheme switch) and the count badges on the links. Each needs data or a
-setting the page does not have: the decisions count alone costs one spawn
-per active task (see the decisions view) on every screen.
+setting the page does not have: the decisions count costs a
+`log --open-questions` spawn on every screen whenever the cache cannot
+answer it.
 
 ## Live refresh (UI-7)
 
@@ -381,25 +382,23 @@ through `createLive` and redraw on `change`.
 
 ## The decisions view (UI-5)
 
-**Data.** branchling 0.2 has no command that lists open questions across
-tasks. It defines an open question as one no decision points at, computed from
-a task's log, and `log <ID> --decisions --json` is the read it names for that.
-So `listDecisions(adapter)` in `src/adapter.mjs` composes one answer from
-`query --json` (the active tasks, branchling's own default scope) plus one
-`log <ID> --decisions` per task, four at a time. It takes the server's
-per-request scope, so each of those reads goes through UI-2's cache and is
-covered by `X-Branchling-UI-Fetched-At`; `adapter.decide()` is a write, which
-the cache passes through and which invalidates every cached answer. No status name is used: no command reports which
-statuses mean "waiting for somebody" (`reason_required_statuses` minus the
-archived ones, inside branchling), and a task can carry an open question in
-any status. The cost is one spawn per active task (about 0.45 s each, so
-about 1.5 s for a dozen tasks); the upstream command that lists every open
-question would make it one. `log --decisions --json` does not report a
-question's options or recommendation yet, so the page offers a free-text
-answer until it does; the view model reads options when they appear, under the
-names `ask --json` uses. `resume --json` does carry them but was rejected: it
-briefs a successor on one task, may refuse a task somebody else holds, and
-runs the task's verification unless told not to.
+**Data.** One read: `log --open-questions --json` (kind `open-questions`,
+branchling TL-536) lists every question still waiting on an answer across the
+active tasks, oldest first, each with its task, title, status, event id, text,
+asker, time, `options` and `recommend`. `listDecisions(adapter)` in
+`src/adapter.mjs` makes that one call and returns the envelope unchanged,
+after refusing (ContractMismatch) any entry the view could not answer. It
+takes the server's per-request scope, so the read goes through UI-2's cache
+(`openQuestions` is a cached read) and is covered by
+`X-Branchling-UI-Fetched-At`; `adapter.decide()` is a write, which the cache
+passes through and which invalidates every cached answer. No status name is
+used: branchling decides what is open. Until TL-536 this composed `query`
+plus one `log <ID> --decisions` per active task (about 0.45 s a spawn, so the
+screen slowed down as the backlog grew), and `log --decisions` did not carry
+a question's options, so the page offered only a typed answer (UI-23). The
+entries carry no priority, so the page no longer shows one; `query` was
+rejected as a second read for it, since it would bring back a spawn per view
+for a field nobody answers a question by.
 
 **The write.** `POST /api/decide` takes `{ id, resolves, choose }` or
 `{ id, resolves, reason }` and runs `branchling decide` through
@@ -414,14 +413,23 @@ decision. 0.2's bare object, with no `schemaVersion`, is refused.
 passes `--actor` and refuses a body that names one. branchling resolves the
 actor itself, in its own order: `$BACKLOG_ACTOR` in the environment of the
 person who started the server, then the `actor:` in their branchling user
-config, then branchling's default, `agent:claude`. The answer shows the actor
-branchling recorded, so a person who has configured neither sees that their
-answer was attributed to the default. Rejected: an actor typed on the page
-(anybody with the tab open could claim to be anybody); a `--actor` flag on
-`bin/branchling-ui.mjs` or a variable of this package's own (a second way to
-say what `$BACKLOG_ACTOR` and the user config already say, and one more place
-for the two to disagree). branchling cannot yet be told to refuse when it
-falls back to its default actor; that is an upstream gap.
+config, then branchling's default, `agent:claude`. That last rung is never
+used for an answer from this interface: `adapter.decide()` always passes
+`--require-actor` (branchling TL-537), so with neither of the first two set
+branchling refuses (`actor-required`, exit 1, nothing recorded) and the page
+shows that refusal, whose details say how to state who answers. A success
+must report `actorSource` as `flag`, `env` or `config`; anything else is a
+ContractMismatch, because it means a build that would have recorded the
+default. The page shows the recorded actor and where it came from. Rejected:
+an actor typed on the page (anybody with the tab open could claim to be
+anybody); a `--actor` flag on `bin/branchling-ui.mjs` or a variable of this
+package's own (a second way to say what `$BACKLOG_ACTOR` and the user config
+already say, and one more place for the two to disagree). The commands the
+terminal interface prints carry `--require-actor` too.
+
+**Any answer text.** An answer is passed as one `--reason=<text>` word
+(TL-537), so text that starts with `-` is recorded as typed; only the task
+and event ids, which never start with one, keep the refusal.
 
 ## The task panel's actions (UI-30)
 
@@ -542,9 +550,8 @@ measured with the test suites of other worktrees running, while a cached
 `stats` answers in about 0.1 s. That is the reason the health view (UI-28)
 gave each section its own route; a composed route would also have needed
 the server's error mapping inside a view module. The cost of parallel
-reads: `query` is asked twice (by `/api/decisions` and `/api/plan/tasks`),
-which UI-2's cache answers once when nothing changed, and five
-`X-Branchling-UI-Fetched-At` headers, of which the page shows the oldest.
+reads: five `X-Branchling-UI-Fetched-At` headers, of which the page shows
+the oldest.
 
 **Where each number comes from**, never from a status name (UI-18): open
 questions from the decisions answer; failing checks from doctor's `error`

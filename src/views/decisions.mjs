@@ -1,8 +1,8 @@
 /**
  * The decisions view's API (UI-5).
  *
- *   GET  /api/decisions   every open question, the adapter's composed
- *                         `decisions` answer (see listDecisions in src/adapter.mjs)
+ *   GET  /api/decisions   every open question, branchling's `open-questions`
+ *                         envelope (see listDecisions in src/adapter.mjs)
  *   POST /api/decide      `{ id, resolves, choose }` or `{ id, resolves, reason }`
  *                         runs `branchling decide` and answers with what it printed
  *
@@ -12,8 +12,10 @@
  * checked by the same `validateDecision` the page uses, and a malformed one is
  * a 400 before branchling is called. No actor is passed: branchling resolves
  * it from the environment of the person who started the server
- * (`$BACKLOG_ACTOR`, then their user config). A refusal from `decide` reaches
- * the page as the server's 409 refusal, its text unchanged.
+ * (`$BACKLOG_ACTOR`, then their user config), and the adapter's
+ * `--require-actor` refuses an answer neither of them names. A refusal from
+ * `decide`, that one included, reaches the page as the server's 409 refusal,
+ * its text unchanged.
  */
 
 import { validateDecision } from "../view-model/decisions.mjs";

@@ -321,75 +321,67 @@ export function parseEnvelope(text, expectedKind) {
   return envelope;
 }
 
-/** How many `log` calls `listDecisions()` keeps running at once. */
-export const DECISIONS_CONCURRENCY = 4;
+/** The places a recorded answer's actor may come from, `default` excluded. */
+export const STATED_ACTOR_SOURCES = Object.freeze(["flag", "env", "config"]);
 
-/** `items` mapped through the async `fn`, at most `limit` at a time, in order. */
-async function mapLimit(items, limit, fn) {
-  const out = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i], i);
-    }
+function badQuestion(q) {
+  if (!q || typeof q !== "object") return "an entry that is not an object";
+  if (typeof q.task !== "string" || !q.task || q.task.startsWith("-")) return "a question without a usable task id";
+  if (typeof q.event !== "string" || !q.event || q.event.startsWith("-")) return "a question without a usable event id";
+  if (typeof q.question !== "string") return "a question without its text";
+  if (!Array.isArray(q.options) || !q.options.every(o => typeof o === "string")) return "a question without its options";
+  if (q.recommend !== null && !(Number.isInteger(q.recommend) && q.recommend >= 1 && q.recommend <= q.options.length)) {
+    return "a question recommending an option it does not offer";
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
+  return null;
 }
 
 /**
- * Every open question in the backlog, as ONE answer.
+ * Every open question in the backlog, as ONE branchling answer (UI-23).
  *
- * branchling 0.2 has no single command that lists open questions across
- * tasks (an upstream gap, UI-23). An open question is defined by branchling as
- * a question no decision points at, computed from each task's log, so this
- * reads `query` once (the active tasks, branchling's own default scope, no
- * status named) and then `log <ID> --decisions` for each of them,
- * DECISIONS_CONCURRENCY at a time. Any failure rejects the whole answer, never
- * a shorter list.
+ * `log --open-questions --json` (branchling TL-536) lists, in one spawn, every
+ * question still waiting on an answer across the active tasks, oldest first.
+ * Measured on branchling main after TL-536:
  *
- * It takes an adapter-shaped object rather than being a method, so the reads
- * it makes are that object's: given the server's per-request scope, every
- * `query` and `log` goes through UI-2's cache like any other read, and the
- * response's X-Branchling-UI-Fetched-At covers them. As a method it would be
- * one opaque call the cache treats as a write. It spawns nothing itself.
+ *   { schemaVersion: 1, kind: "open-questions", root, total,
+ *     questions: [{ task, title, status, event, question, askedBy, askedAt,
+ *                   options: [<text>], recommend: <1-based number> | null }] }
  *
- * `log --decisions` keeps a `question` message only while it is open
- * (answered ones are left out; see `branchling log --help`), so a task is
- * listed when its log holds at least one. The answer is composed here, so its
- * `kind` is this package's, `decisions`:
+ * WHY ONE CALL. Before TL-536 no command listed open questions, so this read
+ * `query` and then one `log <ID> --decisions` per active task, about 0.45 s a
+ * spawn: the screen a person opens to answer questions slowed down as the
+ * backlog grew, and `log --decisions` did not report a question's options, so
+ * the page could offer only a typed answer.
  *
- *   { kind: "decisions", composed: true, scanned: <tasks whose log was read>,
- *     tasks: [{ task: <the task's row from query, unchanged>,
- *               log:  <its task-log envelope, unchanged> }] }
+ * The envelope is returned unchanged; the view model
+ * (src/view-model/decisions.mjs) turns it into rows. An entry the view could
+ * not answer (no task or event id, options that are not a list of texts, a
+ * recommendation outside them) is a ContractMismatch for the whole answer,
+ * never a shorter list.
  *
- * The view model (src/view-model/decisions.mjs) turns that into questions.
+ * It takes an adapter-shaped object rather than being a method, so the read
+ * goes through whatever that object is: given the server's per-request scope,
+ * `openQuestions` is one of UI-2's cached reads and the response carries
+ * X-Branchling-UI-Fetched-At. It spawns nothing itself.
  *
- * @param {{ query: Function, log: Function }} adapter
+ * @param {{ openQuestions: Function }} adapter
  */
 export async function listDecisions(adapter) {
-  const list = await adapter.query();
-  const rows = Array.isArray(list.tasks) ? list.tasks : [];
-  for (const row of rows) {
-    if (!row || typeof row.id !== "string" || !row.id || row.id.startsWith("-")) throw new ContractMismatch("query returned a task without a usable id");
+  const envelope = await adapter.openQuestions();
+  if (!Array.isArray(envelope.questions)) throw new ContractMismatch("open-questions answered without a questions list");
+  for (const q of envelope.questions) {
+    const problem = badQuestion(q);
+    if (problem) throw new ContractMismatch(`open-questions answered ${problem}`);
   }
-  const logs = await mapLimit(rows, DECISIONS_CONCURRENCY, row => adapter.log(row.id, { decisions: true }));
-  const tasks = [];
-  rows.forEach((row, i) => {
-    const exchanges = Array.isArray(logs[i].exchanges) ? logs[i].exchanges : [];
-    const open = exchanges.some(x => Array.isArray(x.messages) && x.messages.some(m => m && m.kind === "question"));
-    if (open) tasks.push({ task: row, log: logs[i] });
-  });
-  return { kind: "decisions", composed: true, scanned: rows.length, tasks };
+  return envelope;
 }
 
 /**
  * Everything the task panel (UI-27) shows about one task, as ONE answer.
  *
- * branchling 0.2 spreads it over three reads, and this composes them the way
- * listDecisions composes its own, from an adapter-shaped object, so each read
- * goes through the server's per-request scope and UI-2's cache:
+ * branchling 0.2 spreads it over three reads, and this composes them from an
+ * adapter-shaped object, as listDecisions reads its list, so each read goes
+ * through the server's per-request scope and UI-2's cache:
  *
  *   show <ID>                         status, priority, title, file, blockers
  *                                     and branchling's `blocked` verdict. First,
@@ -451,10 +443,21 @@ export async function readTask(adapter, id) {
  * or 2 (`not-found`); a malformed `--resolves` is a usage error, stderr only.
  * (0.2.x printed a bare object with no schemaVersion, which parseEnvelope now
  * refuses; that range is no longer supported.)
+ *
+ * Since branchling TL-537 it also carries `actorSource` (`flag`, `env`,
+ * `config` or `default`), and `--require-actor` refuses the default with
+ * refusalKind `actor-required`, exit 1, nothing recorded. decide() always
+ * passes that flag, so a success must name a STATED source: a missing
+ * `actorSource` is a build without TL-537, and `default` is a build that
+ * ignored the flag. Either would let a person's answer stand in history as
+ * the default agent's, so both are a ContractMismatch, not a success.
  */
 function acceptDecision(envelope) {
   if (envelope.ok !== true || typeof envelope.id !== "string" || !envelope.decision || typeof envelope.decision.id !== "string") {
     throw new ContractMismatch("task-decide answered success without a recorded decision");
+  }
+  if (!STATED_ACTOR_SOURCES.includes(envelope.actorSource)) {
+    throw new ContractMismatch(`task-decide recorded an answer with actorSource ${JSON.stringify(envelope.actorSource)}, not one of ${STATED_ACTOR_SOURCES.join(", ")}`);
   }
   return envelope;
 }
@@ -691,21 +694,34 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       return json(args, "release-status");
     },
 
+    /** `log --open-questions`: every open question in the backlog (`open-questions`); see listDecisions. */
+    openQuestions: () => json(["log", "--open-questions"], "open-questions"),
+
     /**
-     * `decide <id> --resolves <event id> (--choose <n> | --reason "…") [--actor <ns:name>]`.
+     * `decide <id> --resolves <event id> (--choose <n> | --reason=<text>) --require-actor [--actor <ns:name>]`.
      *
      * `actor` is passed only when the caller states one. The server never does:
      * branchling then resolves the actor itself (`$BACKLOG_ACTOR`, then the
-     * user's own config, then its default). Values are an argv array, never a
-     * shell string; a value starting with "-" would be read as a flag, so it is
-     * refused here before branchling sees it.
+     * user's own config). `--require-actor` (TL-537) is always passed, so with
+     * neither set branchling refuses (`actor-required`) instead of recording a
+     * person's answer as its default agent's; acceptDecision checks the
+     * `actorSource` it reports.
+     *
+     * Values are an argv array, never a shell string. The answer travels as
+     * ONE word, `--reason=<text>`, so a person's text that starts with "-"
+     * ("-1 for this") is recorded as typed rather than read as a flag. The ids
+     * keep the "-" refusal: no task or event id starts with one, so such a
+     * value is a mistake, not an answer.
      */
     async decide({ id, resolves, choose, reason, actor } = {}) {
       const base = ["decide"];
       const bad = message => new BranchlingUsageError([...base, String(id)], 2, message);
-      const word = (name, value) => {
+      const text = (name, value) => {
         if (typeof value !== "string" || !value.trim()) throw bad(`${name} is required`);
-        if (value.startsWith("-")) throw bad(`${name} cannot start with "-": branchling would read it as a flag`);
+        return value;
+      };
+      const word = (name, value) => {
+        if (text(name, value).startsWith("-")) throw bad(`${name} cannot start with "-": branchling would read it as a flag`);
         return value;
       };
       const args = [...base, word("the task id", id), "--resolves", word("--resolves", resolves)];
@@ -716,9 +732,10 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
         if (!Number.isInteger(choose) || choose < 1) throw bad("--choose takes a positive whole number");
         args.push("--choose", String(choose));
       } else {
-        args.push("--reason", word("--reason", reason));
+        args.push(`--reason=${text("--reason", reason)}`);
       }
       if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", word("--actor", actor));
+      args.push("--require-actor");
       return acceptDecision(await json(args, "task-decide"));
     },
 

@@ -4,9 +4,9 @@
  * shows the exact `branchling decide` command that answers it, from the view
  * model (`commands`), never with `--actor` (docs/architecture.md).
  *
- * It is fed the way the page is: the adapter's composed `listDecisions`
- * answer, read through the same per-refresh scope, so each `query` and `log`
- * goes through the cache.
+ * It is fed the way the page is: listDecisions' `open-questions` answer, one
+ * `log --open-questions` read through the same per-refresh scope, so it goes
+ * through the cache.
  */
 
 import { listDecisions } from "../../adapter.mjs";
@@ -15,7 +15,7 @@ import { SGR, commandLines, para, seg } from "../text.mjs";
 
 function questionLines(q, max) {
   const lines = [[seg(q.taskId, SGR.bold), seg(`  ${q.title}`)]];
-  lines.push(...para([q.statusLabel, q.priority, `asked by ${q.askedBy}`, q.ageLabel].filter(Boolean).join(" · "), max, { style: SGR.dim, indent: 2 }));
+  lines.push(...para([q.statusLabel, `asked by ${q.askedBy}`, q.ageLabel].join(" · "), max, { style: SGR.dim, indent: 2 }));
   lines.push(...para(q.text, max, { indent: 2 }));
   for (const option of q.options) lines.push(...para(`${option.number}. ${option.label}`, max, { indent: 4 }));
   if (q.optionsNote) lines.push(...para(q.optionsNote, max, { style: SGR.dim, indent: 2 }));

@@ -123,7 +123,7 @@ function questionForm(q) {
 }
 
 function questionNode(q) {
-  const meta = [q.statusLabel, q.priority, `asked by ${q.askedBy}`].filter(Boolean).join(" · ");
+  const meta = [q.statusLabel, `asked by ${q.askedBy}`].join(" · ");
   const when = q.askedAt ? el("time", { datetime: q.askedAt, title: q.askedAt, text: q.ageLabel }) : document.createTextNode(q.ageLabel);
   return el("li", { class: "card decision" }, [
     el("h3", {}, [el("a", { class: "task-id", href: taskPanelHref(location.search, q.taskId), "data-task": q.taskId, text: q.taskId }), ` ${q.title}`]),
@@ -141,6 +141,7 @@ let generation = 0;
 /** The last recorded answer, kept above the list while it reloads. */
 function announce(recorded) {
   const parts = [el("p", { text: recorded.message })];
+  if (recorded.actorSourceLabel) parts.push(el("p", { text: recorded.actorSourceLabel }));
   if (recorded.liftedLabel) parts.push(el("p", { text: recorded.liftedLabel }));
   if (recorded.remainingLabel) parts.push(el("p", { text: recorded.remainingLabel }));
   notice.replaceChildren(el("div", { class: "state state-recorded", tabindex: "-1" }, parts));

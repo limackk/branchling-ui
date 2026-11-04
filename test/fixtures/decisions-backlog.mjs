@@ -16,9 +16,8 @@
  *   TASK-2  asked with no options                           -> listed
  *   TASK-3  no question                                     -> not listed
  *
- * branchling 0.2's `log --decisions --json` does not report a question's
- * options (UI-23), so TASK-1 is offered the free-text answer too until it does.
- * Every command used is one the pinned branchling (0.3.0) has. No task file is
+ * TASK-1's two options reach the view through `log --open-questions` (UI-23),
+ * so it is offered both, and a typed answer beside them. Every command used is one the pinned branchling (0.3.0) has. No task file is
  * ever written here.
  */
 

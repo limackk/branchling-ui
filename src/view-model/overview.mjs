@@ -25,7 +25,7 @@
  * WHERE EVERY NUMBER COMES FROM. From an envelope, never from status names
  * (UI-18):
  *
- *   open questions     decisionsModel's count (log --decisions, per task)
+ *   open questions     decisionsModel's count (log --open-questions)
  *   failing checks     doctorModel's `failing` (doctor rows with status error)
  *   waiting on others  stats `blocked`: ACTIVE tasks whose `blocked_by` is not
  *                      empty, as `branchling stats` counts them (its own

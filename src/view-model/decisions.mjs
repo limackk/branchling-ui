@@ -1,8 +1,8 @@
 /**
- * The decisions view model: plain data computed from the adapter's composed
- * `decisions` answer (src/adapter.mjs, `decisions()`): every active task's row
- * from `branchling query --json` with its `branchling log <ID> --decisions
- * --json` envelope, for the tasks that carry an open question.
+ * The decisions view model: plain data computed from branchling's
+ * `open-questions` envelope (`branchling log --open-questions --json`, read by
+ * listDecisions in src/adapter.mjs): one entry per question still waiting on
+ * an answer, across the active tasks.
  *
  * Both surfaces render THIS, never the envelopes (see src/view-model/stats.mjs
  * for the rules: pure, no `node:` import, no DOM, no markup, no ANSI, no
@@ -10,16 +10,15 @@
  * never from a clock read here, so the same input always gives the same model.
  *
  * What the model decides, so no surface has to:
- *   - WHAT IS OPEN is what branchling says is open: a `question` message that
- *     `log --decisions` still reports. Nothing is derived from status names.
+ *   - WHAT IS OPEN is what branchling says is open: an entry of
+ *     `log --open-questions`. Nothing is derived from status names.
  *   - one row per open question (a task can carry two), oldest first, with the
  *     task, the question, who asked, when and how long ago.
- *   - the options, when the answer carries them, numbered from 1 as
- *     `decide --choose N` counts them, the recommended one marked in TEXT.
- *     branchling 0.2's `log --decisions --json` does not report a question's
- *     options (an upstream gap), so they are read only if present, under the
- *     names `ask --json` uses (`options`, `recommend`); until then a question
- *     offers the free-text answer only, and says so.
+ *   - the options the asker offered, numbered from 1 as `decide --choose N`
+ *     counts them, the recommended one marked in TEXT. The adapter refuses an
+ *     entry whose `options` is not a list; a model built from anything else
+ *     (an older payload) still says the options are unknown rather than
+ *     showing an empty menu as if none were offered.
  *   - the shape of an answer (`validateDecision`), shared by the page and the
  *     server's route, so both refuse the same input with the same sentence.
  */
@@ -44,7 +43,16 @@ export const DECISIONS_TEXT = {
   howToAnswer: "Answer it with branchling, from a shell in the repository that holds this backlog:",
   chooseHint: "with N the number of the option to pick, or",
   reasonPlaceholder: "YOUR ANSWER",
-  actorNote: "branchling records the actor from $BACKLOG_ACTOR or your user config.",
+  // One terminal line: --require-actor in the commands is why it refuses
+  // rather than recording branchling's default agent.
+  actorNote: "branchling takes the actor from $BACKLOG_ACTOR or your user config, or refuses.",
+};
+
+/** Where branchling took the recorded actor from (`decide --json` `actorSource`, TL-537). */
+export const ACTOR_SOURCE_TEXT = {
+  flag: "named with --actor",
+  env: "taken from $BACKLOG_ACTOR",
+  config: "taken from your branchling user config",
 };
 
 /** A word as a POSIX shell reads it: bare when it is safe, else single-quoted. */
@@ -58,14 +66,15 @@ export function shellWord(value) {
  * The exact `branchling decide` commands that answer one open question, for a
  * surface that cannot record the answer itself (the terminal interface). The
  * same two shapes `validateDecision` accepts; never an `--actor`: branchling
- * resolves who answered from the environment of the person who runs it.
- * `choose` is null when no options are known.
+ * resolves who answered from the environment of the person who runs it, and
+ * `--require-actor` makes it refuse rather than fall back to its default
+ * agent, as the page's answers do. `choose` is null when no options are known.
  */
 export function answerCommands(taskId, questionId, { optionsKnown = false, options = [] } = {}) {
   const base = `branchling decide ${shellWord(taskId)} --resolves ${shellWord(questionId)}`;
   return {
-    choose: optionsKnown && options.length ? `${base} --choose N` : null,
-    reason: `${base} --reason "${DECISIONS_TEXT.reasonPlaceholder}"`,
+    choose: optionsKnown && options.length ? `${base} --choose N --require-actor` : null,
+    reason: `${base} --reason "${DECISIONS_TEXT.reasonPlaceholder}" --require-actor`,
   };
 }
 
@@ -117,53 +126,46 @@ function optionsOf(message) {
   };
 }
 
-function questionsOf(entry, now) {
-  const task = entry.task || {};
-  const exchanges = Array.isArray(entry.log && entry.log.exchanges) ? entry.log.exchanges : [];
-  const out = [];
-  for (const x of exchanges) {
-    for (const m of Array.isArray(x.messages) ? x.messages : []) {
-      if (!m || m.kind !== "question") continue;
-      // `text: null` means "the exchange's reason, verbatim" (branchling log).
-      const text = str(m.text) ?? str(x.reason) ?? "";
-      const { known, options } = optionsOf(m);
-      const age = ageOf(x.ts, now);
-      const status = str(task.status);
-      out.push({
-        key: `${String(task.id)}:${String(m.id)}`,
-        taskId: String(task.id),
-        title: str(task.title) ?? "",
-        status,
-        statusLabel: status === null ? "status unknown" : status.replace(/_/g, " "),
-        role: statusRole(status),
-        priority: str(task.priority),
-        questionId: String(m.id),
-        text,
-        askedBy: str(x.actor) || "unknown",
-        askedAt: str(x.ts),
-        ageMs: age.ms,
-        ageLabel: age.label ?? "asked at an unknown time",
-        optionsKnown: known,
-        options,
-        optionsNote: !known ? DECISIONS_TEXT.optionsUnknown : options.length ? null : DECISIONS_TEXT.noOptions,
-        needs: DECISIONS_TEXT.needs,
-        commands: answerCommands(String(task.id), String(m.id), { optionsKnown: known, options }),
-      });
-    }
-  }
-  return out;
+function questionOf(entry, now) {
+  const taskId = String(entry.task);
+  const questionId = String(entry.event);
+  const { known, options } = optionsOf(entry);
+  const askedAt = str(entry.askedAt);
+  const age = ageOf(askedAt, now);
+  const status = str(entry.status);
+  return {
+    key: `${taskId}:${questionId}`,
+    taskId,
+    title: str(entry.title) ?? "",
+    status,
+    statusLabel: status === null ? "status unknown" : status.replace(/_/g, " "),
+    role: statusRole(status),
+    questionId,
+    text: str(entry.question) ?? "",
+    askedBy: str(entry.askedBy) || "unknown",
+    askedAt,
+    ageMs: age.ms,
+    ageLabel: age.label ?? "asked at an unknown time",
+    optionsKnown: known,
+    options,
+    optionsNote: !known ? DECISIONS_TEXT.optionsUnknown : options.length ? null : DECISIONS_TEXT.noOptions,
+    needs: DECISIONS_TEXT.needs,
+    commands: answerCommands(taskId, questionId, { optionsKnown: known, options }),
+  };
 }
 
 /**
- * @param {object} answer the adapter's `decisions` answer
+ * @param {object} answer the `open-questions` envelope listDecisions returns
  * @param {{ stale?: boolean, fetchedAt?: string|null }} [freshness]
  * @param {number|string} [now] the current time (epoch ms or ISO), for ages
  */
 export function decisionsModel(answer, freshness = {}, now) {
-  if (!answer || answer.kind !== "decisions" || !Array.isArray(answer.tasks)) {
-    throw new TypeError("decisionsModel needs the adapter's decisions answer");
+  if (!answer || answer.kind !== "open-questions" || !Array.isArray(answer.questions)) {
+    throw new TypeError("decisionsModel needs branchling's open-questions answer");
   }
-  const questions = answer.tasks.flatMap(entry => questionsOf(entry, now));
+  const questions = answer.questions.map(q => questionOf(q, now));
+  // branchling already lists them oldest first; sorting again keeps the order
+  // a property of this model rather than of whatever produced its input.
   questions.sort((a, b) => {
     const ta = a.askedAt ? Date.parse(a.askedAt) : Infinity;
     const tb = b.askedAt ? Date.parse(b.askedAt) : Infinity;
@@ -175,7 +177,6 @@ export function decisionsModel(answer, freshness = {}, now) {
     view: "decisions",
     state: questions.length ? "ready" : "empty",
     freshness: { stale: freshness.stale === true, fetchedAt: freshness.fetchedAt ?? null },
-    scanned: typeof answer.scanned === "number" ? answer.scanned : null,
     count: questions.length,
     taskCount,
     summary: questions.length
@@ -208,6 +209,7 @@ export function decisionRecorded(result) {
   const decision = (result && result.decision) || {};
   const lifted = result && result.lifted;
   const remaining = Array.isArray(result && result.openQuestions) ? result.openQuestions.length : 0;
+  const actorSource = str(result && result.actorSource);
   return {
     view: "decisions",
     state: "recorded",
@@ -215,6 +217,8 @@ export function decisionRecorded(result) {
     decisionId: str(decision.id),
     text: str(decision.text) ?? "",
     actor: str(decision.actor) ?? "unknown",
+    actorSource,
+    actorSourceLabel: actorSource && ACTOR_SOURCE_TEXT[actorSource] ? `The actor was ${ACTOR_SOURCE_TEXT[actorSource]}.` : null,
     message: `Recorded for ${str(result && result.id) ?? "the task"} as ${str(decision.actor) ?? "an unknown actor"}: ${str(decision.text) ?? ""}`,
     liftedLabel: lifted && lifted.from && lifted.to ? `Its status moved from ${String(lifted.from).replace(/_/g, " ")} to ${String(lifted.to).replace(/_/g, " ")}.` : null,
     remaining,
@@ -260,7 +264,8 @@ export function validateDecision(input) {
   const reason = input.reason.trim();
   if (!reason) return { ok: false, message: "The answer is empty." };
   if (reason.length > LIMITS.reason) return { ok: false, message: `The answer is longer than ${LIMITS.reason} characters.` };
-  if (reason.startsWith("-")) return { ok: false, message: "The answer cannot start with \"-\": branchling would read it as a flag." };
+  // An answer MAY start with "-" ("-1 for this"): the adapter passes it as
+  // one `--reason=<text>` word, which branchling never reads as a flag.
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(reason)) return { ok: false, message: "The answer cannot contain control characters." };
   return { ok: true, value: { id: input.id, resolves: input.resolves, reason } };

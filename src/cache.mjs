@@ -104,7 +104,7 @@
  * the fingerprint changes for every entry on any write anyway.
  *
  * WHAT A CACHED CALL RETURNS. The reading methods (query, stats, plan, show,
- * log, deployStatus, setFields, vocabulary) resolve to a frozen
+ * log, openQuestions, deployStatus, setFields, vocabulary) resolve to a frozen
  *
  *   { envelope, answeredAt, fromCache }
  *
@@ -143,8 +143,12 @@ export const RACY_MS = 2000;
  * too, so an edit to it is a miss. A `null` answer (an executable without the
  * command) is cached as well; upgrading the executable under a running cache
  * is a known limit above.
+ *
+ * `openQuestions` (UI-23) is `log --open-questions`: it reads the same task
+ * files and history logs as `log`, so the fingerprint that vouches for a
+ * cached `log` vouches for it too.
  */
-export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus", "setFields", "vocabulary"];
+export const CACHED_READS = ["query", "stats", "plan", "show", "log", "openQuestions", "deployStatus", "setFields", "vocabulary"];
 
 /**
  * Methods that pass through without invalidating: they do not change a backlog.
