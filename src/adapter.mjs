@@ -383,8 +383,9 @@ export async function listDecisions(adapter) {
  * adapter-shaped object, as listDecisions reads its list, so each read goes
  * through the server's per-request scope and UI-2's cache:
  *
- *   show <ID>                         status, priority, title, file, blockers
- *                                     and branchling's `blocked` verdict. First,
+ *   show <ID> --body                  status, priority, title, file, blockers,
+ *                                     branchling's `blocked` verdict and the
+ *                                     body (TL-542). First,
  *                                     because its `no-such-task` refusal is the
  *                                     panel's not-found state, and it names the
  *                                     status the row is looked up by
@@ -403,19 +404,21 @@ export async function listDecisions(adapter) {
  *                                     the array, or null from a build that
  *                                     cannot describe them (see `setFields`)
  *
- * No read prints the body (`show` leaves it out on purpose), so there is no
- * `body` key; see src/view-model/task.mjs. Any failure rejects the whole
- * answer, never a smaller one.
+ * The body comes with `show`, through `show --json --body` (TL-542), and is
+ * lifted to the answer's own `body` key: the markdown string, or null when
+ * the executable is a build without the flag (see `show` in createAdapter),
+ * which the model shows as "not available", never as empty. Any other
+ * failure rejects the whole answer, never a smaller one.
  *
  *   { kind: "task-panel", composed: true, id, show, log, task: <row>|null, blocks: [<row>],
- *     fields: [{ name, list, clearable, vocabulary, suggestions, values }]|null }
+ *     fields: [{ name, list, clearable, vocabulary, suggestions, values }]|null, body: string|null }
  *
  * @param {{ show: Function, log: Function, query: Function }} adapter
  * @param {string} id a task id, already checked by the caller
  */
 export async function readTask(adapter, id) {
   if (typeof id !== "string" || !id || id.startsWith("-")) throw new BranchlingUsageError(["show", String(id)], 2, "a task id is required");
-  const show = await adapter.show(id);
+  const show = await adapter.show(id, { body: true });
   const status = typeof show.status === "string" && /^[A-Za-z0-9_][A-Za-z0-9_ -]*$/.test(show.status) ? show.status : null;
   const [log, list, blocking, described] = await Promise.all([
     adapter.log(id),
@@ -427,7 +430,8 @@ export async function readTask(adapter, id) {
   const task = rows.find(t => t && t.id === id) || null;
   const blocks = (Array.isArray(blocking.tasks) ? blocking.tasks : []).filter(t => t && typeof t.id === "string" && t.id);
   const fields = described ? described.fields : null;
-  return { kind: "task-panel", composed: true, id, show, log, task, blocks, fields };
+  const body = typeof show.body === "string" ? show.body : null;
+  return { kind: "task-panel", composed: true, id, show, log, task, blocks, fields, body };
 }
 
 /**
@@ -534,6 +538,8 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
   const withDir = args => (dir ? [...args, "--dir", dir] : args);
   /** Learned once: the executable refuses `set --fields` (a build before TL-543). */
   let setFieldsFlagUnknown = false;
+  /** Learned once: the executable refuses `show --body` (a build before TL-542). */
+  let bodyFlagUnknown = false;
 
   /**
    * `opts.verdict`: the command is one of VERDICT_KINDS, whose failing answer
@@ -672,7 +678,34 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
      */
     check: () => json(["check"], "check", { verdict: true }),
     plan: () => json(["plan"], "plan"),
-    show: id => json(["show", id], "task-show"),
+    /**
+     * `show <ID>`; `{ body: true }` adds `--body`, which puts the markdown
+     * after the frontmatter, verbatim, in the envelope as `body` (a string).
+     * Without the flag `body` is null (or absent before TL-542).
+     *
+     * `--body` is TL-542, merged upstream after the 0.3.0 release: the
+     * published 0.3.0 answers it with a usage error (`unknown flag: --body`,
+     * exit 2, no envelope). That one refusal, and only that one, is not a
+     * failure of the read: the call is made again without the flag and
+     * answers with no `body`, which the panel shows as "not available" rather
+     * than as empty. This adapter remembers the answer, so an older build
+     * costs one extra spawn per adapter, not one per panel. Any other usage
+     * error still throws. With the flag accepted, a `body` that is not a
+     * string is a ContractMismatch, never an empty body.
+     */
+    async show(id, { body = false } = {}) {
+      if (!body || bodyFlagUnknown) return json(["show", id], "task-show");
+      let envelope;
+      try {
+        envelope = await json(["show", id, "--body"], "task-show");
+      } catch (err) {
+        if (!(err instanceof BranchlingUsageError) || !/unknown flag: --body\b/.test(err.stderr || "")) throw err;
+        bodyFlagUnknown = true;
+        return json(["show", id], "task-show");
+      }
+      if (typeof envelope.body !== "string") throw new ContractMismatch("task-show answered --body without a body string");
+      return envelope;
+    },
     /** `log <ID>`; `{ decisions: true }` adds `--decisions` (what is decided and what is still open). */
     log: (id, { decisions = false } = {}) => json(decisions ? ["log", id, "--decisions"] : ["log", id], "task-log"),
     /**

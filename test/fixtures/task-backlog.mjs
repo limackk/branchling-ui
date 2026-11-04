@@ -18,9 +18,10 @@
  *               panel must show as text.
  *   TASK-4  P3  done: archived, reached through the panel all the same.
  *
- * The panel cannot show a body yet: branchling 0.2 has no read that prints
- * it (see src/view-model/task.mjs), so the bodies here are for the day one
- * does, and for the manual check that nothing of them leaks into the page.
+ * The panel shows each body through `show --json --body` (TL-542; see
+ * src/view-model/task.mjs), so TASK-1's carries every block of the safe
+ * markdown subset (headings, both kinds of list, fenced and inline code, a
+ * safe and an unsafe link) and TASK-3's carries markup that must stay text.
  */
 
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
@@ -53,7 +54,8 @@ function seedPlan() {
         plan_id: "rounding",
         title: TITLES["TASK-1"],
         goal: "Every amount on an invoice is rounded **once**, at the end, the way the `accounting` export expects. See [the export notes](https://example.com/export) and [a bad link](javascript:alert(1)).",
-        context: Array.from({ length: 12 }, (_, i) => `Paragraph ${i + 1} of the context: rounding happens in three places today, and each one rounds a little differently, which is why the totals drift by a cent on long invoices.`).join("\n\n"),
+        context: Array.from({ length: 12 }, (_, i) => `Paragraph ${i + 1} of the context: rounding happens in three places today, and each one rounds a little differently, which is why the totals drift by a cent on long invoices.`).join("\n\n")
+          + "\n\nThe single rounding call:\n\n```js\nconst total = round(sum(lines), \"half-even\");\n```",
         steps: ["Find every place that rounds", "Round once, in `totals()`", "Compare a year of invoices against the export"],
         priority: "P1",
         epic: "Billing",

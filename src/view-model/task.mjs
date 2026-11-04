@@ -7,7 +7,7 @@
  * ANSI, no I/O. `URLSearchParams` is a global in the browser and in Node.
  * Both surfaces render THIS.
  *
- * WHERE EVERY PART COMES FROM (branchling 0.2.0):
+ * WHERE EVERY PART COMES FROM (branchling 0.2.0, the body since TL-542):
  *
  *   status, priority, title     `show --json` (task-show)
  *   blocked, blocked by         `show --json`: `blocked` and `blockers[]`, each
@@ -20,13 +20,14 @@
  *                               estimate, …): `show` does not carry them
  *   history                     `log <ID> --json` (task-log), one exchange per
  *                               write, in branchling's order (oldest first)
- *   body                        NOT AVAILABLE. `show` deliberately never prints
- *                               the body ("read the file"), and no other read
- *                               of the pin does; this package may not read the
- *                               file. So the model says `body.known: false`
+ *   body                        `show --json --body`, lifted by readTask to
+ *                               `answer.body` (a string) and drawn through
+ *                               `markdownBlocks`, the safe subset below. A
+ *                               build without the flag (0.3.0 as published)
+ *                               gives null: this package may not read the
+ *                               file, so the model says `body.known: false`
  *                               instead of showing nothing as if it were
- *                               empty. `markdownBlocks` is ready for the day a
- *                               read gives it, as `answer.body` (a string).
+ *                               empty.
  */
 
 import { priorityRole, statusRole } from "./roles.mjs";
@@ -57,7 +58,7 @@ export const TASK_TEXT = {
   blockedNo: "Not blocked.",
   elsewhere: n => `Different on ${n} other ${n === 1 ? "branch or worktree" : "branches or worktrees"}.`,
   body: "Body",
-  bodyUnavailable: "The description is in the task file named above; this interface cannot read it yet.",
+  bodyUnavailable: "The description is in the task file named above; the installed branchling is too old to print it (show --body).",
   bodyEmpty: "The body is empty.",
   history: "History",
   historyOrder: "Oldest first, as branchling recorded it.",
@@ -432,8 +433,8 @@ export function bodyModel(body) {
 
 /**
  * @param {object} answer the composed `task-panel` answer from readTask():
- *   `{ kind: "task-panel", composed: true, id, show, log, task, blocks }`,
- *   and `body` (a string) once some read gives one
+ *   `{ kind: "task-panel", composed: true, id, show, log, task, blocks, body }`,
+ *   `body` being the markdown string, or null when the executable cannot print it
  * @param {{ stale?: boolean, fetchedAt?: string|null }} [freshness]
  * @param {string} [search] the page's query string, for the links the panel draws
  */

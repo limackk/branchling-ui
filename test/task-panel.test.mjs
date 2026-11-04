@@ -4,15 +4,16 @@
  * The model is built from the answers the real `show`, `log` and `query`
  * print, so a key renamed upstream fails here rather than rendering nothing.
  *
- * The body: branchling 0.2 has no read that prints it (`show` leaves it out on
- * purpose), so the panel says so, and the markdown subset that will draw it
- * is proven on strings here, including that markup in it stays text.
+ * The body comes from `show --json --body` (TL-542) and is drawn through the
+ * safe markdown subset: proven here on the fixture's real bodies, on strings
+ * for the subset's edges, and against a stub of a build without the flag,
+ * where the panel says the body is not available rather than empty.
  */
 
 import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,16 +157,114 @@ test("a title holding HTML stays the text it was written as", () => {
   assert.match(page, /title\.textContent = text/);
 });
 
-test("the body is said to be unavailable, never shown as empty", () => {
-  const model = taskPanelModel(answers["TASK-1"]);
-  assert.equal("body" in answers["TASK-1"], false, "no read of the pin gives a body");
-  assert.equal(model.body.known, false);
-  assert.equal(model.body.text, TASK_TEXT.bodyUnavailable);
-  // Positive control: a body, once given, is drawn from blocks.
-  const given = taskPanelModel({ ...answers["TASK-1"], body: "## Goal\n\nRound once." });
-  assert.equal(given.body.known, true);
-  assert.deepEqual(given.body.blocks.map(b => b.type), ["heading", "paragraph"]);
+/* ---------- the body (UI-37, through `show --json --body`, TL-542) ---------- */
+
+const segmentsOf = blocks => blocks.flatMap(b => b.inlines || (b.items ? b.items.flatMap(i => i.inlines) : []));
+
+test("a fixture task's real body renders as headings, lists, fenced and inline code, and links", () => {
+  const a = answers["TASK-1"];
+  assert.equal(typeof a.body, "string", "the composed answer carries the body show --body printed");
+  assert.equal(a.body, a.show.body, "lifted from show, not read from anywhere else");
+  const model = taskPanelModel(a);
+  assert.equal(model.body.known, true);
+  assert.equal(model.body.text, null, "a body with blocks needs no sentence");
+  const blocks = model.body.blocks;
+  assert.ok(isPlainData(blocks));
+  const headings = blocks.filter(b => b.type === "heading").map(b => b.inlines.map(s => s.text).join(""));
+  assert.deepEqual(headings.slice(0, 3), ["Goal", "Context", "Steps"]);
+  const lists = blocks.filter(b => b.type === "list");
+  assert.deepEqual(lists.map(l => l.ordered), [true, false], "the steps are ordered, the acceptance criteria are not");
+  assert.deepEqual(lists[0].items.map(i => i.inlines.map(s => s.text).join("")), [
+    "Find every place that rounds", "Round once, in totals()", "Compare a year of invoices against the export",
+  ]);
+  assert.deepEqual(blocks.filter(b => b.type === "code"), [{ type: "code", lang: "js", text: 'const total = round(sum(lines), "half-even");' }]);
+  const segments = segmentsOf(blocks);
+  assert.ok(segments.some(s => s.type === "code" && s.text === "accounting"), "an inline code span");
+  assert.deepEqual(segments.filter(s => s.type === "link"), [{ type: "link", text: "the export notes", href: "https://example.com/export" }]);
+  assert.ok(segments.some(s => s.type === "text" && s.text.includes("[a bad link](javascript:alert(1))")), "the unsafe link stays visible as text");
+  assert.equal(blocks.filter(b => b.type === "paragraph").length >= 12, true, "every context paragraph is there");
+});
+
+test("HTML in a real body is shown as text, and an archived task's body is read all the same", () => {
+  const model = taskPanelModel(answers["TASK-3"]);
+  assert.equal(model.body.known, true);
+  const segments = segmentsOf(model.body.blocks);
+  for (const s of segments) assert.ok(["text", "code", "link"].includes(s.type), s.type);
+  const text = segments.map(s => s.text).join("");
+  for (const markup of ["<script>alert('body')</script>", "<b>markup</b>", "<img src=x onerror=alert(2)>"]) {
+    assert.ok(text.includes(markup), `${markup} is text`);
+  }
+  // The page draws blocks through textContent only; the title test checks the rest of that file.
+  assert.match(read("src/web/task.mjs"), /model\.body\.known && model\.body\.blocks\.length/);
+  // TASK-4 is done, so archived: show --body still reaches its file.
+  const four = taskPanelModel(answers["TASK-4"]);
+  assert.equal(four.body.known, true);
+  assert.match(answers["TASK-4"].body, /The helper nobody calls any more is gone\./);
+});
+
+test("the panel route carries the body, and an empty body is said to be empty", async () => {
+  const server = await createServer({ adapter, port: 0, log: () => {} });
+  try {
+    const res = await call(server, "/api/task/panel?id=TASK-1");
+    assert.equal(res.status, 200);
+    assert.equal(res.json.body, answers["TASK-1"].body);
+  } finally {
+    await server.close();
+  }
+  assert.equal(bodyModel("").known, true);
   assert.equal(bodyModel("").text, TASK_TEXT.bodyEmpty);
+});
+
+/**
+ * A build without `--body` (branchling 0.3.0 as published): the flag is a
+ * usage error, anything else is answered with a minimal task-show. Every
+ * spawn appends a line to `calls`, so the test can count them.
+ */
+function preBodyBin(root) {
+  const envelope = '{"schemaVersion":1,"kind":"task-show","ok":true,"id":"TASK-1","status":"pending","priority":"P1","title":"t","blocked":false,"blockers":[]}';
+  const calls = join(root, "calls");
+  const file = join(root, process.platform === "win32" ? "pre-body.cmd" : "pre-body");
+  if (process.platform === "win32") {
+    writeFileSync(file, [
+      "@echo off",
+      `echo %*>>"${calls}"`,
+      "for %%a in (%*) do if \"%%~a\"==\"--body\" (echo branchling show: unknown flag: --body 1>&2 & exit /b 2)",
+      `echo ${envelope}`,
+      "",
+    ].join("\r\n"));
+  } else {
+    writeFileSync(file, [
+      "#!/bin/sh",
+      `echo "$*" >> '${calls}'`,
+      'for a in "$@"; do if [ "$a" = "--body" ]; then echo "branchling show: unknown flag: --body" >&2; exit 2; fi; done',
+      `echo '${envelope}'`,
+      "",
+    ].join("\n"));
+  }
+  chmodSync(file, 0o755);
+  return { file, calls: () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split(/\r?\n/) : []) };
+}
+
+test("a build without show --body leaves the body unavailable, never empty, and is asked once", async () => {
+  const root = mkdtempSync(join(tmp, "pre-body-"));
+  const stub = preBodyBin(root);
+  const old = createAdapter({ bin: stub.file, dir: root });
+  const first = await old.show("TASK-1", { body: true });
+  assert.equal(first.kind, "task-show");
+  assert.equal("body" in first, false);
+  assert.equal(stub.calls().length, 2, "the refused --body, then the read without it");
+  await old.show("TASK-1", { body: true });
+  assert.equal(stub.calls().length, 3, "the refusal is remembered: no second --body");
+  assert.ok(stub.calls().slice(1).every(line => !line.includes("--body")));
+  const model = bodyModel(typeof first.body === "string" ? first.body : null);
+  assert.equal(model.known, false);
+  assert.equal(model.text, TASK_TEXT.bodyUnavailable);
+  // Any other usage error still throws: a bin that does not exist is not "no body".
+  await assert.rejects(createAdapter({ bin: join(root, "no-such-bin"), dir: root }).show("TASK-1", { body: true }));
+  // Positive control: the real executable accepts the flag and gives a string.
+  const real = await adapter.show("TASK-1", { body: true });
+  assert.equal(typeof real.body, "string");
+  assert.equal((await adapter.show("TASK-1")).body ?? null, null, "without the flag there is no body");
 });
 
 /* ---------- not found ---------- */
