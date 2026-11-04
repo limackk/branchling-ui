@@ -24,6 +24,7 @@ import release from "./release.mjs";
 import stats from "./stats.mjs";
 import task from "./task.mjs";
 import tasks from "./tasks.mjs";
+import vocabulary from "./vocabulary.mjs";
 
 export const views = [
   decisions,
@@ -33,4 +34,5 @@ export const views = [
   stats,
   task,
   tasks,
+  vocabulary,
 ];

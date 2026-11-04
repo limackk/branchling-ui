@@ -5,6 +5,7 @@
  * through textContent only: the model is data, never markup.
  */
 
+import { useVocabulary } from "/view-model/roles.mjs";
 import { STATS_TEXT, statsModel } from "/view-model/stats.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 
@@ -114,13 +115,38 @@ for (const link of document.querySelectorAll("[data-view-link]")) {
   if (link.dataset.viewLink === current) link.setAttribute("aria-current", "page");
   else link.removeAttribute("aria-current");
 }
-const shown = current === "stats"
-  ? (load(), Promise.resolve({ refresh: load }))
-  : import(VIEW_MODULES[current]).then(m => (m.start?.(document.querySelector(`[data-view="${current}"]`)), m));
+/**
+ * The backlog's vocabulary (UI-18): every status and priority colour, and the
+ * order of the stats rows, come from it (src/view-model/roles.mjs). It is read
+ * BEFORE any view starts, because a view that rendered first would paint the
+ * neutral palette and repaint a moment later. It never fails the page: a
+ * branchling without the command answers `null`, and any failure leaves the
+ * neutral palette while the view's own read reports what went wrong.
+ */
+async function loadVocabulary() {
+  try {
+    const res = await fetch("/api/vocabulary", { headers: { Accept: "application/json" } });
+    const body = res.ok ? await res.json().catch(() => null) : null;
+    useVocabulary(body && body.vocabulary);
+  } catch {
+    useVocabulary(null);
+  }
+}
+
+const vocabularyRead = loadVocabulary();
+const shown = vocabularyRead.then(() => current === "stats"
+  ? (load(), { refresh: load })
+  : import(VIEW_MODULES[current]).then(m => (m.start?.(document.querySelector(`[data-view="${current}"]`)), m)));
 
 // The task panel (UI-27) opens over every view: `?task=<ID>`, or any link
 // carrying `data-task`. Its own module, so no view repeats it.
-import("/task.mjs").then(m => m.start());
+const panel = vocabularyRead.then(() => import("/task.mjs"));
+panel.then(m => m.start());
 
-// Live refresh (UI-7): re-reads the modules on screen through their `refresh()`.
-import("/live.mjs").then(m => m.start([shown, import("/task.mjs")]));
+// Live refresh (UI-7): re-reads the modules on screen through their
+// `refresh()`. The view's refresh reads the vocabulary first, so an edit to
+// config.yaml recolours the view it changed.
+const withVocabulary = m => (m && typeof m.refresh === "function"
+  ? { refresh: () => loadVocabulary().then(() => m.refresh()) }
+  : m);
+import("/live.mjs").then(m => m.start([shown.then(withVocabulary), panel]));

@@ -20,6 +20,8 @@ import {
 import { BROKEN_GUARDS, buildBrokenBacklog, buildHealthyBacklog } from "./fixtures/health-backlog.mjs";
 import { OTHER_ACTOR, ROLES, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
 import { fixtureEnv } from "./fixtures/env.mjs";
+import { PRIORITIES, STATUSES, buildVocabularyBacklog } from "./fixtures/vocabulary-backlog.mjs";
+import { priorityRole, statusRole, vocabularyRoles } from "../src/view-model/roles.mjs";
 
 const BIN = process.env.BRANCHLING_BIN || "branchling";
 let root;
@@ -379,4 +381,71 @@ test("a writing call refuses a missing or flag-shaped value before branchling ru
   for (const call of refused) await assert.rejects(call(), err => err instanceof BranchlingUsageError && /required|flag/.test(err.message));
   // Positive control: a well-formed call does reach the spawn (and fails there).
   await assert.rejects(adapter.take("TASK-1"), err => !(err instanceof BranchlingUsageError && /flag|required/.test(err.message)));
+});
+
+/* ---------- vocabulary: the backlog's own words (UI-18, upstream TL-532) ---------- */
+
+let renamed;
+
+before(async () => {
+  renamed = await buildVocabularyBacklog(join(root, "renamed"));
+});
+
+test("vocabulary returns a non-default fixture's statuses and priorities, in declared order", async t => {
+  const answer = await on(renamed).vocabulary();
+  if (answer === null) {
+    // branchling 0.3.0, the published floor of the range, predates the
+    // command. Reported as a skip, never as a pass: nothing was proved.
+    t.skip("the executable under test has no `vocabulary` command (TL-532 is not in this build)");
+    return;
+  }
+  assert.equal(answer.kind, "vocabulary");
+  assert.deepEqual(
+    answer.statuses.map(({ name, archived, role, roleSource }) => ({ name, archived, role, roleSource })),
+    STATUSES,
+  );
+  assert.deepEqual(answer.priorities, PRIORITIES);
+  // The colours the views paint come from those roles and that order, not
+  // from names: none of the default names is declared here.
+  const roles = vocabularyRoles(answer);
+  const painted = Object.fromEntries(STATUSES.map(s => [s.name, statusRole(s.name, roles)]));
+  assert.deepEqual(painted, { todo: "neutral", doing: "progress", parked: "attention", review: "attention", shipped: "success", dropped: "muted" });
+  assert.deepEqual(PRIORITIES.map(p => priorityRole(p, roles)), ["danger", "attention", "neutral", "muted"]);
+  for (const name of ["pending", "in_progress", "done"]) assert.equal(statusRole(name, roles), "neutral", `${name} is not declared here`);
+  assert.equal(priorityRole("P0", roles), "neutral");
+  // Positive control: the default fixture's vocabulary is a different answer,
+  // so the one above was read from this backlog and not from a default.
+  const defaults = await createAdapter({ bin: BIN, dir, cwd: root }).vocabulary();
+  assert.deepEqual(defaults.priorities, ["P0", "P1", "P2", "P3"]);
+  assert.notDeepEqual(defaults.statuses.map(s => s.name), answer.statuses.map(s => s.name));
+});
+
+/** A fake branchling that prints `message` on stderr and exits 2, as an unknown command does. */
+function fakeUsage(name, message) {
+  const file = join(root, process.platform === "win32" ? `${name}.cmd` : name);
+  if (process.platform === "win32") writeFileSync(file, `@echo ${message} 1>&2\r\n@exit /b 2\r\n`);
+  else writeFileSync(file, `#!/bin/sh\necho '${message}' >&2\nexit 2\n`);
+  chmodSync(file, 0o755);
+  return file;
+}
+
+test("vocabulary from an executable without the command is null, not an error", async () => {
+  const old = fakeUsage("fake-vocabulary-unknown", "x branchling: unknown command: vocabulary");
+  assert.equal(await createAdapter({ bin: old }).vocabulary(), null);
+  // Positive control: any OTHER usage error is still thrown, so null is not
+  // what every failure becomes.
+  const otherwise = fakeUsage("fake-vocabulary-flag", "x branchling: unknown flag: --json");
+  await assert.rejects(createAdapter({ bin: otherwise }).vocabulary(), BranchlingUsageError);
+});
+
+test("a vocabulary envelope without status roles is a contract mismatch", async () => {
+  const base = { schemaVersion: 1, kind: "vocabulary", root: "/r/backlog" };
+  const good = fakeBin("fake-vocabulary-ok", JSON.stringify({ ...base, statuses: [{ name: "open", archived: false, role: "open" }], priorities: ["A"] }), 0);
+  assert.equal((await createAdapter({ bin: good }).vocabulary()).statuses[0].name, "open");
+  const noRole = fakeBin("fake-vocabulary-no-role", JSON.stringify({ ...base, statuses: [{ name: "open", archived: false }], priorities: ["A"] }), 0);
+  await assert.rejects(createAdapter({ bin: noRole }).vocabulary(), ContractMismatch);
+  const badPriority = fakeBin("fake-vocabulary-priority", JSON.stringify({ ...base, statuses: [], priorities: [1] }), 0);
+  await assert.rejects(createAdapter({ bin: badPriority }).vocabulary(), ContractMismatch);
+  const otherKind = fakeBin("fake-vocabulary-stats", JSON.stringify({ schemaVersion: 1, kind: "stats", root: "/r/backlog" }), 0);
+  await assert.rejects(createAdapter({ bin: otherKind }).vocabulary(), ContractMismatch);
 });

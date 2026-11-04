@@ -8,8 +8,9 @@
  *
  * Colour roles: a status or priority gets a role from
  * src/view-model/roles.mjs, never a colour. All six roles are styled here;
- * every status and priority maps to "neutral" until UI-18. A new role is
- * added here and in roles.mjs together.
+ * which status gets which comes from the backlog's `vocabulary` (UI-18),
+ * and "neutral" when that is not known. A new role is added here and in
+ * roles.mjs together.
  *
  * docs/design/tokens.css and components.css are the source; change them
  * there first and copy, so the design-system page stays the truth.
@@ -95,8 +96,9 @@
 
   /* ---------- semantic: colour ROLES for statuses and priorities ----------
    * A role is what a status or priority MEANS to the reader, never which
-   * status it is. Until UI-18 brings the vocabulary from the CLI, every
-   * status and priority renders as `neutral` (see roles.mjs). */
+   * status it is: roles.mjs maps branchling's status roles and the declared
+   * priority order to these (UI-18), and `neutral` when the vocabulary is
+   * not known. */
   --role-neutral-bg: light-dark(var(--n-100), #252c29);
   --role-neutral-fg: light-dark(var(--n-800), #d4dbd8);
   --role-neutral-dot: light-dark(var(--n-500), #8d9793);

@@ -36,7 +36,8 @@ assumptions, so correct any that are wrong.
 - **Constraints, from docs/architecture.md.** Zero dependencies, no build,
   native ES modules, a strict CSP (`default-src 'self'`): no web fonts, no CDN,
   no inline script in the app. WCAG 2.2 AA in light and dark. Every write is a
-  branchling command; status and priority colours stay neutral until UI-18.
+  branchling command; status and priority colours come from the backlog's vocabulary (UI-18),
+  neutral when the installed branchling cannot give it.
 - **Tone.** A tool for work: calm, dense, exact. Not a marketing page.
 
 ## Principles
@@ -89,7 +90,6 @@ a drawer; below 640 px tables fold into lists.
 The mockups show the target, so a few things on them have no data source
 today. Each one is either an upstream task or a small view-model computation:
 
-- **Status and priority colours** wait on UI-18; today they render neutral.
 - **"No change for 5 days"** and wait times per stage need history timestamps
   per task (`log`) or `deploy status`; confirm the envelope carries them.
 - **Refusal kinds** shown (`not-holder`, `stale-reference`, `no-plan`) are
@@ -107,8 +107,8 @@ stats, plan, release and decisions views, each after its mockup.
 `src/web/icons.svg` is `icons.svg` copied; the page uses it for the brand,
 the view links and the plan's waves. Change a token, component or icon here
 first, then copy it; the ui-web skill says the same. The roles are listed in
-`ROLES` in `src/view-model/roles.mjs`; every status and priority still maps to
-`neutral` (UI-18).
+`ROLES` in `src/view-model/roles.mjs`, which maps the backlog's vocabulary to
+them (UI-18) and falls back to `neutral` when it is not known.
 
 The shell is the sidebar of `mockups/shell.js` from 64rem up. Below that it is
 a band above the page with the four view links in one row, not the mockups'

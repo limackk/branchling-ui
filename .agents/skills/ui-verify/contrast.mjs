@@ -94,7 +94,7 @@ const PAIRS = [
   ["color-text-default", "color-action-secondary", TEXT, "Try again, Clear"],
   ["color-text-default", "color-action-secondary-hover", TEXT, "a secondary button under the pointer"],
   ["color-action-disabled-fg", "color-action-disabled-bg", TEXT, "a decision being sent"],
-  // status and priority roles (all neutral until UI-18; the six are styled)
+  // status and priority roles (from the vocabulary since UI-18; the six are styled)
   ...["neutral", "progress", "attention", "danger", "success", "muted"].map(r => [`role-${r}-fg`, `role-${r}-bg`, TEXT, `the ${r} role pill or tag`]),
   // view states
   ...["error", "refusal", "stale", "recorded"].map(s => [`state-${s}-fg`, `state-${s}-bg`, TEXT, `the ${s} state`]),

@@ -80,11 +80,14 @@ Statuses and priorities get a **role** (`role` in the view model, class
 `role-<role>` on the page, `--role-<role>-bg/-fg/-dot` tokens), never a
 colour. Six roles are styled: `neutral`, `progress`, `attention`, `danger`,
 `success`, `muted` (their meaning is on the design-system page).
-**Every status and priority is `neutral` until UI-18** brings the status and
-priority vocabulary from the CLI as JSON. The UI may not read config.yaml,
-and guessing from key names (`done` is green) would colour a custom or
-renamed status wrongly in someone else's backlog. When UI-18 lands, the
-functions in `src/view-model/roles.mjs` take the vocabulary as an argument.
+**A status's role comes from the backlog's vocabulary** (UI-18): the
+`vocabulary` envelope gives each status a semantic role (open, active,
+waiting, closed, cancelled) and the priorities in declared order, and
+`src/view-model/roles.mjs` maps those to the six roles. The page loads it
+once before any view starts (`useVocabulary` in src/web/app.mjs). Never
+colour by key name (`done` is green): that is wrong in someone else's
+backlog. When the vocabulary is not known (branchling 0.3.0 has no such
+command) everything is `neutral`.
 Colour is never the only signal: the label is always shown.
 
 ## The states every view has

@@ -127,10 +127,13 @@ label, an empty state or a refusal is decided once, here.
   are taken from the envelope as branchling computed them, never derived
   from status names, until UI-18. A backlog with a custom archived status
   would otherwise get a wrong number.
-- Status and priority roles are all `neutral` until UI-18. The vocabulary is
-  in the backlog's config.yaml, which this package may not read, and no
-  branchling command returns it as JSON yet (`stats --json` gives only the
-  keys of `byStatus` and `byPriority`).
+- Status and priority roles come from `branchling vocabulary --json`
+  (UI-18, upstream TL-532), read through `adapter.vocabulary()` and served as
+  `GET /api/vocabulary`: each status's semantic role, the priorities in
+  declared order. A surface loads it once with `useVocabulary` before it
+  renders (src/view-model/roles.mjs). A branchling without the command
+  (0.3.0) answers `null`, and every role is then `neutral`; nothing is ever
+  guessed from a status name.
 
 ## The API and its errors
 

@@ -104,7 +104,7 @@
  * the fingerprint changes for every entry on any write anyway.
  *
  * WHAT A CACHED CALL RETURNS. The reading methods (query, stats, plan, show,
- * log, deployStatus, setFields) resolve to a frozen
+ * log, deployStatus, setFields, vocabulary) resolve to a frozen
  *
  *   { envelope, answeredAt, fromCache }
  *
@@ -138,8 +138,13 @@ export const RACY_MS = 2000;
  * from config.yaml, which sits inside the backlog directory the fingerprint
  * walks. Left out of this list it would pass through as a write and empty
  * the cache on every panel read.
+ *
+ * `vocabulary` (UI-18) is cached like the others: it answers from config.yaml
+ * too, so an edit to it is a miss. A `null` answer (an executable without the
+ * command) is cached as well; upgrading the executable under a running cache
+ * is a known limit above.
  */
-export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus", "setFields"];
+export const CACHED_READS = ["query", "stats", "plan", "show", "log", "deployStatus", "setFields", "vocabulary"];
 
 /**
  * Methods that pass through without invalidating: they do not change a backlog.

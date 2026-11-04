@@ -12,7 +12,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { STATS_TEXT, statsModel } from "../src/view-model/stats.mjs";
 import { fromAdapterError, fromApiError, loadingState, rejectedInputState, unreachableState } from "../src/view-model/states.mjs";
 import { BranchlingRefusal, BranchlingUsageError, ContractMismatch } from "../src/adapter.mjs";
-import { priorityRole, statusRole } from "../src/view-model/roles.mjs";
+import {
+  ROLES, comparePriorities, compareStatuses, currentVocabulary, priorityColourAt, priorityRole, statusRole, useVocabulary, vocabularyRoles,
+} from "../src/view-model/roles.mjs";
 import { DECISIONS_TEXT, answerCommands, shellWord } from "../src/view-model/decisions.mjs";
 import { PLAN_TEXT, taskNotes } from "../src/view-model/plan.mjs";
 import { RELEASE_TEXT, releaseModel } from "../src/view-model/release.mjs";
@@ -128,9 +130,91 @@ test("anything but a stats envelope is rejected instead of rendered as zeros", (
   assert.throws(() => statsModel(null), TypeError);
 });
 
-test("every status and priority has the neutral role until UI-18", () => {
+test("every status and priority has the neutral role while the vocabulary is not known", () => {
+  assert.equal(currentVocabulary(), null);
   for (const key of ["pending", "done", "blocked", "anything-custom"]) assert.equal(statusRole(key), "neutral");
   for (const key of ["P0", "P3", "high"]) assert.equal(priorityRole(key), "neutral");
+  // An executable without the command answers null: still not known.
+  assert.equal(vocabularyRoles(null), null);
+  assert.equal(vocabularyRoles({ kind: "vocabulary" }), null);
+});
+
+/** A `vocabulary` envelope in the shape branchling prints (TL-532), renamed throughout. */
+function vocabularyEnvelope() {
+  return {
+    schemaVersion: 1,
+    kind: "vocabulary",
+    statuses: [
+      { name: "todo", archived: false, reasonRequired: false, role: "open", roleSource: "derived" },
+      { name: "doing", archived: false, reasonRequired: false, role: "active", roleSource: "derived" },
+      { name: "parked", archived: false, reasonRequired: true, role: "waiting", roleSource: "derived" },
+      { name: "shipped", archived: true, reasonRequired: false, role: "closed", roleSource: "derived" },
+      { name: "dropped", archived: true, reasonRequired: true, role: "cancelled", roleSource: "derived" },
+      { name: "later", archived: false, reasonRequired: false, role: "some-future-role", roleSource: "status_roles" },
+    ],
+    priorities: ["urgent", "high", "normal", "someday"],
+  };
+}
+
+test("a known vocabulary colours statuses by their role and priorities by their order", () => {
+  const v = vocabularyRoles(vocabularyEnvelope());
+  const painted = ["todo", "doing", "parked", "shipped", "dropped", "later"].map(s => statusRole(s, v));
+  assert.deepEqual(painted, ["neutral", "progress", "attention", "success", "muted", "neutral"]);
+  assert.deepEqual(["urgent", "high", "normal", "someday"].map(p => priorityRole(p, v)), ["danger", "attention", "neutral", "muted"]);
+  for (const role of [...painted, "danger"]) assert.ok(ROLES.includes(role), `${role} is styled`);
+  // Names the vocabulary does not declare are neutral, defaults included:
+  // nothing is guessed from a name.
+  for (const name of ["pending", "done", "in_progress"]) assert.equal(statusRole(name, v), "neutral");
+  assert.equal(priorityRole("P0", v), "neutral");
+  assert.deepEqual([...v.archived], ["shipped", "dropped"]);
+});
+
+test("priority colours need at least two priorities and read only the order", () => {
+  assert.equal(priorityColourAt(0, 1), "neutral");
+  assert.deepEqual([0, 1].map(i => priorityColourAt(i, 2)), ["danger", "attention"]);
+  assert.deepEqual([0, 1, 2].map(i => priorityColourAt(i, 3)), ["danger", "attention", "muted"]);
+  assert.equal(priorityColourAt(5, 3), "neutral");
+});
+
+test("useVocabulary sets what statusRole reads by default, and null forgets it", () => {
+  try {
+    useVocabulary(vocabularyEnvelope());
+    assert.equal(statusRole("doing"), "progress");
+    assert.equal(priorityRole("urgent"), "danger");
+    // An explicit argument wins over the one in use.
+    assert.equal(statusRole("doing", null), "neutral");
+  } finally {
+    useVocabulary(null);
+  }
+  assert.equal(statusRole("doing"), "neutral");
+});
+
+test("stats rows follow the declared order when the vocabulary is known, and keep their colours", () => {
+  const stats = {
+    ...envelope(),
+    stats: { total: 4, active: 2, archived: 2, byStatus: { shipped: 1, todo: 1, dropped: 1, doing: 1 }, byPriority: { someday: 1, urgent: 2, high: 1 } },
+  };
+  const unknown = statsModel(stats);
+  // Not known: the envelope's status order, priorities by name, all neutral.
+  assert.deepEqual(unknown.byStatus.map(r => r.key), ["shipped", "todo", "dropped", "doing"]);
+  assert.deepEqual(unknown.byPriority.map(r => r.key), ["high", "someday", "urgent"]);
+  assert.ok([...unknown.byStatus, ...unknown.byPriority].every(r => r.role === "neutral"));
+  try {
+    useVocabulary(vocabularyEnvelope());
+    const known = statsModel(stats);
+    assert.deepEqual(known.byStatus.map(r => [r.key, r.role]), [["todo", "neutral"], ["doing", "progress"], ["shipped", "success"], ["dropped", "muted"]]);
+    assert.deepEqual(known.byPriority.map(r => [r.key, r.role]), [["urgent", "danger"], ["high", "attention"], ["someday", "muted"]]);
+  } finally {
+    useVocabulary(null);
+  }
+});
+
+test("names the vocabulary does not declare sort after the declared ones, by name", () => {
+  const v = vocabularyRoles(vocabularyEnvelope());
+  assert.deepEqual(["zeta", "shipped", "alpha", "todo"].sort((a, b) => compareStatuses(a, b, v)), ["todo", "shipped", "alpha", "zeta"]);
+  assert.deepEqual(["P10", "someday", "P2", "urgent"].sort((a, b) => comparePriorities(a, b, v)), ["urgent", "someday", "P2", "P10"]);
+  // Without a vocabulary: by name, numeric-aware.
+  assert.deepEqual(["P10", "P2", "P1"].sort((a, b) => comparePriorities(a, b, null)), ["P1", "P2", "P10"]);
 });
 
 test("a refusal body becomes the refusal state, other failures the error state", () => {

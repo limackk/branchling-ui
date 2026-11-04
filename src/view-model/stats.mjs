@@ -9,13 +9,15 @@
  * here, with a test, rather than computing it in the surface.
  */
 
-import { priorityRole, statusRole } from "./roles.mjs";
+import { comparePriorities, compareStatuses, currentVocabulary, priorityRole, statusRole } from "./roles.mjs";
 
 /*
  * Counts that depend on the vocabulary (which statuses are archived, which
  * block) are taken from the envelope as branchling computed them, never
  * derived here from status names: a backlog may name its statuses anything.
- * That holds until UI-18 brings the vocabulary from the CLI.
+ * The vocabulary (UI-18, src/view-model/roles.mjs) gives only colour and
+ * ORDER: statuses in the order config.yaml declares them when it is known,
+ * else in the envelope's order; priorities in declared order, else by name.
  */
 
 /**
@@ -53,6 +55,7 @@ export function statsModel(envelope, freshness = {}) {
   }
   const s = envelope.stats;
   const byStatus = rows(s.byStatus, statusRole);
+  if (currentVocabulary()) byStatus.sort((a, b) => compareStatuses(a.key, b.key));
   const total = Number(s.total) || 0;
 
   return {
@@ -68,7 +71,7 @@ export function statsModel(envelope, freshness = {}) {
       { key: "archived", label: "Archived", value: Number(s.archived) || 0 },
     ],
     byStatus,
-    byPriority: rows(s.byPriority, priorityRole).sort((a, b) => a.key.localeCompare(b.key, "en", { numeric: true })),
+    byPriority: rows(s.byPriority, priorityRole).sort((a, b) => comparePriorities(a.key, b.key)),
     openHours: {
       hours: Number(s.openHours?.hours) || 0,
       unknown: Number(s.openHours?.unknown) || 0,

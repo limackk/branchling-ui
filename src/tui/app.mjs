@@ -13,6 +13,7 @@
  * run the whole loop with fake objects and no terminal.
  */
 
+import { useVocabulary } from "../view-model/roles.mjs";
 import { fromAdapterError, loadingState } from "../view-model/states.mjs";
 import { KEYS, actionFor, maxScroll, renderScreen } from "./render.mjs";
 import { SCREENS, screenById } from "./screens/index.mjs";
@@ -38,13 +39,30 @@ async function fetchModel(screen, source, now) {
   const adapter = scope ? scope.adapter : source;
   let input;
   try {
-    input = await screen.read(adapter);
+    [input] = await Promise.all([screen.read(adapter), loadVocabulary(adapter)]);
   } catch (err) {
     return { model: fromAdapterError(screen.id, err), input: null, fetchedAt: null };
   }
   const at = scope ? scope.answeredAt() : null;
   const fetchedAt = at === null || at === undefined ? null : new Date(at).toISOString();
   return { model: screen.model(input, { fetchedAt }, now()), input, fetchedAt };
+}
+
+/**
+ * The vocabulary the models colour and order by (UI-18), read with every
+ * screen's read so an edit to config.yaml shows on the next refresh; through
+ * the cache that is a hit while nothing changed. It never fails the screen:
+ * an adapter without the call, an executable without the command (null) or a
+ * failed read leaves the neutral palette, and the screen's own read reports
+ * any failure it shares.
+ */
+async function loadVocabulary(adapter) {
+  if (typeof adapter.vocabulary !== "function") return useVocabulary(null);
+  try {
+    return useVocabulary(await adapter.vocabulary());
+  } catch {
+    return useVocabulary(null);
+  }
 }
 
 /**

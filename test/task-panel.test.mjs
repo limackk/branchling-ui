@@ -249,7 +249,11 @@ test("the panel's page modules are served", async () => {
 /* ---------- links from the views, and the URL ---------- */
 
 test("the tasks, plan and decisions views link task ids to the panel", () => {
-  assert.match(read("src/web/app.mjs"), /import\("\/task\.mjs"\)\.then\(m => m\.start\(\)\)/);
+  // The panel is imported only after the vocabulary is read (UI-18), so its
+  // first paint already uses branchling's colours; then it is started.
+  const app = read("src/web/app.mjs");
+  assert.match(app, /const panel = vocabularyRead\.then\(\(\) => import\("\/task\.mjs"\)\);/);
+  assert.match(app, /panel\.then\(m => m\.start\(\)\);/);
   assert.match(read("src/web/tasks.mjs"), /"data-task": row\.id/);
   assert.match(read("src/web/plan.mjs"), /"data-task": task\.id/);
   assert.match(read("src/web/decisions.mjs"), /"data-task": q\.taskId/);

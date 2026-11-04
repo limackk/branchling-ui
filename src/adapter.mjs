@@ -586,6 +586,47 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
 
     stats: () => json(["stats"], "stats"),
     /**
+     * `vocabulary`: the words config.yaml declares, in declared order (UI-18,
+     * upstream TL-532). Measured on branchling main after TL-532:
+     *
+     *   { schemaVersion: 1, kind: "vocabulary", root,
+     *     statuses: [{ name, archived, reasonRequired, role, roleSource }],
+     *     priorities: [string], types, confidence, estimates, labels,
+     *     labels_closed, boards: [{ slug, name, isDefault }], roles,
+     *     releases, deploy_targets }
+     *
+     * `role` is one of open, active, waiting, closed, cancelled. Only
+     * `statuses` and `priorities` are checked here, because they are what a
+     * view reads; a status without a name, a role or an archived flag, or a
+     * priority that is not a name, is a ContractMismatch rather than an
+     * uncoloured row.
+     *
+     * Resolves to `null` when the executable has no `vocabulary` command:
+     * branchling 0.3.0, the published floor of SUPPORTED_RANGE, predates it,
+     * and answers `unknown command: vocabulary` on stderr with exit 2. Inside
+     * the supported range that is an answer ("this build cannot say"), not a
+     * bug of this package, so it is not a BranchlingUsageError; the views then
+     * keep the neutral palette. `null` is "not known", never "empty". Any
+     * other usage error still throws.
+     */
+    async vocabulary() {
+      let envelope;
+      try {
+        envelope = await json(["vocabulary"], "vocabulary");
+      } catch (err) {
+        if (err instanceof BranchlingUsageError && err.code === 2 && /unknown command:?\s*vocabulary\b/.test(err.stderr || "")) return null;
+        throw err;
+      }
+      const { statuses, priorities } = envelope;
+      if (!Array.isArray(statuses) || !statuses.every(s => s && typeof s.name === "string" && s.name && typeof s.role === "string" && typeof s.archived === "boolean")) {
+        throw new ContractMismatch("vocabulary answered statuses without a name, a role or an archived flag");
+      }
+      if (!Array.isArray(priorities) || !priorities.every(p => typeof p === "string" && p)) {
+        throw new ContractMismatch("vocabulary answered priorities that are not names");
+      }
+      return envelope;
+    },
+    /**
      * `where`: the backlog this run would read and the rule that found it,
      * plus this machine's branchling homes. Measured on branchling 0.3.0:
      *

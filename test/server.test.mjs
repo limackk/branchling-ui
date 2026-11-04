@@ -89,6 +89,17 @@ test("the stats endpoint returns the adapter's stats envelope for the fixture", 
   assert.deepEqual(res.json.stats, direct.stats);
 });
 
+test("the vocabulary endpoint wraps what the adapter answered, null included", async () => {
+  const res = await call(server, { path: "/api/vocabulary" });
+  assert.equal(res.status, 200);
+  assert.ok(res.json && Object.hasOwn(res.json, "vocabulary"), res.text);
+  const direct = await createAdapter({ bin: BIN, dir, cwd: root }).vocabulary();
+  // The same answer the adapter gives: the envelope from a branchling that
+  // has the command, null from one that predates it (0.3.0).
+  assert.deepEqual(res.json.vocabulary, direct);
+  if (direct !== null) assert.equal(res.json.vocabulary.kind, "vocabulary");
+});
+
 test("the page's script and the shared view model are served as ES modules", async () => {
   for (const path of ["/app.mjs", "/view-model/stats.mjs", "/view-model/states.mjs", "/view-model/roles.mjs"]) {
     const res = await call(server, { path });

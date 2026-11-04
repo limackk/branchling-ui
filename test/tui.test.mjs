@@ -553,7 +553,9 @@ test("the TUI reads through the cache: an unchanged backlog is answered without 
     await settle();
     s.stdin.emit("data", "r");
     await waitFor("Tasks 3");
-    assert.equal(spawns(), afterFirst + 1, "a changed backlog is read with one spawn");
+    // Two reads, each one spawn: the screen's stats and the vocabulary its
+    // colours come from (UI-18), which a change invalidates like any entry.
+    assert.equal(spawns(), afterFirst + 2, "a changed backlog is read again, one spawn per read");
 
     s.stdin.emit("data", "q");
     assert.equal(await s.done, 0);
