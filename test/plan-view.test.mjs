@@ -15,7 +15,8 @@ import { join } from "node:path";
 
 import { createAdapter, BranchlingRefusal } from "../src/adapter.mjs";
 import { createServer } from "../src/server.mjs";
-import { planModel } from "../src/view-model/plan.mjs";
+import { PLAN_REFUSAL_TEXT, planModel } from "../src/view-model/plan.mjs";
+import planScreen from "../src/tui/screens/plan.mjs";
 import { taskDetailModel } from "../src/view-model/task.mjs";
 import { TASK_ID } from "../src/views/task.mjs";
 import { BIN, PLAN_RATIONALE, TITLES, WAVES, buildEmptyBacklog, buildPlanBacklog } from "./fixtures/plan-backlog.mjs";
@@ -69,13 +70,14 @@ after(() => {
 test("the real plan envelope carries every key the model reads", () => {
   assert.equal(planEnvelope.kind, "plan");
   assert.equal(planEnvelope.schemaVersion, 1);
-  for (const key of ["exists", "rationale", "updated", "waves", "activeWave", "nextUp", "inProgress", "unplanned", "coverage", "stale"]) {
+  for (const key of ["ok", "exists", "rationale", "updated", "waves", "activeWave", "nextUp", "inProgress", "unplanned", "coverage", "stale", "refusalKind", "refusal", "problems"]) {
     assert.ok(key in planEnvelope, `plan envelope has ${key}`);
   }
   for (const key of ["index", "name", "tasks", "together", "open", "closed", "active", "endsOnHuman"]) {
     assert.ok(key in planEnvelope.waves[0], `a wave has ${key}`);
   }
-  for (const key of ["id", "status", "known", "open", "executor"]) assert.ok(key in planEnvelope.waves[0].tasks[0], `a wave task has ${key}`);
+  assert.equal(planEnvelope.ok, true);
+  for (const key of ["id", "title", "status", "blocked_by", "known", "open", "executor"]) assert.ok(key in planEnvelope.waves[0].tasks[0], `a wave task has ${key}`);
   for (const key of ["together", "ids", "executors", "waitsOnHuman"]) assert.ok(key in planEnvelope.nextUp[0], `a nextUp entry has ${key}`);
   for (const key of ["open", "planned", "unplanned", "share"]) assert.ok(key in planEnvelope.coverage, `coverage has ${key}`);
   assert.equal(taskList.kind, "task-list");
@@ -169,12 +171,34 @@ test("every wave closed: no active wave, the summary says the plan is finished",
 });
 
 test("without the task list the model says dependencies are unknown, never that there are none", () => {
-  const model = planModel(planEnvelope, {}, null);
+  // The shape of a plan envelope from before TL-534: no title, no blocked_by.
+  const bare = structuredClone(planEnvelope);
+  for (const wave of bare.waves) for (const t of wave.tasks) { delete t.title; delete t.blocked_by; }
+  const model = planModel(bare, {}, null);
   assert.equal(model.dependenciesKnown, false);
   assert.equal(model.waves[1].tasks.find(t => t.id === "TASK-3").title, null);
+  assert.deepEqual(model.waves[1].tasks.find(t => t.id === "TASK-3").waitsOn, []);
   // The plan's own answers do not depend on it.
   assert.deepEqual(model.waves.map(w => w.active), [true, false]);
   assert.deepEqual(ids(model.unplanned.tasks), ["TASK-5"]);
+  // Positive control: the plan envelope itself carries titles and edges, so
+  // with no task list a planned task still has both; only the unplanned one
+  // is shown by id.
+  const real = planModel(planEnvelope, {}, null);
+  assert.equal(real.dependenciesKnown, false);
+  const roof = real.waves[1].tasks.find(t => t.id === "TASK-3");
+  assert.equal(roof.title, TITLES["TASK-3"]);
+  assert.deepEqual(roof.waitsOn, [{ id: "TASK-2", open: true }]);
+  assert.equal(real.unplanned.tasks[0].title, null);
+});
+
+test("a closed planned task keeps its title, which the active-only task list cannot give", () => {
+  const model = planModel(planEnvelope, {}, taskList);
+  assert.ok(!taskList.tasks.some(t => t.id === "TASK-4"), "positive control: the task list does not hold the closed TASK-4");
+  const doors = model.waves[1].tasks.find(t => t.id === "TASK-4");
+  assert.equal(doors.open, false);
+  assert.equal(doors.title, TITLES["TASK-4"]);
+  assert.equal(model.overtaken[0].title, TITLES["TASK-4"]);
 });
 
 test("no plan at all is the empty state, not an error", async () => {
@@ -190,12 +214,128 @@ test("no plan at all is the empty state, not an error", async () => {
 
 test("a plan with no waves yet is the empty state too", async () => {
   const bare = await buildEmptyBacklog(join(tmp, "no-waves"));
-  writeFileSync(join(bare.dir, "plan.yaml"), "rationale: \"Not decided yet.\"\nwaves:\n");
+  await bare.branchling(["plan", "init", "--rationale", "Not decided yet.", "--dir", bare.dir]);
   const envelope = await createAdapter({ bin: BIN, dir: bare.dir, cwd: bare.root }).plan();
   assert.equal(envelope.exists, true);
   const model = planModel(envelope);
   assert.equal(model.state, "empty");
   assert.equal(model.emptyReason, "no-waves");
+  assert.equal(model.rationale, "Not decided yet.");
+});
+
+/* ---------- a broken plan (UI-22) ---------- */
+
+/**
+ * A backlog whose plan schedules TASK-1 in wave 1 and TASK-2 in wave 2, built
+ * only through branchling. `contradict` then makes TASK-1 wait on TASK-2 with
+ * `set`, which edits a field and does not consult the plan: the order the plan
+ * already holds becomes one that cannot be executed, the way it does in a
+ * real backlog when a dependency is found after the plan was written.
+ */
+async function twoTaskPlan(name, { contradict = false } = {}) {
+  const built = await buildEmptyBacklog(join(tmp, name));
+  const { dir, branchling } = built;
+  const tasks = ["One", "Two"].map(title => ({
+    plan_id: title.toLowerCase(), title, goal: title, priority: "P1", estimate: "1h",
+    verification: [{ id: "noop", bash: "true", proves: "The fixture can be closed." }],
+  }));
+  await branchling(["seed", "--dir", dir, "--actor", "agent:fixture"], { input: JSON.stringify({ planVersion: 1, meta: {}, tasks }) });
+  await branchling(["plan", "init", "--rationale", "One before two.", "--dir", dir]);
+  await branchling(["plan", "add", "TASK-1", "--wave", "First", "--why", "It comes first.", "--dir", dir]);
+  await branchling(["plan", "add", "TASK-2", "--wave", "Second", "--why", "It comes after.", "--dir", dir]);
+  if (contradict) await branchling(["set", "TASK-1", "blocked_by", "TASK-2", "--actor", "agent:fixture", "--dir", dir]);
+  return { ...built, adapter: createAdapter({ bin: BIN, dir, cwd: built.root }) };
+}
+
+test("a plan that contradicts blocked_by is the refusal state, not an interface error", async () => {
+  const broken = await twoTaskPlan("contradicts", { contradict: true });
+  const err = await broken.adapter.plan().then(() => null, e => e);
+  assert.ok(err instanceof BranchlingRefusal, `a refusal, not ${err && err.name}`);
+  assert.equal(err.envelope.kind, "plan");
+  assert.equal(err.envelope.refusalKind, "plan-contradicts-blocked-by");
+
+  const model = planModel(err.envelope);
+  assert.equal(model.view, "plan");
+  assert.equal(model.state, "refusal");
+  assert.equal(model.title, PLAN_REFUSAL_TEXT.titles["plan-contradicts-blocked-by"]);
+  assert.equal(model.refusalKind, "plan-contradicts-blocked-by");
+  assert.equal(model.detail, err.envelope.refusal);
+  assert.equal(model.details.length, 1);
+  assert.match(model.details[0], /TASK-1 .*blocked by TASK-2/);
+  assert.equal(model.hint, PLAN_REFUSAL_TEXT.hint);
+  assert.equal(model.root, err.envelope.root);
+  assert.ok(isPlainData(model));
+  for (const s of strings(model)) assert.doesNotMatch(s, /<[a-z/!]|\x1b/i);
+
+  // Positive control: the same plan before the dependency is a ready plan.
+  const sound = await twoTaskPlan("contradicts-control");
+  const control = planModel(await sound.adapter.plan());
+  assert.equal(control.state, "ready");
+  assert.deepEqual(control.waves.map(w => ids(w.tasks)), [["TASK-1"], ["TASK-2"]]);
+});
+
+test("a plan that contradicts blocked_by reaches both surfaces as the plan's refusal", async () => {
+  const broken = await twoTaskPlan("contradicts-surfaces", { contradict: true });
+
+  // The terminal: the screen reads it through the adapter and the model it
+  // builds is the refusal with the problems, not the generic "declined".
+  const screenModel = planScreen.model(await planScreen.read(broken.adapter), {});
+  assert.equal(screenModel.state, "refusal");
+  assert.equal(screenModel.title, PLAN_REFUSAL_TEXT.titles["plan-contradicts-blocked-by"]);
+  assert.equal(screenModel.details.length, 1);
+
+  // The page: the route answers 409 with the plan envelope, which the page
+  // hands to planModel (src/web/plan.mjs, failureModel).
+  const server = await createServer({ adapter: broken.adapter, port: 0, log: () => {} });
+  try {
+    const res = await call(server, "/api/plan");
+    assert.equal(res.status, 409);
+    assert.equal(res.json.error.type, "refusal");
+    assert.equal(res.json.error.envelope.kind, "plan");
+    assert.equal(planModel(res.json.error.envelope).state, "refusal");
+  } finally {
+    await server.close();
+  }
+
+  // Positive control: a sound plan reaches the terminal screen as ready.
+  const sound = await twoTaskPlan("contradicts-surfaces-control");
+  assert.equal(planScreen.model(await planScreen.read(sound.adapter), {}).state, "ready");
+});
+
+test("an unparsable plan is the refusal state, never the empty plan", async () => {
+  const bare = await buildEmptyBacklog(join(tmp, "unparsable"));
+  const adapter = createAdapter({ bin: BIN, dir: bare.dir, cwd: bare.root });
+  await bare.branchling(["plan", "init", "--rationale", "Not decided yet.", "--dir", bare.dir]);
+  // Positive control: the plan as `plan init` wrote it reads, and is empty.
+  const before = planModel(await adapter.plan());
+  assert.equal(before.state, "empty");
+  assert.equal(before.emptyReason, "no-waves");
+
+  // The one plan.yaml written by hand, and deliberately: a broken file is
+  // what a person's hand edit leaves, and no branchling command writes one.
+  writeFileSync(join(bare.dir, "plan.yaml"), "waves: [oops\n");
+  const err = await adapter.plan().then(() => null, e => e);
+  assert.ok(err instanceof BranchlingRefusal, `a refusal, not ${err && err.name}`);
+  assert.equal(err.envelope.refusalKind, "plan-unparsable");
+  assert.deepEqual(err.envelope.waves, [], "the envelope's waves are empty, which is why the state must not be");
+
+  const model = planModel(err.envelope);
+  assert.equal(model.state, "refusal");
+  assert.notEqual(model.state, "empty");
+  assert.equal(model.emptyReason, undefined);
+  assert.equal(model.title, PLAN_REFUSAL_TEXT.titles["plan-unparsable"]);
+  assert.ok(model.details.length >= 1);
+  assert.match(model.details[0], /^line 1\b/);
+});
+
+test("a refused plan of a kind this package does not name still reads as a refusal", () => {
+  const model = planModel({ schemaVersion: 1, kind: "plan", ok: false, waves: [], refusalKind: "plan-something-new", refusal: "a new reason", problems: ["first", "second"] });
+  assert.equal(model.state, "refusal");
+  assert.equal(model.title, PLAN_REFUSAL_TEXT.other);
+  assert.equal(model.refusalKind, "plan-something-new");
+  assert.deepEqual(model.details, ["first", "second"]);
+  // Positive control: `ok: true` with no refusalKind is a plan, not a refusal.
+  assert.equal(planModel({ ...planEnvelope, ok: true }).state, "ready");
 });
 
 test("the plan model is plain data, with no markup and no escape codes", () => {

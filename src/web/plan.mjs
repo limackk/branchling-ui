@@ -11,7 +11,7 @@
  * what the plan has been overtaken by, and how much is outside it.
  */
 
-import { PLAN_TEXT, planModel } from "/view-model/plan.mjs";
+import { PLAN_TEXT, isPlanRefusal, planModel } from "/view-model/plan.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
 
 function el(tag, props = {}, children = []) {
@@ -55,7 +55,13 @@ async function getJson(path) {
 }
 
 function failureModel(view, answer) {
-  return answer.unreachable ? unreachableState(view, answer.message) : fromApiError(view, answer.body, answer.status);
+  if (answer.unreachable) return unreachableState(view, answer.message);
+  // A broken plan is branchling's refusal carrying the plan envelope (TL-534):
+  // the plan model names the kind and lists the problems, where the generic
+  // refusal would say only that branchling declined (UI-22).
+  const error = answer.body && answer.body.error;
+  if (error && error.type === "refusal" && isPlanRefusal(error.envelope)) return planModel(error.envelope);
+  return fromApiError(view, answer.body, answer.status);
 }
 
 /** An answer the model cannot read is the installed branchling's shape, not a fault here. */
@@ -70,6 +76,10 @@ function renderState(model, retry, loadingText) {
     return box;
   }
   box.append(el("h3", { text: model.title }), el("p", { class: "detail", text: model.detail }));
+  if (Array.isArray(model.details) && model.details.length) {
+    box.append(el("ul", { class: "refusal-details" }, model.details.map(line => el("li", { text: line }))));
+  }
+  if (model.hint) box.append(el("p", { text: model.hint }));
   if (model.refusalKind) box.append(el("p", { text: `Reason code: ${model.refusalKind}` }));
   if (retry) {
     const again = el("button", { type: "button", text: "Try again" });

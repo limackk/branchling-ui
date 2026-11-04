@@ -18,6 +18,7 @@ export function stateLines(model, max, loadingText) {
     const lines = [[seg(model.title, `${SGR.bold};${model.state === "refusal" ? SGR.yellow : SGR.red}`)]];
     lines.push(...para(model.detail, max));
     for (const line of Array.isArray(model.details) ? model.details : []) lines.push(...para(`- ${line}`, max));
+    if (model.hint) lines.push(...para(model.hint, max, { style: SGR.dim }));
     if (model.refusalKind) lines.push([seg("Reason code: ", SGR.dim), seg(model.refusalKind)]);
     return lines;
   }

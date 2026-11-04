@@ -10,7 +10,7 @@
  * the model says `dependenciesKnown: false` and tasks are shown by id).
  */
 
-import { PLAN_TEXT, planModel } from "../../view-model/plan.mjs";
+import { PLAN_TEXT, isPlanRefusal, planModel } from "../../view-model/plan.mjs";
 import { SGR, heading, para, seg, shortTime, taskLine } from "../text.mjs";
 
 const withWave = t => ({ ...t, notes: [...t.notes, `${PLAN_TEXT.wave.toLowerCase()} ${t.waveNumber}`] });
@@ -44,8 +44,17 @@ export default {
 
   async read(adapter) {
     // The task list only adds titles and edges: its failure is not the plan's.
-    const [plan, list] = await Promise.all([adapter.plan(), adapter.query().catch(() => null)]);
-    return { plan, list };
+    // A broken plan is a refusal carrying the plan envelope (TL-534); it is
+    // handed to the model, which names the kind and lists the problems,
+    // rather than to the generic refusal that says only "declined" (UI-22).
+    // Judged by name, as states.mjs judges adapter errors, so this screen
+    // imports nothing from the adapter.
+    const plan = adapter.plan().catch(err => {
+      if (err && err.name === "BranchlingRefusal" && isPlanRefusal(err.envelope)) return err.envelope;
+      throw err;
+    });
+    const [answer, list] = await Promise.all([plan, adapter.query().catch(() => null)]);
+    return { plan: answer, list };
   },
 
   model: ({ plan, list }, freshness) => planModel(plan, freshness, list),

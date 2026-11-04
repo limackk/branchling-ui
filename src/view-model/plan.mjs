@@ -27,12 +27,24 @@
  *   open / closed    per task, `waves[].tasks[].open`; per wave, `open` and
  *                    `closed`.
  *
- * NOT IN THE PLAN ENVELOPE (branchling 0.2.0): task titles and `blocked_by`.
- * They come from the optional `task-list` envelope (`query --json`, active
- * tasks only), so a closed task shows its id alone, and with no task list the
- * model says `dependenciesKnown: false` instead of drawing no edges as if
- * there were none. Also absent and therefore not shown: the critical path,
- * elapsed time against estimate, the actor and the worktree of a running task.
+ * TITLES AND EDGES. Since TL-534 each wave task carries `title` and
+ * `blocked_by`, closed tasks included, and those win. The optional `task-list`
+ * envelope (`query --json`, active tasks only) is still read: it is where an
+ * UNPLANNED task's title and edges come from, and the only source on a
+ * branchling that predates TL-534 (0.3.0), where a closed planned task shows
+ * its id alone. `dependenciesKnown` says whether that list was read; with no
+ * list the model says so instead of drawing no edges as if there were none.
+ * Absent and therefore not shown: the critical path, elapsed time against
+ * estimate, the actor and the worktree of a running task.
+ *
+ * A BROKEN PLAN IS A REFUSAL (TL-534, UI-22). `plan --json` answers a plan it
+ * cannot read or execute with `ok: false`, a `refusalKind`
+ * (`plan-unparsable`, `plan-contradicts-blocked-by`, `plan-contradicts-tree`),
+ * branchling's own sentence in `refusal` and every defect in `problems`, and
+ * exits 1, so the adapter throws it as a BranchlingRefusal carrying that
+ * envelope. `planModel` turns it into the `refusal` state with the problems
+ * listed, never into `empty`: its `waves` is `[]`, and an unreadable plan
+ * drawn as "schedules no waves yet" reads exactly like a real answer.
  */
 
 import { statusRole } from "./roles.mjs";
@@ -72,6 +84,55 @@ export const PLAN_TEXT = {
   allPlanned: "Every open task is in the plan.",
   footnote: "The plan orders; it does not block. Status stays the only truth about what has happened.",
 };
+
+/**
+ * The sentences of a broken plan (UI-22). Kept apart from PLAN_TEXT because
+ * no surface renders them by key: they reach both through the refusal
+ * state's `title` and `hint`, which the shared state rendering draws. One
+ * heading per refusalKind branchling names, so the reader learns WHAT is
+ * wrong before reading the problems themselves.
+ */
+export const PLAN_REFUSAL_TEXT = {
+  titles: {
+    "plan-unparsable": "The plan does not parse",
+    "plan-contradicts-blocked-by": "The plan contradicts blocked_by",
+    "plan-contradicts-tree": "The plan names tasks the backlog does not hold as it says",
+  },
+  other: "branchling refused to read the plan",
+  hint: "No wave is shown because branchling would not read this plan: it is not empty, it is broken. Fix plan.yaml, or reorder it with `branchling plan move ID --wave \"NAME\"`, then refresh.",
+};
+
+/**
+ * A `plan` envelope that branchling refused (`ok: false` or a `refusalKind`):
+ * the shared `refusal` state, with the plan's own heading for the kind and
+ * every problem branchling listed (each one carries its line number or its
+ * task ids), so both surfaces can show WHAT to fix.
+ *
+ * @param {object} envelope the `plan` envelope of the refusal, as the adapter's
+ *   BranchlingRefusal (`err.envelope`) or the server's 409 body carries it
+ * @param {{ stale?: boolean, fetchedAt?: string|null }} [freshness]
+ */
+export function planRefusalState(envelope, freshness = {}) {
+  if (!envelope || envelope.kind !== "plan") throw new TypeError("planRefusalState needs a plan envelope");
+  const refusalKind = typeof envelope.refusalKind === "string" && envelope.refusalKind ? envelope.refusalKind : null;
+  const sentence = typeof envelope.refusal === "string" && envelope.refusal.trim() ? envelope.refusal.trim() : null;
+  return {
+    view: "plan",
+    state: "refusal",
+    freshness: freshnessOf(freshness),
+    root: typeof envelope.root === "string" ? envelope.root : null,
+    title: (refusalKind && Object.hasOwn(PLAN_REFUSAL_TEXT.titles, refusalKind) ? PLAN_REFUSAL_TEXT.titles[refusalKind] : null) ?? PLAN_REFUSAL_TEXT.other,
+    detail: sentence ?? "No detail was given.",
+    details: Array.isArray(envelope.problems) ? envelope.problems.filter(p => typeof p === "string" && p).map(String) : [],
+    hint: PLAN_REFUSAL_TEXT.hint,
+    refusalKind,
+  };
+}
+
+/** Whether a `plan` envelope is branchling refusing the plan rather than answering it. */
+export function isPlanRefusal(envelope) {
+  return !!envelope && envelope.kind === "plan" && (envelope.ok === false || (typeof envelope.refusalKind === "string" && envelope.refusalKind !== ""));
+}
 
 function edgeText(edge) {
   if (edge.open === true) return `waits on ${edge.id}`;
@@ -114,6 +175,9 @@ const WAVE_STATE_LABELS = { closed: "closed", active: "active", next: "next", la
  *   for titles and blocked_by; null when it is not available
  */
 export function planModel(envelope, freshness = {}, taskList = null) {
+  // Before the shape check: a refusal's `waves` is `[]`, which would otherwise
+  // pass it and build the empty state.
+  if (isPlanRefusal(envelope)) return planRefusalState(envelope, freshness);
   if (!envelope || envelope.kind !== "plan" || !Array.isArray(envelope.waves)) {
     throw new TypeError("planModel needs a plan envelope");
   }
@@ -141,17 +205,31 @@ export function planModel(envelope, freshness = {}, taskList = null) {
 
   const listed = new Map((taskList?.tasks || []).map(t => [t.id, t]));
   const planOpen = new Map();
-  for (const wave of envelope.waves) for (const t of wave.tasks || []) planOpen.set(t.id, t.open === true);
+  // Title and edges per task: the plan's own (TL-534) where a wave task
+  // carries them, the task list's otherwise (an unplanned task, or a
+  // branchling whose plan envelope has neither).
+  const known = new Map();
+  for (const wave of envelope.waves) {
+    for (const t of wave.tasks || []) {
+      planOpen.set(t.id, t.open === true);
+      const fromList = listed.get(t.id);
+      known.set(t.id, {
+        title: typeof t.title === "string" && t.title ? t.title : fromList?.title,
+        blocked_by: Array.isArray(t.blocked_by) ? t.blocked_by : fromList?.blocked_by,
+      });
+    }
+  }
+  for (const [id, t] of listed) if (!known.has(id)) known.set(id, t);
   const unplannedIds = new Set((envelope.unplanned || []).map(t => t.id));
   const inFlightIds = new Set((envelope.inProgress || []).map(t => t.id));
   const overtakenIds = new Set((envelope.stale || []).map(t => t.id));
 
-  // Reverse edges, from the task list only: who waits on each id.
+  // Reverse edges: who waits on each id, from every task whose edges are known.
   const unblocks = new Map();
-  for (const t of listed.values()) {
+  for (const [id, t] of known) {
     for (const blocker of t.blocked_by || []) {
       if (!unblocks.has(blocker)) unblocks.set(blocker, []);
-      unblocks.get(blocker).push(t.id);
+      unblocks.get(blocker).push(id);
     }
   }
 
@@ -159,7 +237,7 @@ export function planModel(envelope, freshness = {}, taskList = null) {
   const openOf = id => (planOpen.has(id) ? planOpen.get(id) : unplannedIds.has(id) ? true : null);
 
   function taskRow(id, status, extra = {}) {
-    const task = listed.get(id);
+    const task = known.get(id);
     const row = {
       id,
       title: task && typeof task.title === "string" ? task.title : null,

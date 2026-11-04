@@ -20,21 +20,19 @@
  *                                                wave after the active one
  *   unplanned            TASK-5 pending       -> unplanned, coverage 1 of 4 open
  *
- * THE ONE FILE WRITTEN BY HAND. branchling refuses to create plan.yaml: `plan
- * add --why` creates a WAVE, but on a backlog with no plan it answers "there is
- * no plan to edit", because a plan is a decision a person makes and the tool
- * will not write an order with no argument for it. So, like the person who
- * decides to have a plan, this fixture writes the file's header (the rationale
- * and an empty `waves:` key) and nothing else. Every wave and every membership
- * is then written by `branchling plan add`, every task and its `blocked_by` by
- * one `seed` (which cannot create the plan: its `wave` key names an EXISTING
- * wave), and every status change by `take` and `done`. No task file is ever
- * written here. Every command used is one the pinned branchling (0.3.0, from
- * package-lock.json) has; check with `node_modules/.bin/branchling --help`.
+ * NO FILE IS WRITTEN BY HAND. The plan is started by `plan init --rationale`
+ * (TL-535), the command for the decision a person makes to have a plan: it
+ * writes plan.yaml with the rationale and no waves, and branchling refuses an
+ * order with no argument for it. Every wave and every membership is then
+ * written by `branchling plan add`, every task and its `blocked_by` by one
+ * `seed` (which cannot create the plan: its `wave` key names an EXISTING
+ * wave), and every status change by `take` and `done`. `plan init` is newer
+ * than the pinned branchling 0.3.0: it needs the release that ships TL-535
+ * (BRANCHLING_BIN pointing at it until that release is pinned).
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -94,7 +92,7 @@ export async function buildEmptyBacklog(root, { bin = BIN } = {}) {
 export async function buildPlanBacklog(root, { bin = BIN } = {}) {
   const { dir, branchling } = await buildEmptyBacklog(root, { bin });
   await branchling(["seed", "--dir", dir, "--actor", "agent:fixture"], { input: seedPlan() });
-  writeFileSync(join(dir, "plan.yaml"), `rationale: ${JSON.stringify(PLAN_RATIONALE)}\nwaves:\n`);
+  await branchling(["plan", "init", "--rationale", PLAN_RATIONALE, "--dir", dir]);
   await branchling(["plan", "add", "TASK-1", "TASK-2", "--wave", WAVES[0].name, "--why", WAVES[0].why, "--dir", dir]);
   await branchling(["plan", "add", "TASK-3", "TASK-4", "--wave", WAVES[1].name, "--why", WAVES[1].why, "--dir", dir]);
   await branchling(["take", "TASK-2", "--actor", "agent:fixture", "--dir", dir]);

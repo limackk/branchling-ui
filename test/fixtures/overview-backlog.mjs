@@ -24,12 +24,13 @@
  * INDEX.yaml is regenerated from the tasks on every command, so a committed
  * copy conflicts between branches. Here `git add -f` puts it there, the way a
  * person who overrides the backlog's own .gitignore does. That is git, not a
- * hand-written file: no task file is ever written here, and the only file
- * written by hand is plan-backlog's plan.yaml header (see that module).
+ * hand-written file: no file is written by hand here or in plan-backlog,
+ * whose plan starts with `plan init` (see that module).
  *
  * The question is on TASK-5, the unplanned task, so the plan's waves and
  * what may start now stay exactly as plan-backlog describes them. Every
- * branchling command used is one the pinned branchling (0.3.0) has.
+ * branchling command used here is one the pinned branchling (0.3.0) has;
+ * plan-backlog's `plan init` needs the release after it.
  */
 
 import { execFileSync } from "node:child_process";
