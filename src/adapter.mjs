@@ -564,11 +564,24 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       return { version: v, supported };
     },
 
-    /** `query` with its filters as `{status: "pending,blocked", epic: "…"}`. */
-    query(filters = {}) {
+    /**
+     * `query` with its filters as `{status: "pending,blocked", epic: "…"}`.
+     *
+     * `scope` (`active`, `archived`, `all`) is `--scope` (TL-540), and the
+     * envelope names the set it searched in `scope`. A different answer is a
+     * ContractMismatch: an executable that ignored the flag would hand back
+     * the active set, which reads exactly like a correct archived list. Only
+     * an asked-for scope is judged, so a call without one keeps working
+     * against a branchling whose envelope has no `scope` key.
+     */
+    async query(filters = {}) {
       const args = ["query"];
       for (const [key, value] of Object.entries(filters)) args.push("--" + key, String(value));
-      return json(args, "task-list");
+      const envelope = await json(args, "task-list");
+      if (filters.scope !== undefined && envelope.scope !== String(filters.scope)) {
+        throw new ContractMismatch(`query was asked for scope ${filters.scope} and answered ${JSON.stringify(envelope.scope)}`);
+      }
+      return envelope;
     },
 
     stats: () => json(["stats"], "stats"),

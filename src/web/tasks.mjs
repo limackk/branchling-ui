@@ -4,7 +4,13 @@
  * (src/view-model/tasks.mjs, served at /view-model/) and renders it with DOM
  * APIs into #tasks. Text goes in through textContent only.
  *
- * View state is the URL: `?view=tasks&status=…&priority=…&task=<ID>`.
+ * View state is the URL: `?view=tasks&status=…&priority=…&scope=…&task=<ID>`.
+ *
+ * The Open / Archived / All control (UI-33) is `scope`, branchling's
+ * `query --scope`. Its buttons come from the model, so the page names no
+ * status. A scope and a status filter exclude each other, as they do in
+ * branchling: pressing a scope clears the status field, and applying a
+ * status drops the scope.
  *   - a filter applied (a field changed, the form submitted, Clear) is
  *     `history.pushState`, so Back undoes it;
  *   - typing in the search box is `history.replaceState`, debounced, so Back
@@ -23,7 +29,7 @@
  */
 
 import {
-  TASK_FILTER_KEYS, TASK_FILTER_LABELS, TASKS_TEXT,
+  TASK_FILTER_KEYS, TASK_FILTER_LABELS, TASK_SCOPES, TASK_SCOPE_LABELS, TASKS_TEXT,
   filtersSummaryText, parseTaskFilters, parseTaskSelection, tasksFailure, tasksHref, tasksLoading, tasksModel, writeTaskFilters,
 } from "/view-model/tasks.mjs";
 import { unreachableState } from "/view-model/states.mjs";
@@ -53,6 +59,7 @@ function icon(name) {
 
 let root;            // #tasks
 let form;            // the filter form, built once so focus survives a reload of the data
+let scopeBar;        // the Open / Archived / All control
 let countRegion;     // aria-live: the result count
 let results;         // the list, or the state
 let stats = null;    // a stats envelope, for the values offered; optional
@@ -78,7 +85,43 @@ function formFilters() {
     const value = form.elements[key].value.trim();
     if (value) filters[key] = value;
   }
+  // The scope is not a form field; it rides along unless a status now
+  // chooses the statuses itself.
+  const scope = filtersFromUrl().scope;
+  if (scope && !filters.status) filters.scope = scope;
   return filters;
+}
+
+/**
+ * The scope buttons, built once with the contract's three words; which one
+ * is pressed comes from the model (syncScope).
+ */
+function buildScopeBar() {
+  scopeBar = el("div", { class: "segmented tasks-scope-control", role: "group", "aria-label": TASKS_TEXT.scopeControl });
+  for (const value of TASK_SCOPES) {
+    const button = el("button", { type: "button", "data-scope": value, "aria-pressed": "false", text: TASK_SCOPE_LABELS[value] });
+    button.addEventListener("click", () => {
+      clearTimeout(searchTimer);
+      const next = { ...formFilters() };
+      delete next.status;
+      if (value === "active") delete next.scope;
+      else next.scope = value;
+      syncForm(next);
+      syncScope(next);
+      if (navigate(next)) load();
+    });
+    scopeBar.append(button);
+  }
+  return scopeBar;
+}
+
+/** Marks the pressed scope; none is pressed while a status filter chooses. */
+function syncScope(filters, options = null) {
+  for (const button of scopeBar.querySelectorAll("button[data-scope]")) {
+    const option = options && options.find(o => o.value === button.dataset.scope);
+    const pressed = option ? option.pressed : !filters.status && button.dataset.scope === (filters.scope || "active");
+    button.setAttribute("aria-pressed", pressed ? "true" : "false");
+  }
 }
 
 function apply() {
@@ -133,6 +176,7 @@ function buildForm() {
     }, SEARCH_DEBOUNCE_MS);
   });
   form.querySelector('[data-action="clear"]').addEventListener("click", () => {
+    // The scope is kept: clearing the filters is not choosing another set.
     for (const key of TASK_FILTER_KEYS) form.elements[key].value = "";
     apply();
     form.elements.text.focus();
@@ -240,8 +284,9 @@ function renderModel(model) {
       const clear = el("a", { href: model.clearHref, class: "btn btn-secondary btn-sm", text: "Clear filters" });
       clear.addEventListener("click", event => {
         event.preventDefault();
-        syncForm({});
-        navigate({});
+        const kept = model.filters.scope ? { scope: model.filters.scope } : {};
+        syncForm(kept);
+        navigate(kept);
         load();
       });
       box.append(clear);
@@ -258,6 +303,7 @@ function render() {
   if (!lastAnswer) return;
   const model = tasksModel(lastAnswer.body, lastAnswer.filters, lastAnswer.freshness, { stats, task: selectionFromUrl() });
   syncOptions(model.options);
+  syncScope(model.filters, model.scopeControl.options);
   root.querySelector(".tasks-scope").textContent = model.scope.text;
   countRegion.textContent = model.count.text;
   results.replaceChildren(...renderModel(model));
@@ -328,11 +374,13 @@ export function start(section) {
   countRegion = el("p", { class: "tasks-count", "aria-live": "polite", "aria-atomic": "true" });
   results = el("div", { class: "tasks-results" });
   root.replaceChildren(
+    buildScopeBar(),
     buildForm(),
     el("div", { class: "tasks-summary" }, [el("p", { class: "tasks-scope quiet" }), countRegion]),
     results,
   );
   syncForm(filtersFromUrl());
+  syncScope(filtersFromUrl());
 
   document.addEventListener("keydown", event => {
     if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey || isTextField(document.activeElement)) return;
@@ -344,6 +392,7 @@ export function start(section) {
     clearTimeout(searchTimer);
     const filters = filtersFromUrl();
     syncForm(filters);
+    syncScope(filters);
     // Only the open task changed (the panel opened or closed): redraw, no read.
     if (lastAnswer && writeTaskFilters(filters) === writeTaskFilters(lastAnswer.filters)) render();
     else load();

@@ -8,11 +8,15 @@
  * ANSI, no I/O. `URLSearchParams` is a global in both the browser and Node,
  * so it needs no import. Both surfaces render THIS.
  *
- * WHICH TASKS. Without a status filter, `query` searches the ACTIVE tasks
- * only: branchling leaves the backlog's archived statuses out. With one, it
- * searches exactly the statuses named, which is how a closed task is reached.
- * branchling 0.2.0 has no flag for "every status" that does not name them, so
- * the model says which set is shown instead of offering one.
+ * WHICH TASKS (UI-33). The scope is branchling's `query --scope` (TL-540):
+ * `active` (its default, shown as Open), `archived` (the statuses the
+ * backlog's `archived_statuses` names) or `all`. The scope is a set
+ * branchling computes from its own configuration, so this package offers
+ * Open / Archived / All without naming a single status; building `--status`
+ * from the keys of `stats` instead would name them, and would miss a task
+ * whose status is outside the vocabulary. A status filter chooses the
+ * statuses itself, so branchling refuses it beside a scope: the two are
+ * exclusive here too, and choosing one clears the other (scopeHref).
  *
  * THE FILTERS map one to one onto `query` flags (`--text`, `--status`,
  * `--priority`, `--board`, `--epic`, `--owner`, `--label`). Narrowing is
@@ -43,6 +47,17 @@ export function tasksFailure(body, status) {
 /** The filters, in the order they are written to the URL and shown. */
 export const TASK_FILTER_KEYS = ["text", "status", "priority", "board", "epic", "owner", "label"];
 
+/**
+ * The scopes `query --scope` accepts, in the order the control shows them.
+ * These are the contract's fixed words, not the project's vocabulary.
+ * `active` is branchling's default, so it is never written to the URL.
+ */
+export const TASK_SCOPES = ["active", "archived", "all"];
+export const DEFAULT_TASK_SCOPE = "active";
+
+/** The control's labels: "Open" is what a person calls the active set. */
+export const TASK_SCOPE_LABELS = { active: "Open", archived: "Archived", all: "All" };
+
 /** Labels for the filters, the same on both surfaces. */
 export const TASK_FILTER_LABELS = {
   text: "Id or title",
@@ -63,10 +78,14 @@ export const TASK_ID_SHAPE = /^[A-Za-z][A-Za-z0-9_]{0,31}-[0-9]{1,9}$/;
 export const TASKS_TEXT = {
   loading: "Loading the tasks…",
   stale: "This list was remembered from an earlier answer; a fresh one is on its way.",
-  scopeActive: "Showing active tasks. branchling leaves archived statuses out unless a status filter names them.",
+  scopeActive: "Showing open tasks. Archived ones are under Archived and All.",
+  scopeArchived: "Showing archived tasks.",
+  scopeAll: "Showing every task, archived ones included.",
   scopeStatus: status => `Showing tasks with status ${status}.`,
+  scopeControl: "Show",
   emptyNoTasks: "This backlog has no tasks yet.",
-  emptyNoActive: "There are no active tasks. Archived tasks are listed when a status filter names their status.",
+  emptyNoActive: "There are no open tasks. Archived ones are listed under Archived.",
+  emptyNoArchived: "There are no archived tasks.",
   emptyNoMatch: "No task matches these filters.",
   emptyNoMatchHint: "Change or clear a filter to see more tasks.",
   filtersSummary: n => (n > 0 ? `Filters · ${n} active` : "Filters"),
@@ -76,6 +95,9 @@ export const TASKS_TEXT = {
 };
 
 const label = key => String(key).replace(/_/g, " ");
+
+const SCOPE_TEXT = { active: TASKS_TEXT.scopeActive, archived: TASKS_TEXT.scopeArchived, all: TASKS_TEXT.scopeAll };
+const SCOPE_CAPTION = { active: "Open tasks", archived: "Archived tasks", all: "All tasks" };
 
 function freshnessOf(freshness = {}) {
   return { stale: freshness.stale === true, fetchedAt: freshness.fetchedAt ?? null };
@@ -115,7 +137,19 @@ export function parseTaskFilters(params) {
     const value = params.get(key);
     if (typeof value === "string" && value.trim() !== "") filters[key] = value.trim();
   }
+  const scope = scopeParam(params.get("scope"));
+  if (scope) filters.scope = scope;
   return filters;
+}
+
+/**
+ * A scope worth carrying: a known one other than the default. The default
+ * is dropped so `?view=tasks` and `?view=tasks&scope=active` are one address;
+ * an unknown word is dropped here and refused by validateTaskFilters.
+ */
+function scopeParam(value) {
+  const v = typeof value === "string" ? value.trim() : "";
+  return TASK_SCOPES.includes(v) && v !== DEFAULT_TASK_SCOPE ? v : null;
 }
 
 /**
@@ -133,7 +167,22 @@ export function writeTaskFilters(filters = {}) {
     const value = filters && filters[key];
     if (typeof value === "string" && value.trim() !== "") params.set(key, value.trim());
   }
+  const scope = scopeParam(filters && filters.scope);
+  if (scope) params.set("scope", scope);
   return params.toString();
+}
+
+/**
+ * The address the scope control links to: the same filters under `scope`,
+ * without a status filter (branchling refuses `--scope` beside `--status`)
+ * and without an open task.
+ */
+export function scopeHref(filters = {}, scope = DEFAULT_TASK_SCOPE) {
+  const next = { ...(filters || {}) };
+  delete next.status;
+  if (scope === DEFAULT_TASK_SCOPE) delete next.scope;
+  else next.scope = scope;
+  return tasksHref(next);
 }
 
 /**
@@ -159,8 +208,10 @@ export function parseTaskSelection(params) {
  * Checks filters before anything is spawned. A value is a string up to
  * FILTER_MAX_LENGTH, without control characters, and neither it nor any of
  * its comma-separated parts starts with `-`: branchling would read such a
- * value as a flag. Keys outside TASK_FILTER_KEYS are dropped, empty values
- * are no filter.
+ * value as a flag. Keys outside TASK_FILTER_KEYS and `scope` are dropped,
+ * empty values are no filter. `scope` is one of TASK_SCOPES, and is refused
+ * beside `status` rather than one silently winning: branchling refuses the
+ * pair as a usage error, which the server would report as its own bug.
  *
  * @returns {{ ok: true, value: Record<string,string> } | { ok: false, key: string, message: string }}
  */
@@ -180,6 +231,16 @@ export function validateTaskFilters(input) {
       return { ok: false, key, message: `The ${key} filter cannot start with "-": branchling would read it as a flag` };
     }
     value[key] = v;
+  }
+  const rawScope = input.scope;
+  if (rawScope !== undefined && rawScope !== null) {
+    if (typeof rawScope !== "string") return { ok: false, key: "scope", message: "The scope must be text" };
+    const s = rawScope.trim();
+    if (s !== "") {
+      if (!TASK_SCOPES.includes(s)) return { ok: false, key: "scope", message: `The scope must be one of ${TASK_SCOPES.join(", ")}` };
+      if (value.status) return { ok: false, key: "scope", message: "A scope and a status filter both choose which statuses are listed; use one" };
+      if (s !== DEFAULT_TASK_SCOPE) value.scope = s;
+    }
   }
   return { ok: true, value };
 }
@@ -243,14 +304,28 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
     throw new TypeError("tasksModel needs a task-list envelope");
   }
   const applied = parseTaskFilters({ get: key => (typeof filters[key] === "string" ? filters[key] : null) });
+  // A status filter outranks a scope in the model too; the server refuses
+  // the pair, so this only matters for a model built from a hand-made URL.
+  if (applied.status) delete applied.scope;
   const selected = typeof task === "string" && TASK_ID_SHAPE.test(task) ? task : null;
   const tasks = envelope.tasks.filter(t => t && typeof t.id === "string" && t.id);
   const rows = tasks.map(t => row(t, applied, selected));
-  const filtered = Object.keys(applied).length > 0;
+  // `filtered` means a criterion narrowed the list; a scope chooses the set
+  // the criteria search, so it does not count as one.
+  const filtered = Object.keys(applied).some(k => k !== "scope");
 
+  // The set shown is the one branchling says it answered (`scope` in the
+  // envelope, TL-540), not the one asked for; the adapter refuses a mismatch.
+  const answered = TASK_SCOPES.includes(envelope.scope) ? envelope.scope : (applied.scope || DEFAULT_TASK_SCOPE);
   const scope = applied.status
     ? { kind: "status", text: TASKS_TEXT.scopeStatus(applied.status) }
-    : { kind: "active", text: TASKS_TEXT.scopeActive };
+    : { kind: answered, text: SCOPE_TEXT[answered] };
+  const scopes = TASK_SCOPES.map(value => ({
+    value,
+    label: TASK_SCOPE_LABELS[value],
+    href: scopeHref(applied, value),
+    pressed: !applied.status && value === answered,
+  }));
 
   const total = Number.isInteger(envelope.total) ? envelope.total : rows.length;
   const limit = Number.isInteger(envelope.limit) ? envelope.limit : null;
@@ -269,9 +344,13 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
       emptyKind = "no-match";
       emptyText = TASKS_TEXT.emptyNoMatch;
       emptyHint = TASKS_TEXT.emptyNoMatchHint;
-    } else if (statsTotal === 0) {
+    } else if (statsTotal === 0 || scope.kind === "all") {
+      // `all` searched every task file, so an empty answer is an empty backlog.
       emptyKind = "no-tasks";
       emptyText = TASKS_TEXT.emptyNoTasks;
+    } else if (scope.kind === "archived") {
+      emptyKind = "no-archived";
+      emptyText = TASKS_TEXT.emptyNoArchived;
     } else {
       emptyKind = "no-active";
       emptyText = TASKS_TEXT.emptyNoActive;
@@ -290,7 +369,7 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
 
   const active = TASK_FILTER_KEYS.filter(k => applied[k]).map(key => ({ key, label: TASK_FILTER_LABELS[key], value: applied[key] }));
   const caption = [
-    applied.status ? `Tasks with status ${applied.status}` : "Active tasks",
+    applied.status ? `Tasks with status ${applied.status}` : SCOPE_CAPTION[scope.kind],
     ...active.filter(f => f.key !== "status").map(f => `${f.label.toLowerCase()} ${f.value}`),
   ].join(", ");
 
@@ -314,6 +393,7 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
     activeFilters: active,
     filtersSummary: filtersSummaryText(applied),
     scope,
+    scopeControl: { label: TASKS_TEXT.scopeControl, options: scopes },
     count: { shown: rows.length, total, limit, text: countText },
     caption,
     emptyKind,
@@ -322,6 +402,7 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
     rows,
     options,
     selection,
-    clearHref: tasksHref({}),
+    // Clearing the filters keeps the scope: the control is not one of them.
+    clearHref: tasksHref(applied.scope ? { scope: applied.scope } : {}),
   };
 }

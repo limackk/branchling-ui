@@ -9,18 +9,18 @@
 import "./fixtures/private-homes.mjs";
 import { lazyFixture } from "./fixtures/lazy-fixture.mjs";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createAdapter } from "../src/adapter.mjs";
+import { ContractMismatch, createAdapter } from "../src/adapter.mjs";
 import { createCache, servedFromCache } from "../src/cache.mjs";
 import { createServer } from "../src/server.mjs";
 import { views } from "../src/views/index.mjs";
 import {
-  FILTER_MAX_LENGTH, TASK_FILTER_KEYS, TASKS_TEXT,
-  activeFieldFilterCount, filtersSummaryText, parseTaskFilters, parseTaskSelection, tasksFailure, tasksHref, tasksLoading, tasksModel, validateTaskFilters, writeTaskFilters,
+  FILTER_MAX_LENGTH, TASK_FILTER_KEYS, TASK_SCOPES, TASKS_TEXT,
+  activeFieldFilterCount, scopeHref, filtersSummaryText, parseTaskFilters, parseTaskSelection, tasksFailure, tasksHref, tasksLoading, tasksModel, validateTaskFilters, writeTaskFilters,
 } from "../src/view-model/tasks.mjs";
 import { BIN, TASKS, buildTasksBacklog } from "./fixtures/tasks-backlog.mjs";
 import { buildEmptyBacklog } from "./fixtures/plan-backlog.mjs";
@@ -382,5 +382,138 @@ test("no model string carries markup or an escape code", async () => {
   for (const s of models.flatMap(m => strings(m))) {
     assert.doesNotMatch(s, /<[a-z/!]/i, `markup in ${JSON.stringify(s)}`);
     assert.doesNotMatch(s, /\x1b/, `escape code in ${JSON.stringify(s)}`);
+  }
+});
+
+// UI-33: the Open / Archived / All scope is branchling's `query --scope`
+// (TL-540). The fixture holds one archived task (TASK-5), so every scope has a
+// different right answer: an empty archived list or an all list equal to the
+// active one would fail here rather than pass on a zero sample.
+
+test("scope: Open lists the active tasks, Archived the archived one, All every task", async () => {
+  const open = await listed("/api/tasks");
+  const archived = await listed("/api/tasks?scope=archived");
+  const all = await listed("/api/tasks?scope=all");
+  assert.equal(open.scope, "active");
+  assert.equal(archived.scope, "archived");
+  assert.equal(all.scope, "all");
+  assert.deepEqual(ids(open.tasks), [...ACTIVE].sort());
+  assert.deepEqual(ids(archived.tasks), ["TASK-5"]);
+  assert.deepEqual(ids(all.tasks), TASKS.map(t => t.id).sort());
+  // Positive control: the three sets differ, so the scope reached branchling.
+  assert.ok(!ids(open.tasks).includes("TASK-5"));
+  assert.ok(ids(all.tasks).length > ids(open.tasks).length);
+  // `scope=active` is the default and the same set.
+  assert.deepEqual(ids((await listed("/api/tasks?scope=active")).tasks), [...ACTIVE].sort());
+
+  const cases = [
+    [open, {}, "active", "Open tasks", TASKS_TEXT.scopeActive],
+    [archived, { scope: "archived" }, "archived", "Archived tasks", TASKS_TEXT.scopeArchived],
+    [all, { scope: "all" }, "all", "All tasks", TASKS_TEXT.scopeAll],
+  ];
+  for (const [envelope, filters, kind, caption, text] of cases) {
+    const model = tasksModel(envelope, filters);
+    assert.equal(model.scope.kind, kind);
+    assert.equal(model.scope.text, text);
+    assert.equal(model.caption, caption);
+    assert.equal(model.filtered, false, "a scope is not a filter");
+    assert.deepEqual(model.scopeControl.options.map(o => o.value), TASK_SCOPES);
+    assert.deepEqual(model.scopeControl.options.filter(o => o.pressed).map(o => o.value), [kind]);
+  }
+  assert.deepEqual(tasksModel(open).scopeControl.options.map(o => o.label), ["Open", "Archived", "All"]);
+});
+
+test("scope: the other filters still narrow inside a scope", async () => {
+  const platform = await listed("/api/tasks?scope=all&epic=Platform");
+  assert.deepEqual(ids(platform.tasks), expect(t => t.epic === "Platform"));
+  assert.ok(ids(platform.tasks).includes("TASK-5"), "the archived Platform task is in All");
+  const none = await listed("/api/tasks?scope=archived&epic=Billing");
+  assert.deepEqual(none.tasks, []);
+  const model = tasksModel(none, { scope: "archived", epic: "Billing" });
+  assert.equal(model.emptyKind, "no-match");
+  assert.equal(model.clearHref, "?view=tasks&scope=archived", "clearing the filters keeps the scope");
+});
+
+test("scope: the empty states say which set was empty", async () => {
+  const env = { schemaVersion: 1, kind: "task-list", tasks: [], total: 0, limit: null };
+  assert.equal(tasksModel({ ...env, scope: "archived" }, { scope: "archived" }).emptyKind, "no-archived");
+  assert.equal(tasksModel({ ...env, scope: "archived" }, { scope: "archived" }).emptyText, TASKS_TEXT.emptyNoArchived);
+  assert.equal(tasksModel({ ...env, scope: "all" }, { scope: "all" }).emptyKind, "no-tasks");
+  assert.equal(tasksModel({ ...env, scope: "active" }).emptyKind, "no-active");
+  const empty = await call(emptyServer, "/api/tasks?scope=all");
+  assert.equal(empty.status, 200);
+  assert.equal(tasksModel(empty.json, { scope: "all" }).emptyKind, "no-tasks");
+});
+
+test("scope: beside a status, or outside the three, is a 400 and spawns nothing", async () => {
+  // Positive control: a good scoped request spawns (on a key not read before).
+  const first = calls.query;
+  await listed("/api/tasks?scope=all&text=exports");
+  assert.equal(calls.query, first + 1);
+  for (const path of ["/api/tasks?scope=all&status=pending", "/api/tasks?scope=everything", "/api/tasks?scope=--help", "/api/tasks?scope=ALL"]) {
+    const before = calls.query;
+    const res = await call(server, path);
+    assert.equal(res.status, 400, path);
+    assert.equal(res.json.error.type, "bad-request", path);
+    assert.equal(calls.query, before, `${path} spawned nothing`);
+  }
+  assert.equal(validateTaskFilters({ scope: "archived" }).ok, true);
+  assert.deepEqual(validateTaskFilters({ scope: "active" }).value, {}, "the default scope is no flag");
+  assert.equal(validateTaskFilters({ scope: "archived", status: "done" }).ok, false);
+  assert.equal(validateTaskFilters({ scope: 1 }).ok, false);
+});
+
+test("scope: it survives a URL round trip; the default is never written; choosing one drops the status", () => {
+  for (const scope of ["archived", "all"]) {
+    const filters = { label: "ui", scope };
+    assert.deepEqual(parseTaskFilters(new URLSearchParams(writeTaskFilters(filters))), filters);
+    const href = tasksHref(filters, "TASK-3");
+    assert.equal(href, `?view=tasks&label=ui&scope=${scope}&task=TASK-3`);
+    assert.deepEqual(parseTaskFilters(new URLSearchParams(href)), filters);
+  }
+  assert.equal(writeTaskFilters({ scope: "active" }), "");
+  assert.deepEqual(parseTaskFilters(new URLSearchParams("scope=active")), {});
+  assert.deepEqual(parseTaskFilters(new URLSearchParams("scope=bogus")), {});
+  assert.equal(scopeHref({ status: "pending", epic: "Billing" }, "all"), "?view=tasks&epic=Billing&scope=all");
+  assert.equal(scopeHref({ scope: "all", epic: "Billing" }, "active"), "?view=tasks&epic=Billing");
+  // A row keeps the scope, so closing the panel returns to the same set.
+  const env = { schemaVersion: 1, kind: "task-list", scope: "archived", tasks: [{ id: "TASK-5", title: "A" }], total: 1, limit: null };
+  const model = tasksModel(env, { scope: "archived" }, {}, { task: "TASK-5" });
+  assert.equal(model.rows[0].href, "?view=tasks&scope=archived&task=TASK-5");
+  assert.equal(model.selection.closeHref, "?view=tasks&scope=archived");
+  // A status filter chooses the statuses itself: no scope button is pressed.
+  const byStatus = tasksModel({ ...env, scope: null }, { status: "done" });
+  assert.equal(byStatus.scope.kind, "status");
+  assert.ok(byStatus.scopeControl.options.every(o => !o.pressed));
+  assert.equal(byStatus.scopeControl.options.find(o => o.value === "archived").href, "?view=tasks&scope=archived");
+});
+
+test("scope: the adapter refuses an answer for another scope than the one asked for", async () => {
+  // An executable that ignored --scope would hand back the active set, which
+  // reads exactly like a correct archived list.
+  const envelope = JSON.stringify({ schemaVersion: 1, kind: "task-list", tasks: [], total: 0, limit: null, scope: "active" });
+  const file = join(tmp, process.platform === "win32" ? "fake-query-scope.cmd" : "fake-query-scope");
+  if (process.platform === "win32") writeFileSync(file, `@echo ${envelope}\r\n`);
+  else writeFileSync(file, `#!/bin/sh\necho '${envelope}'\n`);
+  chmodSync(file, 0o755);
+  const fake = createAdapter({ bin: file });
+  await assert.rejects(fake.query({ scope: "archived" }), ContractMismatch);
+  // Positive control: the same answer is accepted when that scope was asked for, or none.
+  assert.equal((await fake.query({ scope: "active" })).scope, "active");
+  assert.equal((await fake.query()).scope, "active");
+});
+
+test("scope: the page's control comes from the model and names no status", () => {
+  const page = readFileSync(new URL("../src/web/tasks.mjs", import.meta.url), "utf8");
+  assert.match(page, /class: "segmented tasks-scope-control"/);
+  assert.match(page, /TASK_SCOPES/);
+  assert.match(page, /TASK_SCOPE_LABELS/);
+  assert.match(page, /model\.scopeControl\.options/);
+  for (const file of ["../src/web/tasks.mjs", "../src/view-model/tasks.mjs", "../src/views/tasks.mjs"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    const statuses = [...new Set(TASKS.map(t => t.status))];
+    // Positive control: the fixture's statuses are real words to look for.
+    assert.ok(statuses.includes("done"));
+    for (const status of statuses) assert.doesNotMatch(source, new RegExp(`["'\`]${status}["'\`]`), `${file} names the status ${status}`);
   }
 });

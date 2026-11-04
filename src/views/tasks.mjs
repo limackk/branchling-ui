@@ -3,13 +3,15 @@
  * envelope exactly as branchling printed it; the page builds the model in the
  * browser (src/view-model/tasks.mjs), as the terminal will.
  *
- *   GET /api/tasks[?text=][&status=][&priority=][&board=][&epic=][&owner=][&label=]
+ *   GET /api/tasks[?text=][&status=][&priority=][&board=][&epic=][&owner=][&label=][&scope=]
  *
  * Each known parameter passes through to the `query` flag of the same name;
- * any other parameter is ignored. Without `status`, branchling lists the
- * ACTIVE tasks only. A value is checked by the same validateTaskFilters the
+ * any other parameter is ignored. Without `status` or `scope`, branchling
+ * lists the ACTIVE tasks only; `scope=archived|all` is `query --scope`
+ * (TL-540, UI-33). A value is checked by the same validateTaskFilters the
  * page uses before anything is spawned: one that is too long, has a control
- * character or starts with `-` (branchling would read it as a flag) is a 400.
+ * character or starts with `-` (branchling would read it as a flag), a scope
+ * outside TASK_SCOPES, and a scope beside a status are a 400.
  *
  * status, priority and board are closed vocabularies in branchling 0.2.0: a
  * name outside them is a usage error with stderr only. They are names the
@@ -28,7 +30,7 @@ const CLOSED_VOCABULARY = ["status", "priority", "board"];
 
 export function taskFiltersParam(params) {
   const input = {};
-  for (const key of TASK_FILTER_KEYS) {
+  for (const key of [...TASK_FILTER_KEYS, "scope"]) {
     const value = params.get(key);
     if (value !== null) input[key] = value;
   }
