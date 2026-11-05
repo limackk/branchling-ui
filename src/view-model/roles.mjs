@@ -66,7 +66,10 @@ export function priorityColourAt(index, count) {
  * or null; anything without status and priority lists is "not known".
  *
  * @param {object|null|undefined} envelope
- * @returns {{ statuses: Map<string,string>, priorities: Map<string,string>, statusOrder: string[], priorityOrder: string[], archived: Set<string> } | null}
+ * `boardOrder` is the declared boards' slugs in declared order (UI-53), or
+ * null when the envelope carries no `boards` list.
+ *
+ * @returns {{ statuses: Map<string,string>, priorities: Map<string,string>, statusOrder: string[], priorityOrder: string[], boardOrder: string[]|null, archived: Set<string> } | null}
  */
 export function vocabularyRoles(envelope) {
   if (!envelope || !Array.isArray(envelope.statuses) || !Array.isArray(envelope.priorities)) return null;
@@ -79,7 +82,10 @@ export function vocabularyRoles(envelope) {
   }
   const priorityOrder = envelope.priorities.filter(p => typeof p === "string");
   const priorities = new Map(priorityOrder.map((p, i) => [p, priorityColourAt(i, priorityOrder.length)]));
-  return Object.freeze({ statuses, priorities, statusOrder: [...statuses.keys()], priorityOrder, archived });
+  const boardOrder = Array.isArray(envelope.boards)
+    ? [...new Set(envelope.boards.map(b => (typeof b === "string" ? b : b && typeof b.slug === "string" ? b.slug : "")).filter(Boolean))]
+    : null;
+  return Object.freeze({ statuses, priorities, statusOrder: [...statuses.keys()], priorityOrder, boardOrder, archived });
 }
 
 let current = null;

@@ -25,6 +25,8 @@ import {
 } from "../src/view-model/tasks.mjs";
 import { BIN, TASKS, buildTasksBacklog } from "./fixtures/tasks-backlog.mjs";
 import { buildEmptyBacklog } from "./fixtures/plan-backlog.mjs";
+import { PRIORITIES, STATUSES, buildVocabularyBacklog } from "./fixtures/vocabulary-backlog.mjs";
+import { useVocabulary, vocabularyRoles } from "../src/view-model/roles.mjs";
 
 let tmp;
 let fixture;
@@ -576,4 +578,71 @@ test("scope: the page's control comes from the model and names no status", () =>
     assert.ok(statuses.includes("done"));
     for (const status of statuses) assert.doesNotMatch(source, new RegExp(`["'\`]${status}["'\`]`), `${file} names the status ${status}`);
   }
+});
+
+// UI-53: the filters offer the declared vocabulary. Over a NON-default one
+// (test/fixtures/vocabulary-backlog.mjs), so an offer built from hard-coded
+// names, or from the answers alone, cannot pass.
+const answerWith = tasks => ({ kind: "task-list", tasks, total: tasks.length, limit: null, scope: "active" });
+
+test("the filters offer the declared statuses, priorities and boards in declared order", async () => {
+  const fx = await buildVocabularyBacklog(join(tmp, "vocabulary"), { bin: BIN });
+  const envelope = await createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root }).vocabulary();
+  assert.ok(envelope, "the executable under test answers vocabulary");
+  const vocabulary = vocabularyRoles(envelope);
+  const boards = envelope.boards.map(b => b.slug);
+  assert.ok(boards.length > 0, "the fixture declares a board");
+  // One task, carrying the LAST declared status and priority: the rest are
+  // offered although no task carries them.
+  const answer = answerWith([{ id: "VOC-1", title: "One", status: "review", priority: "someday", board: boards[0], labels: [] }]);
+  const model = tasksModel(answer, {}, {}, { vocabulary });
+  assert.deepEqual(model.options.status, STATUSES.map(s => s.name));
+  assert.deepEqual(model.options.priority, PRIORITIES);
+  assert.deepEqual(model.options.board, boards);
+});
+
+test("a value the answers hold but the vocabulary does not declare is offered after the declared ones", () => {
+  const vocabulary = vocabularyRoles({
+    statuses: [{ name: "todo" }, { name: "doing" }, { name: "shipped", archived: true }],
+    priorities: ["urgent", "someday"],
+    boards: [{ slug: "web", name: "Web" }, { slug: "api", name: "API" }],
+  });
+  const stats = { kind: "stats", stats: { total: 2, byStatus: { legacy: 1, doing: 1 }, byPriority: {}, byBoard: { old: 1 } } };
+  const answer = answerWith([
+    { id: "VOC-1", title: "One", status: "doing", priority: "P9", board: "api", labels: [] },
+    { id: "VOC-2", title: "Two", status: "stray", priority: "someday", board: "old", labels: [] },
+  ]);
+  const model = tasksModel(answer, {}, {}, { stats, vocabulary });
+  assert.deepEqual(model.options.status, ["todo", "doing", "shipped", "legacy", "stray"]);
+  assert.deepEqual(model.options.priority, ["urgent", "someday", "P9"]);
+  assert.deepEqual(model.options.board, ["web", "api", "old"]);
+});
+
+test("without a declared vocabulary the filters offer the answers alone, as before", () => {
+  const answer = answerWith([
+    { id: "VOC-1", title: "One", status: "doing", priority: "P2", board: "api", labels: [] },
+    { id: "VOC-2", title: "Two", status: "todo", priority: "P1", board: "web", labels: [] },
+  ]);
+  const unknown = tasksModel(answer, {}, {}, { vocabulary: null });
+  assert.deepEqual(unknown.options.status, ["doing", "todo"]);
+  assert.deepEqual(unknown.options.priority, ["P2", "P1"]);
+  assert.deepEqual(unknown.options.board, ["api", "web"]);
+  // A vocabulary without a boards list leaves the boards to the answers.
+  const noBoards = vocabularyRoles({ statuses: [{ name: "todo" }], priorities: ["P1"] });
+  assert.equal(noBoards.boardOrder, null);
+  assert.deepEqual(tasksModel(answer, {}, {}, { vocabulary: noBoards }).options.board, ["api", "web"]);
+});
+
+test("the declared vocabulary in use is the default the filters read", () => {
+  const answer = answerWith([{ id: "VOC-1", title: "One", status: "doing", priority: "low", board: "web", labels: [] }]);
+  try {
+    useVocabulary({ statuses: [{ name: "todo" }, { name: "doing" }], priorities: ["high", "low"], boards: [{ slug: "web" }, { slug: "api" }] });
+    const model = tasksModel(answer);
+    assert.deepEqual(model.options.status, ["todo", "doing"]);
+    assert.deepEqual(model.options.priority, ["high", "low"]);
+    assert.deepEqual(model.options.board, ["web", "api"]);
+  } finally {
+    useVocabulary(null);
+  }
+  assert.deepEqual(tasksModel(answer).options.status, ["doing"]);
 });

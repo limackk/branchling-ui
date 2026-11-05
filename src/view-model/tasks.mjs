@@ -22,13 +22,17 @@
  * `--priority`, `--board`, `--epic`, `--owner`, `--label`). Narrowing is
  * branchling's, never this module's: a value is passed on as typed, and a
  * comma inside one is branchling's OR. No status, priority or board name is
- * written here; the values offered come from the answers (the rows, and the
- * keys of a `stats` envelope when one is given). A rejected status, priority
+ * written here. The values offered (UI-53) are the backlog's declared
+ * statuses, priorities and boards from the `vocabulary` envelope, in declared
+ * order, so a status no task carries yet is offered too; after them come any
+ * values the answers hold (the rows, and the keys of a `stats` envelope when
+ * one is given) that the vocabulary does not declare. Without a vocabulary
+ * the answers alone are offered, first seen first. A rejected status, priority
  * or board name is answered with the declared names from the `vocabulary`
  * envelope when the executable has it (UI-44, src/request-error.mjs).
  */
 
-import { priorityRole, statusRole } from "./roles.mjs";
+import { currentVocabulary, priorityRole, statusRole } from "./roles.mjs";
 import { fromApiError, loadingState } from "./states.mjs";
 
 /** Before the first answer. */
@@ -262,6 +266,12 @@ function statsKeys(stats, key) {
   return map && typeof map === "object" ? Object.keys(map) : [];
 }
 
+/** One declared order of a vocabulary (vocabularyRoles), or nothing when it is not known. */
+function declared(vocabulary, key) {
+  const order = vocabulary && typeof vocabulary === "object" ? vocabulary[key] : null;
+  return Array.isArray(order) ? order : [];
+}
+
 function row(task, filters, selected) {
   const status = text(task.status);
   const priority = text(task.priority);
@@ -298,9 +308,12 @@ function row(task, filters, selected) {
  * @param {{ stale?: boolean, fetchedAt?: string|null }} [freshness]
  * @param {{ stats?: object|null, task?: string|null }} [options] `stats`: a
  *   `stats` envelope whose keys widen the values offered per filter (and say
- *   whether the backlog holds any task at all); `task`: the selected task id
+ *   whether the backlog holds any task at all); `task`: the selected task id;
+ *   `vocabulary`: the vocabulary as vocabularyRoles returns it, whose
+ *   declared statuses, priorities and boards are offered first (default: the
+ *   one in use, currentVocabulary(); null means not known)
  */
-export function tasksModel(envelope, filters = {}, freshness = {}, { stats = null, task = null } = {}) {
+export function tasksModel(envelope, filters = {}, freshness = {}, { stats = null, task = null, vocabulary = currentVocabulary() } = {}) {
   if (!envelope || envelope.kind !== "task-list" || !Array.isArray(envelope.tasks)) {
     throw new TypeError("tasksModel needs a task-list envelope");
   }
@@ -360,9 +373,9 @@ export function tasksModel(envelope, filters = {}, freshness = {}, { stats = nul
 
   const options = {
     text: [],
-    status: unique([...statsKeys(stats, "byStatus"), ...rows.map(r => r.status)]),
-    priority: unique([...statsKeys(stats, "byPriority"), ...rows.map(r => r.priority)]),
-    board: unique([...statsKeys(stats, "byBoard"), ...rows.map(r => r.board)]),
+    status: unique([...declared(vocabulary, "statusOrder"), ...statsKeys(stats, "byStatus"), ...rows.map(r => r.status)]),
+    priority: unique([...declared(vocabulary, "priorityOrder"), ...statsKeys(stats, "byPriority"), ...rows.map(r => r.priority)]),
+    board: unique([...declared(vocabulary, "boardOrder"), ...statsKeys(stats, "byBoard"), ...rows.map(r => r.board)]),
     epic: unique([...statsKeys(stats, "byEpic"), ...rows.map(r => r.epic)]),
     owner: unique([...statsKeys(stats, "byOwner"), ...rows.map(r => r.owner)]),
     label: unique([...statsKeys(stats, "byLabel"), ...rows.flatMap(r => r.labels)]),
