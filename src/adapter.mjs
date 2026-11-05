@@ -387,15 +387,14 @@ export async function listDecisions(adapter) {
  *                                     branchling's `blocked` verdict and the
  *                                     body (TL-542). First,
  *                                     because its `no-such-task` refusal is the
- *                                     panel's not-found state, and it names the
- *                                     status the row is looked up by
+ *                                     panel's not-found state
  *   log <ID>                          the history, one exchange per write
- *   query --text <ID> --status <s>    the task's row: the fields `show` does not
+ *   query --text <ID> --scope all     the task's row: the fields `show` does not
  *                                     carry (owner, epic, labels, estimate…).
  *                                     `--text` is a substring of "<id> <title>",
- *                                     so the row is picked by its exact id. The
- *                                     status `show` gave lets a closed task's row
- *                                     be found too
+ *                                     so the row is picked by its exact id.
+ *                                     `--scope all` (TL-540) finds a closed
+ *                                     task's row too, with no status named
  *   query --blocked-by <ID>           the tasks this one blocks (active ones,
  *                                     branchling's default scope)
  *   set --fields                      the fields `set` edits, as data (TL-543):
@@ -418,11 +417,13 @@ export async function listDecisions(adapter) {
  */
 export async function readTask(adapter, id) {
   if (typeof id !== "string" || !id || id.startsWith("-")) throw new BranchlingUsageError(["show", String(id)], 2, "a task id is required");
+  // show goes first: its no-such-task refusal is the panel's not-found state.
+  // The row is read with --scope all (TL-540), so a closed task is found
+  // without naming the status show gave.
   const show = await adapter.show(id, { body: true });
-  const status = typeof show.status === "string" && /^[A-Za-z0-9_][A-Za-z0-9_ -]*$/.test(show.status) ? show.status : null;
   const [log, list, blocking, described] = await Promise.all([
     adapter.log(id),
-    adapter.query(status ? { text: id, status } : { text: id }),
+    adapter.query({ text: id, scope: "all" }),
     adapter.query({ "blocked-by": id }),
     adapter.setFields(),
   ]);

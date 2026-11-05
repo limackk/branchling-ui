@@ -90,7 +90,7 @@ export const TASKS_TEXT = {
   emptyNoMatchHint: "Change or clear a filter to see more tasks.",
   filtersSummary: n => (n > 0 ? `Filters · ${n} active` : "Filters"),
   selectionPending: "Open in the task panel.",
-  selectionMissing: id => `${id} is not in this list. It may be archived or outside the filters.`,
+  selectionMissing: id => `${id} is not in this list. It may be in another scope or outside the filters.`,
   none: "—",
 };
 

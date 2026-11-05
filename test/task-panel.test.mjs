@@ -140,8 +140,10 @@ test("blockers both ways: blocked by (with branchling's verdicts) and what it bl
   assert.deepEqual(one.blockers.blocks.map(b => [b.id, b.href]), [["TASK-2", "?view=tasks&epic=Billing&task=TASK-2"]]);
 });
 
-test("a closed task is found all the same: its row is read with the status show gave", () => {
+test("a closed task is found all the same: its row is read with --scope all", () => {
   const four = taskPanelModel(answers["TASK-4"]);
+  assert.equal(answers["TASK-4"].task.id, "TASK-4", "the archived row came back from query");
+  assert.equal(answers["TASK-4"].task.status, "done");
   assert.equal(four.status, "done");
   assert.equal(four.fieldsKnown, true);
   assert.deepEqual(four.blockers.blocks.map(b => b.id), ["TASK-2"], "TASK-2 waits on it (active, so listed)");
