@@ -45,7 +45,7 @@
 
 import { decisionsFailure, decisionsModel } from "./decisions.mjs";
 import { doctorModel } from "./health.mjs";
-import { planModel } from "./plan.mjs";
+import { isPlanRefusal, planModel, planRefusalState } from "./plan.mjs";
 import { statusRole } from "./roles.mjs";
 import { fromApiError, unreachableState } from "./states.mjs";
 import { statsModel } from "./stats.mjs";
@@ -148,16 +148,32 @@ function base(key, state) {
   return { key, view: PART_VIEWS[key], heading: HEADINGS[key], state };
 }
 
+/**
+ * How a failed read is said. A refused plan carries the plan envelope
+ * (TL-534) and is said as the plan view says it (UI-22, UI-47): its own
+ * heading per refusalKind and every problem branchling listed, never the
+ * generic "branchling declined the request".
+ */
+function failureOf(key, source, part) {
+  const body = { error: part.error || {} };
+  if (source === "decisions") return decisionsFailure(body, part.status);
+  if (source === "plan" && body.error.type === "refusal" && isPlanRefusal(body.error.envelope)) {
+    return { ...planRefusalState(body.error.envelope), httpStatus: part.status ?? null };
+  }
+  return fromApiError(PART_VIEWS[key], body, part.status);
+}
+
 /** A part whose read failed: the state, title and detail states.mjs gives that failure. */
 function failedPart(key, source, part, mapped = null) {
-  const body = { error: part.error || {} };
-  const failure = mapped || (source === "decisions" ? decisionsFailure(body, part.status) : fromApiError(PART_VIEWS[key], body, part.status));
+  const failure = mapped || failureOf(key, source, part);
   return {
     ...base(key, failure.state === "refusal" ? "refusal" : "error"),
     source,
     failure: {
       title: failure.title,
       detail: failure.detail,
+      details: Array.isArray(failure.details) ? failure.details.map(String) : [],
+      hint: typeof failure.hint === "string" && failure.hint ? failure.hint : null,
       refusalKind: failure.refusalKind ?? null,
       errorType: failure.errorType ?? (failure.state === "refusal" ? "refusal" : null),
       httpStatus: failure.httpStatus ?? part.status ?? null,
@@ -248,6 +264,10 @@ function wavePart(parts, freshness) {
   const list = envelopeOf(parts.tasks);
   const plan = planModel(envelopeOf(parts.plan), freshness, list && list.kind === "task-list" && Array.isArray(list.tasks) ? list : null);
   const link = { href: LINKS.wave, label: OVERVIEW_TEXT.waveLink };
+  // A refusal envelope that reached here as an answer: the same refusal as a 409.
+  if (plan.state === "refusal") {
+    return failedPart("wave", "plan", { status: null, error: { type: "refusal" } }, plan);
+  }
   if (plan.state === "empty") {
     return {
       ...base("wave", "empty"),

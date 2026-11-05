@@ -61,6 +61,10 @@ function failureNode(part) {
     el("p", { class: "state-head", text: f.title }),
     el("p", { class: "detail", text: f.detail }),
   ]);
+  if (Array.isArray(f.details) && f.details.length) {
+    box.append(el("ul", { class: "refusal-details" }, f.details.map(text => el("li", { text }))));
+  }
+  if (f.hint) box.append(el("p", { text: f.hint }));
   if (f.refusalKind) box.append(el("p", { text: `Reason code: ${f.refusalKind}` }));
   const again = el("button", { type: "button", text: "Try again" });
   again.addEventListener("click", () => retry(part.source, part.key));

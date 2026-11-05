@@ -15,7 +15,7 @@
 import "./fixtures/private-homes.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +24,9 @@ import { BranchlingRefusal, BranchlingUsageError, createAdapter } from "../src/a
 import { createCache, servedFromCache } from "../src/cache.mjs";
 import { createServer } from "../src/server.mjs";
 import { views } from "../src/views/index.mjs";
+import { PLAN_REFUSAL_TEXT } from "../src/view-model/plan.mjs";
 import { OVERVIEW_LIST_LIMIT, OVERVIEW_READS, OVERVIEW_TEXT, overviewLoading, overviewModel, overviewPart } from "../src/view-model/overview.mjs";
+import { branchlingIn } from "./fixtures/env.mjs";
 import { BIN, FAILING_CHECK, QUESTION, QUESTION_TASK, buildEmptyOverviewBacklog, buildOverviewBacklog } from "./fixtures/overview-backlog.mjs";
 
 let tmp;
@@ -217,6 +219,62 @@ test("a refused plan leaves the questions, checks and totals shown, the wave and
   }
   for (const key of ["questions", "checks", "blocked", "totals"]) assert.equal(p[key].state, "ready", key);
   assert.ok(p.checks.lines.some(l => l.label === "views out of the index"));
+});
+
+/**
+ * The overview fixture with its plan broken by the REAL branchling: `set`
+ * makes TASK-1 (wave 1) wait on TASK-3 (wave 2), which `set` does not check
+ * against the plan, so the plan contradicts blocked_by. An unparsable plan is
+ * the one plan.yaml written by hand, deliberately: no branchling command
+ * writes a broken file, a person's hand edit does (as in plan-view.test.mjs).
+ */
+async function brokenPlanParts(name, kind) {
+  const fx = await buildOverviewBacklog(join(tmp, name));
+  if (kind === "plan-contradicts-blocked-by") {
+    await branchlingIn(fx.root)(["set", "TASK-1", "blocked_by", "TASK-3", "--actor", "agent:fixture", "--dir", fx.dir]);
+  } else {
+    writeFileSync(join(fx.dir, "plan.yaml"), "waves: [oops\n");
+  }
+  const srv = await serve(fx, { doctor: async () => doctorEnvelope });
+  return readParts(srv);
+}
+
+for (const kind of ["plan-contradicts-blocked-by", "plan-unparsable"]) {
+  test(`a refused plan (${kind}) shows its own heading and problems on the wave card`, async () => {
+    const { parts, statuses } = await brokenPlanParts(`broken-${kind}`, kind);
+    assert.equal(statuses.plan, 409);
+    assert.equal(parts.plan.error.envelope.refusalKind, kind, "positive control: branchling refused the plan for this reason");
+    const model = overviewModel(parts, {}, Date.now());
+    const wave = model.wave;
+    assert.equal(wave.state, "refusal");
+    assert.equal(wave.failure.title, PLAN_REFUSAL_TEXT.titles[kind]);
+    assert.notEqual(wave.failure.title, "branchling declined the request");
+    assert.equal(wave.failure.refusalKind, kind);
+    assert.equal(wave.failure.detail, parts.plan.error.envelope.refusal);
+    assert.deepEqual(wave.failure.details, parts.plan.error.envelope.problems);
+    assert.ok(wave.failure.details.length >= 1);
+    if (kind === "plan-unparsable") assert.match(wave.failure.details[0], /^line 1\b/);
+    else assert.match(wave.failure.details[0], /TASK-1 .*blocked by TASK-3/);
+    assert.equal(wave.failure.hint, PLAN_REFUSAL_TEXT.hint);
+    assert.equal(wave.failure.httpStatus, 409);
+    // In flight reads the same plan and says it the same way.
+    assert.equal(model.inFlight.failure.title, PLAN_REFUSAL_TEXT.titles[kind]);
+    assertPlain(model, kind);
+  });
+}
+
+test("a refused plan envelope that arrives as an answer is the same refusal on the wave card", () => {
+  const envelope = { schemaVersion: 1, kind: "plan", ok: false, waves: [], refusalKind: "plan-unparsable", refusal: "the plan does not parse", problems: ["line 1: oops"] };
+  const wave = overviewModel({ ...ready.parts, plan: overviewPart({ ok: true, status: 200, body: envelope }) }, {}, Date.now()).wave;
+  assert.equal(wave.state, "refusal");
+  assert.equal(wave.failure.title, PLAN_REFUSAL_TEXT.titles["plan-unparsable"]);
+  assert.deepEqual(wave.failure.details, ["line 1: oops"]);
+});
+
+test("the wave card on the page lists a refused plan's problems and hint", () => {
+  const page = readFileSync(new URL("../src/web/overview.mjs", import.meta.url), "utf8");
+  assert.match(page, /f\.details\.map/);
+  assert.match(page, /if \(f\.hint\)/);
 });
 
 test("a read that never answered is an error naming the unreachable server, never an empty part", () => {
