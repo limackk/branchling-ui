@@ -1,1 +1,2 @@
 {"id":"01M6KBXTM4R2VRKN37FKJ0M8S9","ts":"2026-11-04T13:28:12.164Z","task":"UI-50","field":"__created__","from":"","to":"The pre-body stub runs on Windows","actor":"agent:claude","source":"new","reason":"unknown"}
+{"id":"01M6P3K0V1F3W1TA4SD1XBRQNP","ts":"2026-11-05T15:00:12.769Z","task":"UI-50","field":"blocked_by","from":[],"to":["UI-42"],"actor":"agent:claude","source":"set","reason":"The windows-latest job cannot reach the pre-body stub until the pin carries query --scope: run 42049755791 fails task-panel's before hook on 0.3.0"}

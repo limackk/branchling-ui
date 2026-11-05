@@ -16,8 +16,8 @@ conflict_group: []                 # the AREA it touches (e.g. a module): `next`
 estimate: 30m
 confidence: medium                 # how much you trust the estimate
 created: 2026-11-04
-updated: 2026-11-04
-blocked_by: []                     # ids of tasks that MUST be closed before this one starts
+updated: 2026-11-05
+blocked_by: [UI-42]  # ids of tasks that MUST be closed before this one starts
 blocks: []                         # ids this task will unblock
 related_docs: []                   # paths relative to the repository root
 verification:
