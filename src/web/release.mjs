@@ -15,7 +15,7 @@
 
 import { RELEASE_TEXT, releaseModel } from "/view-model/release.mjs";
 import { fromApiError, loadingState, unreachableState } from "/view-model/states.mjs";
-import { SEEN_LIST_ID, createPlanning } from "/release-planning.mjs";
+import { CHOICES_NOTE_ID, SEEN_LIST_ID, createPlanning } from "/release-planning.mjs";
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -112,7 +112,7 @@ function controls() {
   if (form) return form;
   form = el("form", { class: "release-controls", "aria-label": "Release pipeline selection" });
   const targetSelect = el("select", { id: "release-target", name: "target" });
-  const releaseInput = el("input", { id: "release-name", name: "release", type: "text", autocomplete: "off", spellcheck: "false", list: SEEN_LIST_ID });
+  const releaseInput = el("input", { id: "release-name", name: "release", type: "text", autocomplete: "off", spellcheck: "false", list: SEEN_LIST_ID, "aria-describedby": CHOICES_NOTE_ID });
   const show = el("button", { type: "submit", text: "Show" });
   const clear = el("button", { type: "button", text: "Clear" });
   clear.addEventListener("click", () => select({ target: "", release: "" }));
@@ -125,7 +125,7 @@ function controls() {
   form.append(
     el("label", { for: "release-target", text: "Target" }), targetSelect,
     el("label", { for: "release-name", text: "Compare with release" }), releaseInput,
-    show, clear, declare,
+    show, clear, declare, planning.choicesNote,
   );
   return form;
 }

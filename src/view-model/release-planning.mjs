@@ -14,21 +14,21 @@
  * and the comparison of plan with shipped is the release view's own read,
  * `deploy status --release <name>`, which the page already renders.
  *
- * WHICH RELEASES ARE DECLARED. No read of branchling 0.3.0 returns
- * `releases:` as data: not `deploy status` (its `release` key is the one
- * named by `--release`, with `current`, the release it judges current), not
- * `stats`, `query`, `doctor` (prose only, inside a check's detail), `plan`,
- * `show`, `log`, `audit` or `where`. So this package never shows a list
- * that claims to be the declared releases. What it can say from
- * branchling's own data:
+ * WHICH RELEASES ARE DECLARED (UI-52). The `vocabulary` envelope (UI-18,
+ * upstream TL-532, adapter.vocabulary(), GET /api/vocabulary) carries
+ * `releases: [{ name, ref }]` in the order config.yaml declares them, which
+ * is chronological. When it is known, the release box offers that list,
+ * labelled as declared (`declaredReleases`, `releaseChoices`).
  *
- *   - a release IS declared when `deploy status --release <name>` (and
- *     `query --release <name>`) answer with an envelope; an undeclared one
- *     is a usage error, which the release view turns into its rejected state;
- *   - the releases SEEN: the `release` of the active tasks' `query` rows,
- *     `release.current` of the last `deploy status --release`, and every
- *     name `declare` answered with on this page. That is what the release
- *     box suggests, labelled as seen, never as declared.
+ * The executable at the floor of SUPPORTED_RANGE (0.3.0) has no vocabulary
+ * command, so adapter.vocabulary() resolves null, and no other read of it
+ * returns `releases:` as data. Then the box falls back to the releases SEEN:
+ * the `release` of the active tasks' `query` rows, `release.current` of the
+ * last `deploy status --release`, and every name `declare` answered with on
+ * this page, labelled as seen, never as declared. Either way a release IS
+ * declared when `deploy status --release <name>` answers with an envelope;
+ * an undeclared one is a usage error, which the release view turns into its
+ * rejected state.
  *
  * THE ACTOR is never taken from the page (docs/architecture.md, "The
  * actor"): `actor` in a request is refused by name.
@@ -36,6 +36,7 @@
 
 import { fromApiError } from "./states.mjs";
 import { TASK_ACTIONS_TEXT } from "./task-actions.mjs";
+import { declaredValues } from "./task-fields.mjs";
 
 /** The route a declaration is POSTed to. */
 export const DECLARE_PATH = "/api/release/declare";
@@ -87,8 +88,10 @@ export const PLANNING_TEXT = {
   recordedActor: TASK_ACTIONS_TEXT.recordedActor,
   actorNote: TASK_ACTIONS_TEXT.actorNote,
 
+  declaredLabel: "Releases declared",
+  declaredNote: "Every release this backlog's config.yaml declares, in declared order.",
   seenLabel: "Releases seen",
-  seenNote: "Seen on active tasks, in the last comparison and declared on this page. branchling gives no list of every declared release as data yet.",
+  seenNote: "Seen on active tasks, in the last comparison and declared on this page: this branchling gives no list of the declared releases.",
 };
 
 function badText(value, name, max) {
@@ -272,4 +275,32 @@ export function seenReleases({ list, status, declared = [] } = {}) {
   if (rel) { add(rel.name); add(rel.current); }
   for (const name of declared) add(name);
   return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+/**
+ * The releases a `vocabulary` envelope declares, names only, in declared
+ * (chronological) order. Null when the envelope is null (an executable
+ * without the command) or carries no `releases` array: then the declared
+ * list is not known. An empty list is a real answer: none are declared.
+ */
+export function declaredReleases(vocabulary) {
+  return declaredValues(vocabulary, "releases");
+}
+
+/**
+ * What the release box offers, and what it calls the list:
+ *
+ *   { source: "declared" | "seen", label, note, names }
+ *
+ * The declared releases when the vocabulary is known, with any name declared
+ * on this page since the vocabulary was read added last (it is declared,
+ * and `declare` appends); otherwise seenReleases, labelled as seen.
+ */
+export function releaseChoices({ vocabulary, list, status, declared = [] } = {}) {
+  const names = declaredReleases(vocabulary);
+  if (names) {
+    for (const name of declared) if (typeof name === "string" && name.trim() && !names.includes(name.trim())) names.push(name.trim());
+    return { source: "declared", label: PLANNING_TEXT.declaredLabel, note: PLANNING_TEXT.declaredNote, names };
+  }
+  return { source: "seen", label: PLANNING_TEXT.seenLabel, note: PLANNING_TEXT.seenNote, names: seenReleases({ list, status, declared }) };
 }

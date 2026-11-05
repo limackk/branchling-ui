@@ -30,7 +30,8 @@ import { FIELD_EDIT_PATH } from "../src/view-model/task-fields.mjs";
 import { releaseModel } from "../src/view-model/release.mjs";
 import {
   DECLARE_PATH, declareCommand, declareFailure, declareRecorded,
-  planChanges, planCommand, planningModel, seenReleases, validateDeclare,
+  declaredReleases, planChanges, planCommand, planningModel, releaseChoices, seenReleases, validateDeclare,
+  PLANNING_TEXT,
 } from "../src/view-model/release-planning.mjs";
 import { BIN, buildReleaseManageBacklog, fixtureEnv } from "./fixtures/release-manage-backlog.mjs";
 
@@ -376,6 +377,37 @@ test("planningModel marks the tasks planned for the release; planChanges asks on
   const status = await fx.adapter.deployStatus({ release: "1.0" });
   assert.deepEqual(seenReleases({ list, status, declared: ["1.1"] }), ["1.0", "1.1"]);
   assert.deepEqual(seenReleases({}), []);
+});
+
+test("declared releases: the release box offers the vocabulary's releases in declared order, labelled as declared", async () => {
+  const fx = await fixture();
+  await fx.adapter.declare("releases", "0.9", { reason: "Declared after 1.0, so it comes second." });
+  const vocabulary = await fx.adapter.vocabulary();
+  assert.ok(vocabulary, "the executable under test has the vocabulary command");
+  assert.deepEqual(declaredReleases(vocabulary), ["1.0", "0.9"], "declared order, not sorted");
+  const list = await fx.adapter.query();
+  const status = await fx.adapter.deployStatus({ release: "1.0" });
+  const choices = releaseChoices({ vocabulary, list, status, declared: ["0.9", "2.0"] });
+  assert.equal(choices.source, "declared");
+  assert.equal(choices.label, PLANNING_TEXT.declaredLabel);
+  assert.equal(choices.note, PLANNING_TEXT.declaredNote);
+  assert.deepEqual(choices.names, ["1.0", "0.9", "2.0"], "a name declared on the page since the read is added last, once");
+  assert.deepEqual(releaseChoices({ vocabulary: { ...vocabulary, releases: [] } }).names, [], "none declared is a real answer");
+});
+
+test("declared releases: without a vocabulary the release box falls back to the releases seen, labelled as seen", async () => {
+  const fx = await fixture();
+  const list = await fx.adapter.query();
+  const status = await fx.adapter.deployStatus({ release: "1.0" });
+  for (const vocabulary of [null, undefined, { kind: "vocabulary", statuses: [], priorities: [] }]) {
+    assert.equal(declaredReleases(vocabulary), null);
+    const choices = releaseChoices({ vocabulary, list, status, declared: ["1.1"] });
+    assert.equal(choices.source, "seen");
+    assert.equal(choices.label, PLANNING_TEXT.seenLabel);
+    assert.equal(choices.note, PLANNING_TEXT.seenNote);
+    assert.deepEqual(choices.names, seenReleases({ list, status, declared: ["1.1"] }));
+    assert.deepEqual(choices.names, ["1.0", "1.1"]);
+  }
 });
 
 test("declareRecorded says what branchling wrote and where", () => {

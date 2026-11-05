@@ -17,7 +17,7 @@
 
 import {
   DECLARE_PATH, PLANNING_TEXT, declareCommand, declareFailure, declareRecorded,
-  planChanges, planCommand, planningModel, seenReleases, validateDeclare,
+  planChanges, planCommand, planningModel, releaseChoices, validateDeclare,
 } from "/view-model/release-planning.mjs";
 import { FIELD_EDIT_PATH, fieldEditFailure } from "/view-model/task-fields.mjs";
 import { fromApiError, unreachableState } from "/view-model/states.mjs";
@@ -26,6 +26,9 @@ const capability = () => document.querySelector('meta[name="branchling-ui-capabi
 
 /** The datalist the release view's release box suggests from. */
 export const SEEN_LIST_ID = "release-seen";
+
+/** The line that says whether that list is the declared releases or the ones seen (UI-52). */
+export const CHOICES_NOTE_ID = "release-choices-note";
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -104,11 +107,33 @@ export function createPlanning({ onDeclared, onPlanned }) {
   const declaredHere = [];
   let lastList = null;
   let lastStatus = null;
+  let vocabulary = null;
   const seen = el("datalist", { id: SEEN_LIST_ID });
+  const choicesNote = el("span", { id: CHOICES_NOTE_ID, class: "hint release-choices-note" });
 
   function refreshSeen() {
-    const names = seenReleases({ list: lastList, status: lastStatus, declared: declaredHere });
-    seen.replaceChildren(...names.map(name => el("option", { value: name })));
+    const choices = releaseChoices({ vocabulary, list: lastList, status: lastStatus, declared: declaredHere });
+    seen.replaceChildren(...choices.names.map(name => el("option", { value: name })));
+    seen.dataset.source = choices.source;
+    choicesNote.textContent = `${choices.label}: ${choices.note}`;
+  }
+  refreshSeen();
+
+  /**
+   * The declared releases come from the `vocabulary` envelope (UI-52), read
+   * again with every read of the release view so a release declared since
+   * (here or elsewhere) is offered. A failure or an executable without the
+   * command leaves the seen list.
+   */
+  async function readVocabulary() {
+    try {
+      const res = await fetch("/api/vocabulary", { headers: { Accept: "application/json" } });
+      const json = res.ok ? await res.json().catch(() => null) : null;
+      vocabulary = (json && json.vocabulary) || null;
+    } catch {
+      vocabulary = null;
+    }
+    refreshSeen();
   }
 
   /* ---------- declare ---------- */
@@ -337,6 +362,8 @@ export function createPlanning({ onDeclared, onPlanned }) {
 
   return {
     node,
+    /** The line saying what the release box's suggestions are; the release view places it by the box. */
+    choicesNote,
     /**
      * Called by the release view after every read: the selected release, the
      * `release-status` envelope when the read succeeded, and whether
@@ -344,6 +371,7 @@ export function createPlanning({ onDeclared, onPlanned }) {
      */
     update({ release, status, known, reload = false }) {
       if (status) { lastStatus = status; refreshSeen(); }
+      readVocabulary();
       const name = release || "";
       if (!name) {
         planFor = null;
