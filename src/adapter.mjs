@@ -402,6 +402,12 @@ export async function listDecisions(adapter) {
  *                                     branchling's order. Lifted to `fields`:
  *                                     the array, or null from a build that
  *                                     cannot describe them (see `setFields`)
+ *   vocabulary                        the words config.yaml declares (UI-18),
+ *                                     so a field edit offers a closed
+ *                                     vocabulary's declared values as a
+ *                                     choice (UI-43). Lifted to `vocabulary`:
+ *                                     the envelope, or null from a build
+ *                                     without the command
  *
  * The body comes with `show`, through `show --json --body` (TL-542), and is
  * lifted to the answer's own `body` key: the markdown string, or null when
@@ -410,9 +416,10 @@ export async function listDecisions(adapter) {
  * failure rejects the whole answer, never a smaller one.
  *
  *   { kind: "task-panel", composed: true, id, show, log, task: <row>|null, blocks: [<row>],
- *     fields: [{ name, list, clearable, vocabulary, suggestions, values }]|null, body: string|null }
+ *     fields: [{ name, list, clearable, vocabulary, suggestions, values }]|null,
+ *     vocabulary: <vocabulary envelope>|null, body: string|null }
  *
- * @param {{ show: Function, log: Function, query: Function }} adapter
+ * @param {{ show: Function, log: Function, query: Function, setFields: Function, vocabulary: Function }} adapter
  * @param {string} id a task id, already checked by the caller
  */
 export async function readTask(adapter, id) {
@@ -421,18 +428,19 @@ export async function readTask(adapter, id) {
   // The row is read with --scope all (TL-540), so a closed task is found
   // without naming the status show gave.
   const show = await adapter.show(id, { body: true });
-  const [log, list, blocking, described] = await Promise.all([
+  const [log, list, blocking, described, vocabulary] = await Promise.all([
     adapter.log(id),
     adapter.query({ text: id, scope: "all" }),
     adapter.query({ "blocked-by": id }),
     adapter.setFields(),
+    adapter.vocabulary(),
   ]);
   const rows = Array.isArray(list.tasks) ? list.tasks : [];
   const task = rows.find(t => t && t.id === id) || null;
   const blocks = (Array.isArray(blocking.tasks) ? blocking.tasks : []).filter(t => t && typeof t.id === "string" && t.id);
   const fields = described ? described.fields : null;
   const body = typeof show.body === "string" ? show.body : null;
-  return { kind: "task-panel", composed: true, id, show, log, task, blocks, fields, body };
+  return { kind: "task-panel", composed: true, id, show, log, task, blocks, fields, vocabulary: vocabulary || null, body };
 }
 
 /**

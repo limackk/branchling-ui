@@ -23,13 +23,25 @@
  *
  * WHICH VALUES. The box starts from the task's current value, which `show`
  * and the task's `query` row both carry for every field `set` edits since
- * TL-543 (confidence and the declared blocks included). A field with
- * `values` offers them as suggestions; the other vocabularies are in
- * config.yaml, which this package may not read, and come with UI-18. Every
- * value is still typed as text and judged by branchling: a value outside the
- * vocabulary is refused as `unknown-value`, naming the declared values, and
- * the form says which input to fix, keeps what was typed, and lets the
- * person send again.
+ * TL-543 (confidence and the declared blocks included).
+ *
+ * A CLOSED VOCABULARY IS A CHOICE (UI-43). `set --fields` names, for each
+ * field, the config.yaml key its value must come from (`vocabulary`) or is
+ * only suggested from (`suggestions`); readTask composes branchling's
+ * `vocabulary` envelope (UI-18) into the answer, and that envelope is keyed
+ * by the same config.yaml keys. So a field whose key the envelope answers
+ * offers exactly the declared values as a choice (`control: "select"`, or
+ * `"checkboxes"` for a list), and a field whose values the tool fixes itself
+ * (executor's `values`) does too. A suggested key (estimates, labels) keeps
+ * the text box with the declared values as suggestions. Free text stays
+ * wherever the executable has no vocabulary to give: a field without a key,
+ * a key the envelope does not carry, or a build without the `vocabulary`
+ * command (`vocabulary: null`). A current value the backlog no longer
+ * declares is still offered, marked, so opening the form never changes it.
+ * Every value is still judged by branchling: a value outside the vocabulary
+ * is refused as `unknown-value`, naming the declared values, and the form
+ * says which input to fix, keeps what was chosen, and lets the person send
+ * again.
  *
  * THE REASON is optional: `set` takes `--reason` and records it in the
  * history (`unknown` when none is given, branchling's own word). When the
@@ -91,6 +103,10 @@ export const FIELD_EDIT_TEXT = {
   clearableHint: "An empty value clears it.",
   requiredHint: "It may not be empty.",
   valuesHint: values => `One of: ${values.join(", ")}.`,
+  choiceHint: list => (list ? "Tick the values this backlog declares." : "Choose one of the values this backlog declares."),
+  noneDeclared: "This backlog declares no values for it.",
+  suggestedHint: values => `Declared: ${values.join(", ")}; another value may be typed.`,
+  undeclared: value => `${value} (not declared)`,
   valueUnknown: "branchling did not report this field's current value, so the box starts empty.",
   unavailable: "This build of branchling cannot describe the fields its set command edits (set --fields), so no field can be edited here. A newer branchling can.",
   unknownValue: (value, label, declared) => declared.length
@@ -193,7 +209,13 @@ function valueHint(field, known) {
   if (!known) parts.push(FIELD_EDIT_TEXT.valueUnknown);
   parts.push(FIELD_EDIT_TEXT.valueHint);
   if (field.list) parts.push(FIELD_EDIT_TEXT.listHint);
-  if (field.values && field.values.length) parts.push(FIELD_EDIT_TEXT.valuesHint(field.values));
+  if (field.values && field.values.length) {
+    parts.push(FIELD_EDIT_TEXT.valuesHint(field.values));
+  } else if (field.choices) {
+    parts.push(field.choices.length ? FIELD_EDIT_TEXT.choiceHint(field.list) : FIELD_EDIT_TEXT.noneDeclared);
+  } else if (field.suggested && field.suggested.length) {
+    parts.push(FIELD_EDIT_TEXT.suggestedHint(field.suggested));
+  }
   parts.push(field.clearable ? FIELD_EDIT_TEXT.clearableHint : FIELD_EDIT_TEXT.requiredHint);
   return parts.join(" ");
 }
@@ -207,7 +229,12 @@ function valueHint(field, known) {
  * before TL-543) gives no pens; fieldEditsNote says why.
  *
  *   [{ key, label, known, list, clearable, vocabulary, suggestions, values,
- *      current, display, hint }]
+ *      choices, suggested, control, options, current, display, hint }]
+ *
+ * `choices` is the closed list of declared values (null: free text),
+ * `suggested` the declared values of a suggestions key (null: none),
+ * `control` one of "text", "select", "checkboxes", and `options` the
+ * choice's entries, `[{ value, label, selected, declared }]`, empty for text.
  */
 export function fieldEdits(answer) {
   if (!answer || answer.kind !== "task-panel" || typeof answer.id !== "string") {
@@ -224,20 +251,68 @@ export function fieldEdits(answer) {
     const known = raw !== undefined && raw !== null;
     const current = list ? list.join(", ") : str(raw);
     const values = Array.isArray(f.values) ? f.values.filter(v => typeof v === "string" && v) : null;
+    const vocabularyKey = str(f.vocabulary) || null;
+    const suggestionsKey = str(f.suggestions) || null;
+    const choices = values || declaredValues(answer.vocabulary, vocabularyKey);
+    const suggested = declaredValues(answer.vocabulary, suggestionsKey);
+    const control = choices ? (f.list === true ? "checkboxes" : "select") : "text";
     const field = {
       key,
       label: fieldLabel(key),
       known,
       list: f.list === true,
       clearable: f.clearable === true,
-      vocabulary: str(f.vocabulary) || null,
-      suggestions: str(f.suggestions) || null,
+      vocabulary: vocabularyKey,
+      suggestions: suggestionsKey,
       values,
+      choices,
+      suggested,
+      control,
+      options: control === "text" ? [] : choiceOptions(choices, list || (current ? [current] : []), control === "select" && f.clearable === true),
       current,
       display: !known ? FIELD_EDIT_TEXT.notReported : current || FIELD_EDIT_TEXT.empty,
     };
     return { ...field, hint: valueHint(field, known) };
   });
+}
+
+/**
+ * The values a config.yaml key declares, as the `vocabulary` envelope
+ * reports them: a list of names, or entries named by `slug` (boards) or
+ * `name` (releases, deploy targets). Null when there is no key, no envelope
+ * (a build without the command), or the envelope does not carry that key:
+ * then nothing is known and the box stays free text. An empty list is a
+ * real answer, "this backlog declares none".
+ */
+export function declaredValues(vocabulary, key) {
+  if (!key || !vocabulary || typeof vocabulary !== "object" || !own(vocabulary, key) || !Array.isArray(vocabulary[key])) return null;
+  const out = [];
+  for (const entry of vocabulary[key]) {
+    const name = typeof entry === "string" ? entry : entry && typeof entry === "object" ? str(entry.slug) || str(entry.name) : "";
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+/**
+ * The entries of a choice: an empty entry first when the field may be
+ * cleared (a select only; unticking every box clears a list), then the
+ * declared values in declared order, then any current value the backlog
+ * does not declare, marked, so the form starts from what the task holds.
+ */
+function choiceOptions(choices, current, clearable) {
+  const options = [];
+  if (clearable) options.push({ value: "", label: FIELD_EDIT_TEXT.empty, selected: current.length === 0, declared: true });
+  for (const value of choices) options.push({ value, label: value, selected: current.includes(value), declared: true });
+  for (const value of current) {
+    if (!choices.includes(value)) options.push({ value, label: FIELD_EDIT_TEXT.undeclared(value), selected: true, declared: false });
+  }
+  return options;
+}
+
+/** The value a choice sends: the selected entries' values, comma-separated for a list. */
+export function choiceValue(options) {
+  return (Array.isArray(options) ? options : []).filter(o => o && o.selected && o.value).map(o => o.value).join(", ");
 }
 
 /** The sentence the Fields section shows when no field can be edited with this build, else null. */

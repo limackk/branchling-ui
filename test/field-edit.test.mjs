@@ -28,9 +28,10 @@ import { createCache, servedFromCache } from "../src/cache.mjs";
 import { taskPanelModel } from "../src/view-model/task.mjs";
 import {
   FIELD_EDIT_LIMITS, FIELD_EDIT_PATH, FIELD_EDIT_TEXT, FIELD_LABELS,
-  fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, fieldLabel, validateFieldEdit,
+  choiceValue, declaredValues, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, fieldLabel, validateFieldEdit,
 } from "../src/view-model/task-fields.mjs";
-import { BIN, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
+import { BIN, ROLES, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
+import { PRIORITIES, buildVocabularyBacklog } from "./fixtures/vocabulary-backlog.mjs";
 
 const ACTOR = "local:maja";
 const roots = [];
@@ -538,4 +539,111 @@ test("fieldEditRecorded says when branchling recorded nothing because the value 
   const none = fieldEditRecorded({ kind: "task-set", ok: true, id: "TASK-1", field: "epic", value: "x", changes: [{ field: "epic", from: "", to: "x" }] });
   assert.equal(none.actorKnown, false);
   assert.deepEqual(none.changes.map(c => c.text), ["Epic: (empty) → x"]);
+});
+
+// --- declared values (UI-43) --------------------------------------------------------------
+
+test("declared values: the panel offers a closed vocabulary's declared values as a choice, read from the vocabulary envelope", async () => {
+  const fx = await fixture();
+  const answer = await readTask(fx.adapter, "TASK-1");
+  const vocabulary = await fx.adapter.vocabulary();
+  assert.deepEqual(answer.vocabulary, vocabulary, "readTask composes the vocabulary envelope unchanged");
+  const edits = fieldEdits(answer);
+  const of = key => edits.find(e => e.key === key);
+  const offered = key => of(key).options.map(o => o.value);
+
+  // priority: a closed vocabulary, not clearable: exactly the declared values, the current one selected.
+  assert.equal(of("priority").vocabulary, "priorities");
+  assert.equal(of("priority").control, "select");
+  assert.deepEqual(of("priority").choices, vocabulary.priorities);
+  assert.deepEqual(offered("priority"), vocabulary.priorities);
+  assert.deepEqual(of("priority").options.filter(o => o.selected).map(o => o.value), ["P2"]);
+  assert.match(of("priority").hint, /Choose one of the values this backlog declares\./);
+
+  // role: the roles the fixture declares, clearable, so an empty entry comes first.
+  assert.equal(of("role").control, "select");
+  assert.deepEqual(of("role").choices, ROLES);
+  assert.deepEqual(offered("role"), ["", ...ROLES]);
+  assert.equal(of("role").options[0].label, FIELD_EDIT_TEXT.empty);
+
+  // board: entries named by slug.
+  assert.deepEqual(of("board").choices, vocabulary.boards.map(b => b.slug));
+
+  // A list with a closed vocabulary is a group of boxes; this backlog declares no deploy targets.
+  assert.equal(of("target").control, "checkboxes");
+  assert.deepEqual(of("target").choices, []);
+  assert.match(of("target").hint, /declares no values for it/);
+
+  // A suggested key stays free text, with the declared values as suggestions.
+  assert.equal(of("estimate").control, "text");
+  assert.deepEqual(of("estimate").suggested, vocabulary.estimates);
+  assert.match(of("estimate").hint, /another value may be typed/);
+
+  // A field with no vocabulary stays free text; the tool's own vocabulary is a choice too.
+  assert.equal(of("title").control, "text");
+  assert.deepEqual(of("title").options, []);
+  assert.equal(of("executor").control, "select");
+  assert.deepEqual(offered("executor"), ["", "human", "agent"]);
+
+  // Positive control: a declared value chosen in the panel is accepted by branchling.
+  assert.equal((await fx.adapter.set("TASK-1", "priority", of("priority").choices[0])).value, vocabulary.priorities[0]);
+  for (const str of strings(edits)) assert.ok(!/[<\x1b]/.test(str), str);
+});
+
+test("declared values: a backlog with its own priorities offers those, not branchling's defaults", async () => {
+  const root = mkdtempSync(join(tmpdir(), "branchling-ui-declared-"));
+  roots.push(root);
+  const fx = await buildVocabularyBacklog(join(root, "repo"), { bin: BIN });
+  const real = createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root, env: fx.env });
+  // The fixture holds no task (see its header): the task reads are stand-ins,
+  // the two reads under test, set --fields and vocabulary, are the real executable's.
+  const adapter = {
+    show: async () => ({ id: "TASK-1", title: "t", status: "todo", priority: "high", executor: "" }),
+    log: async () => ({ entries: [] }),
+    query: async () => ({ tasks: [] }),
+    setFields: () => real.setFields(),
+    vocabulary: () => real.vocabulary(),
+  };
+  const answer = await readTask(adapter, "TASK-1");
+  assert.deepEqual(answer.vocabulary.priorities, PRIORITIES, "positive control: the fixture's vocabulary was read");
+  const priority = fieldEdits(answer).find(e => e.key === "priority");
+  assert.equal(priority.control, "select");
+  assert.deepEqual(priority.options.map(o => o.value), PRIORITIES);
+  assert.ok(!priority.options.some(o => /^P\d$/.test(o.value)), "no default priority is hard-coded");
+  assert.deepEqual(priority.options.filter(o => o.selected).map(o => o.value), ["high"]);
+});
+
+test("declared values: free text where the executable has no vocabulary, and a current value no longer declared is kept", () => {
+  const fields = [
+    { name: "priority", list: false, clearable: false, vocabulary: "priorities", suggestions: null, values: null },
+    { name: "target", list: true, clearable: true, vocabulary: "deploy_targets", suggestions: null, values: null },
+    { name: "release", list: false, clearable: true, vocabulary: "releases", suggestions: null, values: null },
+  ];
+  const base = { kind: "task-panel", composed: true, id: "TASK-1", log: {}, task: null, blocks: [], fields, body: null };
+  const show = { priority: "P9", target: ["web", "gone"], release: "" };
+
+  // A build without the vocabulary command: nothing is known, every box is text.
+  const old = fieldEdits({ ...base, show, vocabulary: null });
+  assert.deepEqual(old.map(e => e.control), ["text", "text", "text"]);
+  assert.ok(old.every(e => e.choices === null && e.options.length === 0));
+
+  const vocabulary = {
+    priorities: ["P0", "P1"],
+    deploy_targets: [{ name: "web", repository: "r", paths: [], stages: [] }, { name: "api", repository: "r", paths: [], stages: [] }],
+    releases: [{ name: "v1", ref: null }],
+  };
+  const [priority, target, release] = fieldEdits({ ...base, show, vocabulary });
+  assert.deepEqual(priority.options.map(o => [o.value, o.selected, o.declared]), [["P0", false, true], ["P1", false, true], ["P9", true, false]]);
+  assert.equal(priority.options.at(-1).label, "P9 (not declared)");
+  assert.equal(choiceValue(priority.options), "P9", "opening the form changes nothing");
+  assert.equal(target.control, "checkboxes");
+  assert.deepEqual(target.options.map(o => [o.value, o.selected]), [["web", true], ["api", false], ["gone", true]]);
+  assert.equal(choiceValue(target.options), "web, gone");
+  assert.equal(choiceValue(target.options.map(o => ({ ...o, selected: false }))), "", "unticking every box clears the list");
+  assert.deepEqual(release.options.map(o => [o.value, o.selected]), [["", true], ["v1", false]]);
+
+  // A key the envelope does not carry is unknown, not empty.
+  assert.equal(declaredValues(vocabulary, "roles"), null);
+  assert.deepEqual(declaredValues({ roles: [] }, "roles"), []);
+  assert.deepEqual(declaredValues({ boards: [{ slug: "main", name: "Main" }] }, "boards"), ["main"]);
 });

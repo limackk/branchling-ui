@@ -42,9 +42,11 @@
  * the Fields list (fieldEdits in src/view-model/task-fields.mjs says which,
  * and what the box starts with); a build that cannot report them gets a note
  * and no pens. It opens the edit form in the same second `<dialog>`: a
- * labelled text box for the value (a fixed vocabulary is offered as
- * suggestions; the config.yaml ones are UI-18, so branchling judges the
- * value), an optional reason, and the command it will run. Saving POSTs
+ * labelled control for the value, an optional reason, and the command it
+ * will run. A closed vocabulary (UI-43) is a choice of the declared values:
+ * a select for one value, a group of checkboxes for a list; a suggested
+ * vocabulary is a text box with the declared values as suggestions; every
+ * other field is free text. branchling still judges the value. Saving POSTs
  * `{ id, field, value, reason }` to /api/task/field; a refusal is shown in
  * the form with branchling's text unchanged, a value outside the vocabulary
  * or a missing reason also marks the box to fix, what was typed is kept,
@@ -63,7 +65,7 @@ import {
   TASK_ACTIONS, TASK_ACTIONS_TEXT, actionCommand, actionPath, taskActionFailure, taskActionRecorded, validateTaskAction,
 } from "/view-model/task-actions.mjs";
 import {
-  FIELD_EDIT_PATH, FIELD_EDIT_TEXT, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, validateFieldEdit,
+  FIELD_EDIT_PATH, FIELD_EDIT_TEXT, choiceValue, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, validateFieldEdit,
 } from "/view-model/task-fields.mjs";
 
 /** The capability a write sends; read from the page, as app.mjs does. */
@@ -308,21 +310,15 @@ function openEdit(edit, model, opener) {
     document.body.append(confirmBox);
   }
   const fields = {
-    value: fieldNode("value", FIELD_EDIT_TEXT.valueLabel, el("input", { class: "input", type: "text", autocomplete: "off", spellcheck: "false", maxlength: "2000" }), edit.hint),
+    value: valueField(edit),
     reason: fieldNode("reason", FIELD_EDIT_TEXT.reasonLabel, el("textarea", { class: "textarea", maxlength: "2000", rows: "2" }), FIELD_EDIT_TEXT.reasonHint),
   };
-  fields.value.control.value = edit.known ? edit.current : "";
-  // A vocabulary the tool fixes (executor) is offered; branchling still judges what is sent.
-  if (edit.values && edit.values.length) {
-    const list = el("datalist", { id: "task-action-value-options" }, edit.values.map(v => el("option", { value: v })));
-    fields.value.control.setAttribute("list", list.id);
-    fields.value.wrap.append(list);
-  }
   fields.reason.wrap.querySelector("label").append(" ", el("span", { class: "req", text: FIELD_EDIT_TEXT.reasonOptional }));
   const feedback = el("div", { class: "task-action-feedback" });
   const cmd = el("div", {}, [editCommandNode(id, edit.key, fields.value.control.value, "")]);
   const redraw = () => cmd.replaceChildren(editCommandNode(id, edit.key, fields.value.control.value, fields.reason.control.value));
-  fields.value.control.addEventListener("input", redraw);
+  fields.value.wrap.addEventListener("input", redraw);
+  fields.value.wrap.addEventListener("change", redraw);
   fields.reason.control.addEventListener("input", redraw);
   const submit = el("button", { type: "submit", class: "btn btn-primary" }, [icon("pen"), FIELD_EDIT_TEXT.save]);
   const cancel = el("button", { type: "button", class: "btn btn-ghost", text: FIELD_EDIT_TEXT.cancel });
@@ -354,7 +350,51 @@ function openEdit(edit, model, opener) {
   };
   confirmBox.showModal();
   fields.value.control.focus();
-  fields.value.control.select();
+  if (typeof fields.value.control.select === "function" && edit.control === "text") fields.value.control.select();
+}
+
+/**
+ * The value's control, from the field model (UI-43): a select of the
+ * declared values, a group of checkboxes for a list with a closed
+ * vocabulary, or a text box (with the suggested values, if any, as a
+ * datalist). Whatever the control, `control.value` reads what would be sent,
+ * so the command line, the check and the POST treat them alike.
+ */
+function valueField(edit) {
+  if (edit.control === "select") {
+    const select = el("select", { class: "select" }, edit.options.map(o => el("option", { value: o.value, text: o.label })));
+    const field = fieldNode("value", FIELD_EDIT_TEXT.valueLabel, select, edit.hint);
+    select.selectedIndex = Math.max(0, edit.options.findIndex(o => o.selected));
+    return field;
+  }
+  if (edit.control === "checkboxes") {
+    const hintId = "task-action-value-hint";
+    const errId = "task-action-value-error";
+    const boxes = edit.options.map((o, i) => {
+      const box = el("input", { type: "checkbox", id: `task-action-value-${i}`, name: "value", value: o.value });
+      box.checked = o.selected;
+      return { option: o, box, label: el("label", { class: "choice", for: box.id }, [box, el("span", { text: o.label })]) };
+    });
+    const legend = el("legend", { text: FIELD_EDIT_TEXT.valueLabel });
+    const group = el("fieldset", { class: "choices", id: "task-action-value", tabindex: "-1", "aria-describedby": hintId }, [legend, ...boxes.map(b => b.label)]);
+    // The fieldset stands in for one control: it reads the ticked values, takes focus and error marks.
+    Object.defineProperty(group, "value", { get: () => choiceValue(boxes.map(b => ({ ...b.option, selected: b.box.checked }))) });
+    group.focus = () => (boxes[0] ? boxes[0].box.focus() : HTMLElement.prototype.focus.call(group));
+    const err = el("span", { id: errId, class: "error", hidden: true });
+    const hintNode = edit.hint ? el("span", { id: hintId, class: "hint", text: edit.hint }) : null;
+    const wrap = el("div", { class: "field" }, [group, hintNode, err]);
+    return { wrap, control: group, err, hintId, errId, hint: edit.hint, hintNode };
+  }
+  const input = el("input", { class: "input", type: "text", autocomplete: "off", spellcheck: "false", maxlength: "2000" });
+  const field = fieldNode("value", FIELD_EDIT_TEXT.valueLabel, input, edit.hint);
+  input.value = edit.known ? edit.current : "";
+  // A suggested vocabulary (estimates, labels) is offered; another value may still be typed.
+  if (edit.suggested && edit.suggested.length) {
+    const list = el("datalist", { id: "task-action-value-options" }, edit.suggested.map(v => el("option", { value: v })));
+    input.setAttribute("list", list.id);
+    field.wrap.append(list);
+  }
+  return field;
 }
 
 async function sendEdit(id, field, fields, { form, submit, cancel, feedback }) {
