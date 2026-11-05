@@ -53,7 +53,7 @@
  * is read back from branchling's answer.
  */
 
-import { taskActionFailure, TASK_ACTIONS_TEXT } from "./task-actions.mjs";
+import { actorSourceOf, recordedActorText, taskActionFailure, TASK_ACTIONS_TEXT } from "./task-actions.mjs";
 import { TASK_ID_SHAPE } from "./tasks.mjs";
 
 /**
@@ -184,7 +184,8 @@ export function validateFieldEdit(input) {
 
 /**
  * The command the edit dialog names, as parts for the page to draw (an `arg`
- * part is what the person fills in). Never an `--actor`.
+ * part is what the person fills in). Never an `--actor`, always
+ * `--require-actor`, the flag the adapter passes (UI-48).
  */
 export function fieldCommand(id, field, value = "", reason = "") {
   const v = String(value ?? "").trim();
@@ -192,6 +193,7 @@ export function fieldCommand(id, field, value = "", reason = "") {
   const quote = s => JSON.stringify(s);
   const parts = [{ text: `branchling set ${id} ${field} ` }, { text: v ? (/[\s"'`$\\,;&|<>()]/.test(v) ? quote(v) : v) : "\"\"", arg: true }];
   if (r) parts.push({ text: " --reason " }, { text: quote(r), arg: true });
+  parts.push({ text: " --require-actor" });
   return { parts, text: parts.map(p => p.text).join("") };
 }
 
@@ -352,7 +354,8 @@ export function fieldEditRecorded(result) {
     field: str(r.field) || null,
     actor,
     actorKnown: actor !== null,
-    actorText: actor !== null ? `${FIELD_EDIT_TEXT.recordedActor} ${actor}. ${FIELD_EDIT_TEXT.actorNote}` : FIELD_EDIT_TEXT.actorUnknown,
+    ...actorSourceOf(r),
+    actorText: recordedActorText(actor, r),
     message: changes.length ? FIELD_EDIT_TEXT.recorded(id, label) : FIELD_EDIT_TEXT.unchanged(id, label, shown(r.value)),
     changes,
     note: null,

@@ -473,6 +473,8 @@ function failureNode(failure) {
     el("p", { class: failure.state === "rejected" ? null : "detail", text: failure.detail }),
   ]);
   if (failure.details && failure.details.length) box.append(el("pre", { class: "task-action-details" }, [el("code", { text: failure.details.join("\n") })]));
+  // actor-required: our sentence on how to name the actor, after branchling's own words.
+  if (failure.hint) box.append(el("p", { text: failure.hint }));
   if (failure.branchlingSaid) box.append(el("p", {}, [`${failure.branchlingSaidLabel}: `]), el("pre", { class: "task-action-details" }, [el("code", { text: failure.branchlingSaid })]));
   const meta = [failure.refusalKindText, failure.nothingWritten].filter(Boolean).join(". ").replace(/\.\./g, ".");
   if (meta) box.append(el("p", { class: "t-meta task-action-meta", text: meta }));

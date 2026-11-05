@@ -469,8 +469,19 @@ function acceptDecision(envelope) {
   if (envelope.ok !== true || typeof envelope.id !== "string" || !envelope.decision || typeof envelope.decision.id !== "string") {
     throw new ContractMismatch("task-decide answered success without a recorded decision");
   }
+  return acceptStatedActor(envelope);
+}
+
+/**
+ * A writing command's success, run with `--require-actor`, must say its actor
+ * was STATED (TL-537 for decide, TL-544 for take, release, handoff and set).
+ * A missing `actorSource` is a build that does not report it, and `default`
+ * is a build that ignored the flag: either would let a person's act stand in
+ * history as the default agent's, so both are a ContractMismatch.
+ */
+function acceptStatedActor(envelope) {
   if (!STATED_ACTOR_SOURCES.includes(envelope.actorSource)) {
-    throw new ContractMismatch(`task-decide recorded an answer with actorSource ${JSON.stringify(envelope.actorSource)}, not one of ${STATED_ACTOR_SOURCES.join(", ")}`);
+    throw new ContractMismatch(`${envelope.kind} recorded an act with actorSource ${JSON.stringify(envelope.actorSource)}, not one of ${STATED_ACTOR_SOURCES.join(", ")}`);
   }
   return envelope;
 }
@@ -784,49 +795,56 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
     /*
      * The task panel's writes (UI-30): `take`, `release` and `handoff`. None
      * takes an actor: branchling resolves it itself ($BACKLOG_ACTOR, then the
-     * user's config, then its default), and the envelope (or the history)
-     * says whom it recorded. None passes `--take-over`, `--probe`, `--role`,
-     * `--status`, `--with` or `--to-owner`: the panel offers none of them.
-     * Every value is an argv element, never a shell string, and one starting
-     * with "-" is refused before branchling runs (argWord).
+     * user's config), and the envelope (or the history) says whom it
+     * recorded. Every one passes `--require-actor` (TL-544, UI-48), so with
+     * neither set branchling refuses (`actor-required`, exit 1, nothing
+     * written) instead of recording a person's act as its default agent's;
+     * acceptStatedActor checks the `actorSource` a success reports. None
+     * passes `--take-over`, `--probe`, `--role`, `--status`, `--with` or
+     * `--to-owner`: the panel offers none of them. Every value is an argv
+     * element, never a shell string, and one starting with "-" is refused
+     * before branchling runs (argWord).
      *
-     * How each one fails, measured on branchling 0.3.0:
+     * How each one fails, measured on branchling 0.3.0 (`actor-required`,
+     * exit 1 with an envelope, on main since TL-544):
      *   take     every failure is an envelope, so a BranchlingRefusal: exit 1
-     *            `other-owner` (held), `closed` (a closed task); exit 2
-     *            `not-found` (no such task)
-     *   release  exit 1 `other-owner`, exit 2 `not-found`, both envelopes.
-     *            A missing --reason is exit 2 with `refusalKind: "usage"`,
-     *            which argWord makes unreachable from here
-     *   handoff  exit 1 `other-owner` (an envelope). An undeclared role, a
-     *            backlog with no `roles:`, and a missing --reason are exit 2
-     *            with stderr only: a BranchlingUsageError, which the route
-     *            turns into 422 rejected-input for the role that was typed
+     *            `other-owner` (held), `closed` (a closed task),
+     *            `actor-required`; exit 2 `not-found` (no such task)
+     *   release  exit 1 `other-owner`, `actor-required`, exit 2 `not-found`,
+     *            all envelopes. A missing --reason is exit 2 with
+     *            `refusalKind: "usage"`, which argWord makes unreachable
+     *   handoff  exit 1 `other-owner`, `actor-required` (envelopes). An
+     *            undeclared role, a backlog with no `roles:`, and a missing
+     *            --reason are exit 2 with stderr only: a BranchlingUsageError,
+     *            which the route turns into 422 rejected-input for the role
+     *            that was typed
      */
 
-    /** `take <ID>`: reserve the task and set it in progress (`task-take`). */
+    /** `take <ID> --require-actor`: reserve the task and set it in progress (`task-take`). */
     async take(id) {
       const base = ["take"];
-      return json([...base, argWord(base, "the task id", id)], "task-take");
+      return acceptStatedActor(await json([...base, argWord(base, "the task id", id), "--require-actor"], "task-take"));
     },
 
-    /** `release <ID> --reason "…"`: give the task back to the queue (`task-release`). */
+    /** `release <ID> --reason "…" --require-actor`: give the task back to the queue (`task-release`). */
     async release(id, { reason } = {}) {
       const base = ["release"];
-      return json([...base, argWord(base, "the task id", id), "--reason", argWord(base, "--reason", reason)], "task-release");
+      return acceptStatedActor(await json([...base, argWord(base, "the task id", id), "--reason", argWord(base, "--reason", reason), "--require-actor"], "task-release"));
     },
 
-    /** `handoff <ID> --to-role <r> --reason "…"`: hand the task to a role (`task-handoff`). */
+    /** `handoff <ID> --to-role <r> --reason "…" --require-actor`: hand the task to a role (`task-handoff`). */
     async handoff(id, { role, reason } = {}) {
       const base = ["handoff"];
-      return json([
+      return acceptStatedActor(await json([
         ...base, argWord(base, "the task id", id),
         "--to-role", argWord(base, "--to-role", role),
         "--reason", argWord(base, "--reason", reason),
-      ], "task-handoff");
+        "--require-actor",
+      ], "task-handoff"));
     },
 
     /**
-     * `set <ID> <field> <value> [--reason "…"] [--actor <ns:name>]`: one field
+     * `set <ID> <field> <value> [--reason "…"] [--actor <ns:name>] --require-actor`: one field
      * of one task, validated by branchling against config.yaml and recorded
      * in the task's history (`task-set`, UI-6). 0.3.0 is the first release
      * that has it.
@@ -854,7 +872,10 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
      * that starts with "-", a title "-x", is set as written; the id, the field,
      * the reason and the actor are still names and words that may not.
      * `actor` is passed only when the caller states one; the server never
-     * does.
+     * does. `--require-actor` is always passed (TL-544, UI-48): with no
+     * stated actor branchling refuses (`actor-required`, exit 1, nothing
+     * written), and a success must report a stated `actorSource`
+     * (acceptStatedActor).
      */
     async set(id, field, value, { reason, actor } = {}) {
       const base = ["set"];
@@ -864,11 +885,12 @@ export function createAdapter({ dir, bin, cwd, env } = {}) {
       const args = [...base];
       if (reason !== undefined && reason !== null && reason !== "") args.push("--reason", argWord(base, "--reason", reason));
       if (actor !== undefined && actor !== null && actor !== "") args.push("--actor", argWord(base, "--actor", actor));
+      args.push("--require-actor");
       const envelope = await json(args, "task-set", { literal });
       if (envelope.ok !== true || typeof envelope.id !== "string" || typeof envelope.field !== "string" || !Array.isArray(envelope.changes)) {
         throw new ContractMismatch("task-set answered success without the field it set");
       }
-      return envelope;
+      return acceptStatedActor(envelope);
     },
 
     /**

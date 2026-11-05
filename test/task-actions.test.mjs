@@ -9,7 +9,9 @@
  * Every fixture keeps branchling's state, data and config homes inside its
  * own root (fixtureEnv), so no `take` lock lands in the user's state
  * directory. The server's adapter gets the same homes plus a known
- * BACKLOG_ACTOR, except in the default-actor test, which removes it.
+ * BACKLOG_ACTOR, except in the actor-required test, which removes it: every
+ * panel write passes `--require-actor` (UI-48), so with no actor stated it is
+ * refused rather than recorded as branchling's default agent.
  *
  * A test that writes builds its own fixture, so the order the tests run in
  * does not matter.
@@ -138,6 +140,10 @@ test("take, release and handoff change a fixture task through branchling, and th
     assert.equal(afterTake.log.exchanges.at(-1).source, "take");
     const tookShown = taskActionRecorded("take", took.json, afterTake);
     assert.equal(tookShown.actor, ACTOR, "the recorded actor is shown");
+    assert.equal(took.json.actorSource, "env", "branchling says where the actor came from");
+    assert.equal(tookShown.actorSource, "env");
+    assert.equal(tookShown.actorSourceLabel, "The actor was taken from $BACKLOG_ACTOR.");
+    assert.ok(tookShown.actorText.includes(tookShown.actorSourceLabel));
     assert.match(tookShown.message, /TASK-1 is taken by local:maja/);
     assert.ok(tookShown.changes.some(c => c.text === `status: pending → ${took.json.task.status.replace(/_/g, " ")}`));
 
@@ -153,6 +159,7 @@ test("take, release and handoff change a fixture task through branchling, and th
     assert.equal(lastRelease.reason, "Waiting on the payment provider.", "the reason reached branchling, trimmed");
     const releaseShown = taskActionRecorded("release", released.json, afterRelease);
     assert.equal(releaseShown.actor, ACTOR, "release's actor comes from the exchange carrying its comment");
+    assert.equal(releaseShown.actorSource, "env");
     assert.equal(taskActionRecorded("release", released.json, null).actorKnown, false, "positive control: without the history it is not guessed");
 
     // handoff, to a declared role, with its reason
@@ -164,6 +171,7 @@ test("take, release and handoff change a fixture task through branchling, and th
     assert.equal(afterHandoff.task.role, ROLES[1]);
     const handShown = taskActionRecorded("handoff", handed.json, afterHandoff);
     assert.equal(handShown.actor, ACTOR);
+    assert.equal(handShown.actorSource, "env");
     assert.match(handShown.message, /handed off to reviewer by local:maja/);
     assert.ok(handShown.actorText.includes(TASK_ACTIONS_TEXT.actorNote));
     assert.ok(isPlainData(handShown));
@@ -174,24 +182,65 @@ test("take, release and handoff change a fixture task through branchling, and th
   }
 });
 
-test("with no BACKLOG_ACTOR and no user config, the page shows the default actor branchling recorded", async () => {
+test("with no stated actor, every panel action is refused as actor-required and nothing is written; a stated actor is recorded under it", async () => {
+  // No $BACKLOG_ACTOR and no user config (the fixture's homes are private):
+  // only branchling's default agent is left, which --require-actor refuses.
   const fx = await fixture({ actor: null });
-  const { server, post, panel } = await serve(fx);
+  const { server, post } = await serve(fx);
   try {
-    const took = await post("take", { id: "TASK-4" });
-    assert.equal(took.status, 200, took.text);
-    const answer = await panel("TASK-4");
-    const shown = taskActionRecorded("take", took.json, answer);
-    // Whatever branchling fell back to is what is shown; nothing is invented.
-    assert.equal(shown.actor, answer.task.owner);
-    assert.equal(shown.actor, answer.log.exchanges.at(-1).actor);
-    assert.notEqual(shown.actor, ACTOR, "positive control: not the actor of the other tests");
-    assert.equal(shown.actor, "agent:claude", "branchling's default actor (0.2.0 and 0.3.0), measured");
-    assert.ok(shown.actorText.startsWith(`${TASK_ACTIONS_TEXT.recordedActor} agent:claude.`));
-    assert.match(shown.actorText, /default actor when neither is set/);
+    const before = { 1: await stateOf(fx, "TASK-1"), 4: await stateOf(fx, "TASK-4") };
+    const historyBefore = (await fx.adapter.log("TASK-4")).exchanges.length;
+    const cases = [
+      ["take", { id: "TASK-4" }, () => fx.adapter.take("TASK-4")],
+      ["release", { id: "TASK-4", reason: "Not now." }, () => fx.adapter.release("TASK-4", { reason: "Not now." })],
+      ["handoff", { id: "TASK-1", role: ROLES[1], reason: "Ready for review." }, () => fx.adapter.handoff("TASK-1", { role: ROLES[1], reason: "Ready for review." })],
+    ];
+    for (const [action, value, direct] of cases) {
+      let err;
+      await assert.rejects(direct(), e => { err = e; return e instanceof BranchlingRefusal; });
+      assert.equal(err.envelope.kind, `task-${action}`);
+      assert.equal(err.envelope.refusalKind, "actor-required", action);
+      assert.equal(err.envelope.actorSource, "default", `${action}: branchling says it would have used its default`);
+      assert.equal(err.code, 1);
+
+      const res = await post(action, value);
+      assert.equal(res.status, 409, `${action}: ${res.text}`);
+      assert.equal(res.json.error.refusalKind, "actor-required");
+      assert.equal(res.json.error.message, err.message, "branchling's text, unchanged");
+      const shown = taskActionFailure(action, res.json, res.status);
+      assert.equal(shown.state, "refusal");
+      assert.equal(shown.actorRequired, true);
+      assert.equal(shown.title, TASK_ACTIONS_TEXT.actorRequiredTitle);
+      assert.equal(shown.hint, TASK_ACTIONS_TEXT.actorRequiredHint);
+      assert.match(shown.hint, /\$BACKLOG_ACTOR/);
+      assert.equal(shown.nothingWritten, TASK_ACTIONS_TEXT.nothingWritten);
+    }
+    assert.deepEqual(await stateOf(fx, "TASK-1"), before[1], "nothing was handed off");
+    assert.deepEqual(await stateOf(fx, "TASK-4"), before[4], "nothing was taken or released");
+    assert.equal((await fx.adapter.log("TASK-4")).exchanges.length, historyBefore, "no history was written");
   } finally {
     await server.close();
   }
+
+  // Positive control: the same backlog, with an actor stated, records it.
+  const named = createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root, env: { ...fx.env, BACKLOG_ACTOR: ACTOR } });
+  const took = await named.take("TASK-4");
+  assert.equal(took.actorSource, "env");
+  assert.equal(took.task.owner, ACTOR);
+  const shown = taskActionRecorded("take", took, null);
+  assert.equal(shown.actor, ACTOR);
+  assert.equal(shown.actorSourceLabel, "The actor was taken from $BACKLOG_ACTOR.");
+  assert.doesNotMatch(shown.actorText, /agent:claude/);
+  assert.equal((await stateOf(fx, "TASK-4")).owner, ACTOR, "branchling agrees");
+});
+
+test("a refusal other than actor-required keeps the generic title and no actor hint", () => {
+  const body = { error: { type: "refusal", refusalKind: "other-owner", message: "held", envelope: { details: [] } } };
+  const shown = taskActionFailure("take", body, 409);
+  assert.equal(shown.state, "refusal");
+  assert.equal(shown.actorRequired, false);
+  assert.equal(shown.title, TASK_ACTIONS_TEXT.refusalTitle);
+  assert.equal(shown.hint, null);
 });
 
 // --- refusals reach the page unchanged --------------------------------------------------
@@ -381,11 +430,11 @@ test("validateTaskAction accepts exactly each action's fields, trimmed, and neve
   assert.equal(validateTaskAction("take", { id: "x", actor: "a" }).ok, false);
 });
 
-test("the command a dialog names is branchling's, never with --actor", () => {
-  assert.equal(actionCommand("take", "TASK-1").text, "branchling take TASK-1");
-  assert.equal(actionCommand("release", "TASK-1").text, "branchling release TASK-1 --reason \"…\"");
-  assert.equal(actionCommand("handoff", "TASK-1", { role: "reviewer" }).text, "branchling handoff TASK-1 --to-role reviewer --reason \"…\"");
-  assert.equal(actionCommand("handoff", "TASK-1").text, "branchling handoff TASK-1 --to-role <role> --reason \"…\"");
+test("the command a dialog names is branchling's, never with --actor and always with --require-actor", () => {
+  assert.equal(actionCommand("take", "TASK-1").text, "branchling take TASK-1 --require-actor");
+  assert.equal(actionCommand("release", "TASK-1").text, "branchling release TASK-1 --reason \"…\" --require-actor");
+  assert.equal(actionCommand("handoff", "TASK-1", { role: "reviewer" }).text, "branchling handoff TASK-1 --to-role reviewer --reason \"…\" --require-actor");
+  assert.equal(actionCommand("handoff", "TASK-1").text, "branchling handoff TASK-1 --to-role <role> --reason \"…\" --require-actor");
   for (const action of ["take", "release", "handoff"]) assert.doesNotMatch(actionCommand(action, "TASK-1").text, /--actor|--take-over/);
   assert.equal(actionPath("take"), "/api/task/take");
 });

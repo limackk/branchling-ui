@@ -30,6 +30,7 @@ import {
   FIELD_EDIT_LIMITS, FIELD_EDIT_PATH, FIELD_EDIT_TEXT, FIELD_LABELS,
   choiceValue, declaredValues, fieldCommand, fieldEditFailure, fieldEditRecorded, fieldEdits, fieldEditsNote, fieldLabel, validateFieldEdit,
 } from "../src/view-model/task-fields.mjs";
+import { TASK_ACTIONS_TEXT } from "../src/view-model/task-actions.mjs";
 import { BIN, ROLES, buildActionsBacklog } from "./fixtures/actions-backlog.mjs";
 import { PRIORITIES, buildVocabularyBacklog } from "./fixtures/vocabulary-backlog.mjs";
 
@@ -443,6 +444,83 @@ test("a refused edit is the server's 409 with branchling's text unchanged, which
   }
 });
 
+test("a field edit with no stated actor is refused as actor-required and writes nothing; with an actor it is recorded under it", async () => {
+  // No $BACKLOG_ACTOR and no user config (the fixture's homes are private).
+  const fx = await fixture({ actor: null });
+  const before = historyOf(fx, "TASK-1").length;
+  let err;
+  await assert.rejects(fx.adapter.set("TASK-1", "priority", "P1"), e => { err = e; return e instanceof BranchlingRefusal; });
+  assert.equal(err.envelope.kind, "task-set");
+  assert.equal(err.envelope.refusalKind, "actor-required");
+  assert.equal(err.envelope.actorSource, "default");
+  assert.equal(err.code, 1);
+
+  const { server, post } = await serve(fx);
+  try {
+    const res = await post({ id: "TASK-1", field: "priority", value: "P1", reason: "the audit" });
+    assert.equal(res.status, 409, res.text);
+    assert.equal(res.json.error.refusalKind, "actor-required");
+    const shown = fieldEditFailure(res.json, res.status);
+    assert.equal(shown.state, "refusal");
+    assert.equal(shown.actorRequired, true);
+    assert.equal(shown.title, TASK_ACTIONS_TEXT.actorRequiredTitle);
+    assert.equal(shown.hint, TASK_ACTIONS_TEXT.actorRequiredHint);
+    assert.equal(shown.fix, null, "no box of the form is to blame");
+  } finally {
+    await server.close();
+  }
+  assert.equal(frontmatter(taskFile(fx, "TASK-1"), "priority"), "P2", "the file is unchanged");
+  assert.equal(historyOf(fx, "TASK-1").length, before, "no history record was appended");
+
+  // Positive controls: a stated actor, by flag or by environment, is recorded under it.
+  const flagged = await fx.adapter.set("TASK-1", "priority", "P1", { actor: "local:tester" });
+  assert.equal(flagged.actor, "local:tester");
+  assert.equal(flagged.actorSource, "flag");
+  assert.equal(fieldEditRecorded(flagged).actorSourceLabel, "The actor was named with --actor.");
+  const envFx = createAdapter({ bin: BIN, dir: fx.dir, cwd: fx.root, env: { ...fx.env, BACKLOG_ACTOR: ACTOR } });
+  const env = await envFx.set("TASK-1", "epic", "Payments");
+  assert.equal(env.actor, ACTOR);
+  assert.equal(env.actorSource, "env");
+  const recorded = fieldEditRecorded(env);
+  assert.equal(recorded.actorSource, "env");
+  assert.ok(recorded.actorText.startsWith(`${FIELD_EDIT_TEXT.recordedActor} ${ACTOR}. The actor was taken from $BACKLOG_ACTOR.`), recorded.actorText);
+  assert.equal(historyOf(fx, "TASK-1").at(-1).actor, ACTOR);
+});
+
+test("every panel write passes --require-actor, and a success that does not report a stated actorSource is a contract mismatch", async () => {
+  const root = mkdtempSync(join(tmpdir(), "branchling-ui-actor-source-"));
+  roots.push(root);
+  const success = {
+    take: { kind: "task-take", ok: true, taken: true, id: "TASK-1", task: { id: "TASK-1", status: "in_progress", owner: "local:me" }, lock: { actor: "local:me" } },
+    release: { kind: "task-release", ok: true, id: "TASK-1", status: "pending", owner: "", released: true, comment: "C1" },
+    handoff: { kind: "task-handoff", ok: true, id: "TASK-1", role: { from: "", to: "reviewer" }, comment: { id: "C1", actor: "local:me" } },
+    set: { kind: "task-set", ok: true, id: "TASK-1", file: "f", field: "epic", value: "x", actor: "local:me", changes: [] },
+  };
+  const calls = {
+    take: a => a.take("TASK-1"),
+    release: a => a.release("TASK-1", { reason: "why" }),
+    handoff: a => a.handoff("TASK-1", { role: "reviewer", reason: "why" }),
+    set: a => a.set("TASK-1", "epic", "x"),
+  };
+  for (const [name, envelope] of Object.entries(success)) {
+    const answer = source => JSON.stringify({ schemaVersion: 1, ...envelope, ...(source === undefined ? {} : { actorSource: source }), refusalKind: null, refusal: null, details: [] });
+    // Positive control: a stated source is accepted, and the flag was passed.
+    for (const source of ["flag", "env", "config"]) {
+      const stub = stubBin(root, `${name}-${source}`, answer(source));
+      const got = await calls[name](createAdapter({ bin: stub.file, dir: root }));
+      assert.equal(got.actorSource, source, `${name} ${source}`);
+      const argv = stub.calls().join(" ");
+      assert.match(argv, /--require-actor/, `${name} passes --require-actor`);
+      assert.doesNotMatch(argv, /--actor\b/, `${name} names no actor of its own`);
+    }
+    // No actorSource (a build without TL-544), or the default the flag exists to refuse.
+    for (const [label, source] of [["unsourced", undefined], ["default", "default"], ["unknown", "elsewhere"]]) {
+      const stub = stubBin(root, `${name}-${label}`, answer(source));
+      await assert.rejects(calls[name](createAdapter({ bin: stub.file, dir: root })), ContractMismatch, `${name} ${label}`);
+    }
+  }
+});
+
 // --- the view model --------------------------------------------------------------------
 
 test("validateFieldEdit accepts { id, field, value, reason? }, trimmed, an empty value included, and never an actor", () => {
@@ -469,10 +547,10 @@ test("validateFieldEdit accepts { id, field, value, reason? }, trimmed, an empty
   }
 });
 
-test("fieldCommand names the set command and never an --actor", () => {
-  assert.equal(fieldCommand("TASK-1", "priority", "P1").text, "branchling set TASK-1 priority P1");
-  assert.equal(fieldCommand("TASK-1", "labels", "a, b", "why not").text, 'branchling set TASK-1 labels "a, b" --reason "why not"');
-  assert.equal(fieldCommand("TASK-1", "epic", "").text, 'branchling set TASK-1 epic ""');
+test("fieldCommand names the set command, never an --actor and always --require-actor", () => {
+  assert.equal(fieldCommand("TASK-1", "priority", "P1").text, "branchling set TASK-1 priority P1 --require-actor");
+  assert.equal(fieldCommand("TASK-1", "labels", "a, b", "why not").text, 'branchling set TASK-1 labels "a, b" --reason "why not" --require-actor');
+  assert.equal(fieldCommand("TASK-1", "epic", "").text, 'branchling set TASK-1 epic "" --require-actor');
   assert.ok(!fieldCommand("TASK-1", "epic", "x", "y").text.includes("--actor"));
 });
 

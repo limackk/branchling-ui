@@ -79,6 +79,8 @@ function failureNode(failure) {
     el("p", { class: "detail", text: failure.detail }),
   ]);
   if (failure.details && failure.details.length) box.append(el("pre", { class: "release-planning-details" }, [el("code", { text: failure.details.join("\n") })]));
+  // actor-required: our sentence on how to name the actor, after branchling's own words.
+  if (failure.hint) box.append(el("p", { text: failure.hint }));
   const meta = [failure.refusalKindText, failure.nothingWritten].filter(Boolean).join(". ").replace(/\.\./g, ".");
   if (meta) box.append(el("p", { class: "t-meta", text: meta }));
   return box;

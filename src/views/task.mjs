@@ -23,7 +23,10 @@
  * here repeats it. The body is checked by the same `validateTaskAction` the
  * page uses, and a malformed one (an `actor`, `take-over` or any other field
  * included) is a 400 before branchling runs. No actor is passed: branchling
- * resolves it from the environment of the person who started the server.
+ * resolves it from the environment of the person who started the server, and
+ * the adapter's `--require-actor` (UI-48) makes it refuse (`actor-required`,
+ * a 409 like any refusal) rather than record the act as its default agent's.
+ * The same holds for the field edits below.
  * The answer is the envelope branchling printed, unchanged; a refusal is the
  * server's 409 with its text unchanged. A role branchling does not know
  * (exit 2, stderr only, in 0.2.0) is `422 rejected-input` for that role, with

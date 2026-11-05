@@ -13,14 +13,18 @@
  *     `probe`, `with`, `to-owner`, `status` and anything else are unknown
  *     fields: the panel offers none of them (a take-over crosses somebody
  *     else's claim and is left to the CLI).
- *   - the command each dialog names (`actionCommand`), never with `--actor`.
+ *   - the command each dialog names (`actionCommand`), never with `--actor`
+ *     and always with `--require-actor`, the flag the adapter passes (UI-48).
  *   - what branchling recorded (`taskActionRecorded`), the actor included,
  *     read from what branchling printed: `take`'s lock and owner, `handoff`'s
  *     comment, and for `release`, whose envelope names no actor, the history
- *     exchange that carries the release's comment id.
+ *     exchange that carries the release's comment id; and where branchling
+ *     took that actor from (`actorSource`, TL-544).
  *   - a failure (`taskActionFailure`): a refusal keeps branchling's text
  *     unchanged and its detail lines; a role branchling does not know is the
- *     `rejected` state with branchling's message verbatim.
+ *     `rejected` state with branchling's message verbatim. `actor-required`
+ *     (nobody stated who acts, so branchling would have fallen back to its
+ *     default agent) gets its own title and says how to name the actor.
  *
  * ROLES. Which roles a backlog declares is `roles:` in config.yaml, which
  * this package may not read, and no read of branchling 0.2 reports it as
@@ -28,6 +32,7 @@
  * (which names the declared roles) is shown unchanged.
  */
 
+import { ACTOR_SOURCE_TEXT } from "./decisions.mjs";
 import { fromApiError, rejectedInputState } from "./states.mjs";
 import { TASK_ID_SHAPE } from "./tasks.mjs";
 
@@ -41,7 +46,9 @@ const FIELDS = { take: ["id"], release: ["id", "reason"], handoff: ["id", "role"
 
 export const TASK_ACTIONS_TEXT = {
   heading: "Actions",
-  actorNote: "branchling records who acted from $BACKLOG_ACTOR or your user config, and uses its own default actor when neither is set.",
+  actorNote: "branchling records who acted from $BACKLOG_ACTOR or your user config, and refuses when neither is set.",
+  actorRequiredTitle: "branchling does not know who is acting",
+  actorRequiredHint: "Nothing names who sits in front of this interface, and branchling will not record your act as its default agent. Set $BACKLOG_ACTOR (for example local:your-name) or actor: in your branchling user config, then restart branchling-ui.",
   cancel: "Cancel",
   close: "Close",
   nothingWritten: "Nothing was written.",
@@ -134,6 +141,7 @@ export function actionCommand(action, id, { role } = {}) {
   const parts = [{ text: `branchling ${action} ${id}` }];
   if (action === "handoff") parts.push({ text: " --to-role " }, { text: role && String(role).trim() ? String(role).trim() : "<role>", arg: true });
   if (action !== "take") parts.push({ text: " --reason " }, { text: "\"…\"", arg: true });
+  parts.push({ text: " --require-actor" });
   return { parts, text: parts.map(p => p.text).join("") };
 }
 
@@ -195,11 +203,31 @@ export function taskActionRecorded(action, result, panel = null) {
     taskId: str(r.id),
     actor,
     actorKnown: actor !== null,
-    actorText: actor !== null ? `${TASK_ACTIONS_TEXT.recordedActor} ${actor}. ${TASK_ACTIONS_TEXT.actorNote}` : TASK_ACTIONS_TEXT.actorUnknown,
+    ...actorSourceOf(r),
+    actorText: recordedActorText(actor, r),
     message,
     changes,
     note,
   };
+}
+
+/**
+ * Where branchling took the recorded actor from, as `{ actorSource,
+ * actorSourceLabel }`: the envelope's `actorSource` (TL-544), and a sentence
+ * for a stated one. `default` or a value this package does not know has no
+ * label; the adapter refuses such a success before it reaches a surface.
+ */
+export function actorSourceOf(result) {
+  const actorSource = str(result && result.actorSource);
+  const label = actorSource && Object.hasOwn(ACTOR_SOURCE_TEXT, actorSource) ? `The actor was ${ACTOR_SOURCE_TEXT[actorSource]}.` : null;
+  return { actorSource, actorSourceLabel: label };
+}
+
+/** The line under a recorded write: who, where that came from, and the note. */
+export function recordedActorText(actor, result) {
+  if (actor === null) return TASK_ACTIONS_TEXT.actorUnknown;
+  const { actorSourceLabel } = actorSourceOf(result);
+  return [`${TASK_ACTIONS_TEXT.recordedActor} ${actor}.`, actorSourceLabel, TASK_ACTIONS_TEXT.actorNote].filter(Boolean).join(" ");
 }
 
 /**
@@ -222,10 +250,13 @@ export function taskActionFailure(action, body, status) {
   const model = fromApiError("task", body, status);
   if (model.state === "refusal") {
     const envelope = error.envelope;
+    const actorRequired = model.refusalKind === "actor-required";
     return {
       ...model,
       action,
-      title: TASK_ACTIONS_TEXT.refusalTitle,
+      title: actorRequired ? TASK_ACTIONS_TEXT.actorRequiredTitle : TASK_ACTIONS_TEXT.refusalTitle,
+      actorRequired,
+      hint: actorRequired ? TASK_ACTIONS_TEXT.actorRequiredHint : null,
       details: envelope && Array.isArray(envelope.details) ? envelope.details.map(String) : [],
       refusalKindText: model.refusalKind ? `${TASK_ACTIONS_TEXT.reasonCode}: ${model.refusalKind}` : null,
       nothingWritten: TASK_ACTIONS_TEXT.nothingWritten,

@@ -416,8 +416,9 @@ passes `--actor` and refuses a body that names one. branchling resolves the
 actor itself, in its own order: `$BACKLOG_ACTOR` in the environment of the
 person who started the server, then the `actor:` in their branchling user
 config, then branchling's default, `agent:claude`. That last rung is never
-used for an answer from this interface: `adapter.decide()` always passes
-`--require-actor` (branchling TL-537), so with neither of the first two set
+used for a write from this interface: `adapter.decide()` always passes
+`--require-actor` (branchling TL-537), and so do the task panel's `take`,
+`release`, `handoff` and `set` (TL-544, UI-48), so with neither of the first two set
 branchling refuses (`actor-required`, exit 1, nothing recorded) and the page
 shows that refusal, whose details say how to state who answers. A success
 must report `actorSource` as `flag`, `env` or `config`; anything else is a
