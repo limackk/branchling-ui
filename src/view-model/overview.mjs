@@ -22,8 +22,10 @@
  * parts built from it an error and leaves the others as they are. A failure
  * is mapped by states.mjs, as on every view, never shown as empty.
  *
- * WHERE EVERY NUMBER COMES FROM. From an envelope, never from status names
- * (UI-18):
+ * WHERE EVERY NUMBER COMES FROM. From an envelope, never from status names.
+ * The `vocabulary` envelope (UI-18) gives colour and order only; a count is
+ * taken as branchling computed it even though the archived set is now known,
+ * because branchling's number is the answer and a recount could only differ:
  *
  *   open questions     decisionsModel's count (log --open-questions)
  *   failing checks     doctorModel's `failing` (doctor rows with status error)

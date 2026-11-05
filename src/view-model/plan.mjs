@@ -7,7 +7,11 @@
  * ANSI, no I/O. Both surfaces render THIS.
  *
  * WHERE EVERY ANSWER COMES FROM. Each one is a key branchling computed in
- * `plan --json`, never a guess from status names (UI-18):
+ * `plan --json`, never derived here from status names. The `vocabulary`
+ * envelope (UI-18) now names each status's role and the archived set, and it
+ * is still not used for these: it gives colour and order (roles.mjs), while
+ * open, closed and in flight are branchling's own answer over the same
+ * configuration, and a second derivation here could only disagree with it:
  *
  *   active wave      `activeWave` (an index) and `waves[i].active`: the first
  *                    wave holding an open task. `null` with waves present means

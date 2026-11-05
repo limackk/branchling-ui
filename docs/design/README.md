@@ -77,13 +77,14 @@ a drawer; below 640 px tables fold into lists.
 |---|---|---|
 | 2026-11-02 | System fonts, mono for ids, SHAs, refs and commands | the CSP forbids fetched fonts; the CLI vocabulary reads as something you could type |
 | 2026-11-02 | One accent, teal, reserved for actions | if colour means "clickable", it cannot also mean a status; teal stays clear of the green success role |
-| 2026-11-02 | Six colour roles (`neutral`, `progress`, `attention`, `danger`, `success`, `muted`), every value `neutral` until UI-18 | `roles.mjs` already maps values to roles; the palette is ready the day the vocabulary arrives, and no status is coloured by guessing at its name |
+| 2026-11-02 | Six colour roles (`neutral`, `progress`, `attention`, `danger`, `success`, `muted`), every value `neutral` before UI-18 | `roles.mjs` already maps values to roles; the palette is ready the day the vocabulary arrives, and no status is coloured by guessing at its name |
 | 2026-11-02 | Status is a round pill with a dot, priority a square mono tag | the two must not be confused, also in greyscale |
 | 2026-11-02 | Refusal amber, error red, stale blue | a refusal is an answer to act on, an error a fault, stale data still valid to read |
 | 2026-11-02 | Every write dialog shows a command preview | principle 2; it also teaches the CLI |
 | 2026-11-02 | People get round avatars, agents square ones | the history must make plain who acted |
 | 2026-11-02 | `light-dark()` for every semantic token instead of a duplicated dark block | one line per token cannot drift between schemes; supported by every browser that runs the app |
 | 2026-11-02 | Decision options: the recommended one is labelled, never preselected | preselecting would turn the agent's recommendation into the person's default answer |
+| 2026-11-05 | Roles come from the `vocabulary` envelope (UI-18, UI-45): status role `open` neutral, `active` progress, `waiting` attention, `closed` success, `cancelled` muted; priorities by declared order, first danger, second attention, last of three or more muted | branchling derives or is told each status's role, so the mapping reads a meaning, never a name; `neutral` stays the answer when the vocabulary is not known |
 
 ## Not real yet
 

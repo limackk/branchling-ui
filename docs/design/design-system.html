@@ -104,7 +104,7 @@
         <li><strong>branchling said it, we show it</strong>Counts, refusals and errors are shown as the CLI gave them. A refusal never looks like an empty list; nothing is derived from guessing at names.</li>
         <li><strong>Every write names its command</strong>A dialog that changes the backlog shows the exact <code>branchling</code> command it will run and asks for the reason the command requires.</li>
         <li><strong>What needs a person comes first</strong>Questions waiting on someone, tasks that may start now and failing checks are one glance from anywhere.</li>
-        <li><strong>Label first, colour second</strong>Every status and priority has its text on screen. Colour is a role layered on top, and neutral until the vocabulary arrives from the CLI (UI-18).</li>
+        <li><strong>Label first, colour second</strong>Every status and priority has its text on screen. Colour is a role layered on top, taken from the backlog's vocabulary (UI-18), and neutral when the installed branchling cannot give it.</li>
         <li><strong>Dense, never cramped</strong>Fifty rows must scan without fatigue: tabular numbers, mono ids, one accent, quiet borders, generous line height in prose.</li>
       </ol>
     </section>
@@ -146,18 +146,18 @@
 
     <section id="roles" aria-labelledby="roles-h">
       <h2 id="roles-h">Status and priority roles</h2>
-      <p class="lead">A role says what a value means to the reader, not which value it is. The view model maps a status or priority to a role; the page maps a role to colour. Until UI-18 brings the vocabulary, every value maps to <code>neutral</code>.</p>
+      <p class="lead">A role says what a value means to the reader, not which value it is. The view model maps a status or priority to a role; the page maps a role to colour. The mapping is <code>STATUS_ROLE_COLOURS</code> and <code>priorityColourAt</code> in <code>src/view-model/roles.mjs</code>: a status by the semantic role branchling's <code>vocabulary</code> envelope gives it (UI-18), a priority by its place in the declared order. A status or priority the vocabulary does not declare, and every value when the installed branchling cannot give it, maps to <code>neutral</code>. No name is ever read.</p>
       <div class="table-wrap">
         <table class="table roles-table">
           <caption class="visually-hidden">Roles, their meaning and how they look</caption>
-          <thead><tr><th scope="col">Role</th><th scope="col">Means</th><th scope="col">Status pill</th><th scope="col">Priority tag</th><th scope="col">Likely mapping once UI-18 lands</th></tr></thead>
+          <thead><tr><th scope="col">Role</th><th scope="col">Means</th><th scope="col">Status pill</th><th scope="col">Priority tag</th><th scope="col">Mapped from</th></tr></thead>
           <tbody>
-            <tr><td><code>neutral</code></td><td>nothing to note</td><td><span class="badge role-neutral">pending</span></td><td><span class="prio role-neutral">P2</span></td><td class="muted">open, not started · normal priority · <strong>everything today</strong></td></tr>
-            <tr><td><code>progress</code></td><td>somebody holds it</td><td><span class="badge role-progress">in_progress</span></td><td>—</td><td class="muted">a status that is not terminal and has an owner</td></tr>
-            <tr><td><code>attention</code></td><td>waits on someone</td><td><span class="badge role-attention">blocked</span></td><td><span class="prio role-attention">P1</span></td><td class="muted">a reason-required status · high priority</td></tr>
-            <tr><td><code>danger</code></td><td>act now</td><td><span class="badge role-danger">failing</span></td><td><span class="prio role-danger">P0</span></td><td class="muted">top priority · failed checks</td></tr>
-            <tr><td><code>success</code></td><td>finished well</td><td><span class="badge role-success">done</span></td><td>—</td><td class="muted">archived and not cancelled</td></tr>
-            <tr><td><code>muted</code></td><td>out of the way</td><td><span class="badge role-muted">cancelled</span></td><td><span class="prio role-muted">P3</span></td><td class="muted">archived without finishing · lowest priority</td></tr>
+            <tr><td><code>neutral</code></td><td>nothing to note</td><td><span class="badge role-neutral">pending</span></td><td><span class="prio role-neutral">P2</span></td><td class="muted">status role <code>open</code> · a priority neither first, second nor last · any undeclared value · <strong>everything when the vocabulary is not known</strong></td></tr>
+            <tr><td><code>progress</code></td><td>somebody holds it</td><td><span class="badge role-progress">in_progress</span></td><td>—</td><td class="muted">status role <code>active</code></td></tr>
+            <tr><td><code>attention</code></td><td>waits on someone</td><td><span class="badge role-attention">blocked</span></td><td><span class="prio role-attention">P1</span></td><td class="muted">status role <code>waiting</code> · the second declared priority</td></tr>
+            <tr><td><code>danger</code></td><td>act now</td><td><span class="badge role-danger">failing</span></td><td><span class="prio role-danger">P0</span></td><td class="muted">no status · the first declared priority · a failing check (health)</td></tr>
+            <tr><td><code>success</code></td><td>finished well</td><td><span class="badge role-success">done</span></td><td>—</td><td class="muted">status role <code>closed</code> · a passing check (health)</td></tr>
+            <tr><td><code>muted</code></td><td>out of the way</td><td><span class="badge role-muted">cancelled</span></td><td><span class="prio role-muted">P3</span></td><td class="muted">status role <code>cancelled</code> · the last of three or more declared priorities · a check not run (health)</td></tr>
           </tbody>
         </table>
       </div>

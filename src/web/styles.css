@@ -830,8 +830,9 @@ details[open] > .wave-head .wave-chevron { transform: rotate(90deg); }
 
 /* ---------- the tasks view (UI-26), after mockups/tasks.html ----------
    The mockup's filter chips are labelled fields here: each filter is free
-   text with the values seen in the answers offered (a datalist), since the
-   vocabulary is not known until UI-18. Below 640 px the table is hidden and
+   text with the values seen in the answers offered (a datalist). The filters
+   do not read the vocabulary (UI-18) yet; that is UI-53. Below 640 px the
+   table is hidden and
    the same rows show as a list (.hide-sm / .show-sm). */
 .tasks-controls { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3); background: var(--color-bg-surface); border: var(--border-width) solid var(--color-border-default); border-radius: var(--radius-lg); }
 /* The Open / Archived / All control sits above the filters it scopes (UI-33). */

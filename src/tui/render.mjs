@@ -12,8 +12,9 @@
  *
  * Only the 16 ANSI colours are used (SGR 30-37 and 90-97, plus bold and dim),
  * so the user's terminal theme decides what they look like. Statuses and
- * priorities are styled by ROLE, never by name; every role is neutral until
- * UI-18 brings the vocabulary from the CLI.
+ * priorities are styled by ROLE, never by name; the role comes from the
+ * `vocabulary` envelope (UI-18, src/view-model/roles.mjs) and is neutral when
+ * the installed branchling cannot give it.
  *
  * On the full screen the header and the key map stay put and the body
  * scrolls: when it is taller than the room, the row above the key map says

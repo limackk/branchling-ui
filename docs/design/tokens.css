@@ -88,8 +88,8 @@
 
   /* ---------- semantic: colour ROLES for statuses and priorities ----------
    * A role is what a status or priority MEANS to the reader, never which
-   * status it is. Until UI-18 brings the vocabulary from the CLI, every
-   * status and priority renders as `neutral` (see roles.mjs). */
+   * status it is. roles.mjs maps the backlog's vocabulary (UI-18) to these;
+   * without it every status and priority renders as `neutral`. */
   --role-neutral-bg: light-dark(var(--n-100), #252c29);
   --role-neutral-fg: light-dark(var(--n-800), #d4dbd8);
   --role-neutral-dot: light-dark(var(--n-500), #8d9793);

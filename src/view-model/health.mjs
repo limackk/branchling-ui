@@ -19,12 +19,14 @@
  * never the error state. The adapter returns it (VERDICT_KINDS in
  * src/adapter.mjs) instead of throwing.
  *
- * WHY RESULTS GET A COLOUR ROLE when statuses do not (UI-18). A status is a
- * value out of the backlog's own config.yaml, which this package may not
- * read, so guessing its colour from its name would be wrong in somebody
- * else's backlog. A check's result is not vocabulary: doctor's `status`
+ * WHY RESULTS GET A FIXED COLOUR ROLE when a status's role is read. A status
+ * is a value out of the backlog's own config.yaml, which this package may not
+ * read, so its colour comes from the role the `vocabulary` envelope gives it
+ * (UI-18, roles.mjs), never from its name, and is neutral when that envelope
+ * is not known. A check's result is not vocabulary: doctor's `status`
  * (ok, info, warn, error) and a guard's `ok` and `skipped` are branchling's
- * own verdict, fixed by the tool and the same in every backlog. So:
+ * own verdict, fixed by the tool and the same in every backlog. So it is
+ * mapped here, with no envelope to wait for:
  *
  *   fail     doctor `error`, a guard with `ok: false`   danger
  *   warn     doctor `warn`                              attention

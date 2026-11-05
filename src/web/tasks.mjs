@@ -193,7 +193,7 @@ function syncForm(filters) {
   }
 }
 
-/** The values offered per filter, from the answers (UI-18 brings the vocabulary). */
+/** The values offered per filter, from the answers; the declared vocabulary is UI-53. */
 function syncOptions(options) {
   for (const key of TASK_FILTER_KEYS) {
     const list = form.querySelector(`#tasks-${key}-values`);

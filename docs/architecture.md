@@ -125,8 +125,10 @@ label, an empty state or a refusal is decided once, here.
   result.
 - Counts that depend on the vocabulary (`active`, `archived`, `blocked`)
   are taken from the envelope as branchling computed them, never derived
-  from status names, until UI-18. A backlog with a custom archived status
-  would otherwise get a wrong number.
+  from status names. That still holds now that the `vocabulary` envelope
+  (UI-18) names the archived set: branchling's count is the answer, a recount
+  here could only disagree with it, and `blocked` (active tasks with a
+  non-empty `blocked_by`) is not a status at all.
 - Status and priority roles come from `branchling vocabulary --json`
   (UI-18, upstream TL-532), read through `adapter.vocabulary()` and served as
   `GET /api/vocabulary`: each status's semantic role, the priorities in
@@ -484,9 +486,12 @@ command spawned per panel).
 
 **Which values.** The box starts from the current value: `show` and the
 task's `query` row carry every field `set` edits since TL-543, confidence and
-the declared blocks included. A fixed vocabulary (`values`) is offered as
-suggestions; the config.yaml vocabularies are UI-18, so every value is still a
-text box and branchling judges it. Every failure of `set` is a refusal
+the declared blocks included. A closed vocabulary is a choice (UI-43): a
+field whose `vocabulary` key the `vocabulary` envelope (UI-18) answers, or
+whose `values` the tool fixes, offers exactly the declared values as a select
+(checkboxes for a list); a `suggestions` key keeps the text box with the
+declared values as suggestions; anything else is free text. branchling still
+judges every value. Every failure of `set` is a refusal
 envelope, so it reaches the page as the usual 409 with branchling's text
 unchanged, and the form keeps what was typed for a retry. Two refusals also
 mark the box to fix: `unknown-value` (with `rejected` and `declared`) marks the
@@ -553,7 +558,8 @@ the server's error mapping inside a view module. The cost of parallel
 reads: five `X-Branchling-UI-Fetched-At` headers, of which the page shows
 the oldest.
 
-**Where each number comes from**, never from a status name (UI-18): open
+**Where each number comes from**, never from a status name, even with the
+vocabulary (UI-18) known, which gives colour and order and no counts: open
 questions from the decisions answer; failing checks from doctor's `error`
 rows; "waiting on other tasks" from stats `blocked`, which in branchling 0.2
 counts ACTIVE tasks whose `blocked_by` is not empty (`summarize` in
@@ -642,8 +648,9 @@ that press it, so it cannot be bound without appearing in the key map.
   touched then.
 - **The 16 ANSI colours only** (SGR 30 to 37, 90 to 97, bold, dim), so the
   user's theme decides what they look like. Statuses and priorities are
-  styled by role, from `ROLE_STYLE`, never by name; every role is `neutral`
-  until UI-18 brings the vocabulary from config.yaml through the CLI. A label
+  styled by role, from `ROLE_STYLE`, never by name; the role comes from the
+  `vocabulary` envelope (UI-18), read with every refresh, and is `neutral`
+  when the installed branchling cannot give it. A label
   is always shown; colour is never the only signal.
 - **Restored on every exit path.** Alternate screen and hidden cursor on
   start; on quit, Ctrl-C, SIGINT, SIGTERM, SIGHUP, an uncaught exception, an
