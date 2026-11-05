@@ -18,6 +18,7 @@ import { ContractMismatch, createAdapter } from "../src/adapter.mjs";
 import { createCache, servedFromCache } from "../src/cache.mjs";
 import { createServer } from "../src/server.mjs";
 import { views } from "../src/views/index.mjs";
+import { declaredFromAdapter, declaredFromVocabulary } from "../src/request-error.mjs";
 import {
   FILTER_MAX_LENGTH, TASK_FILTER_KEYS, TASK_SCOPES, TASKS_TEXT,
   activeFieldFilterCount, scopeHref, filtersSummaryText, parseTaskFilters, parseTaskSelection, tasksFailure, tasksHref, tasksLoading, tasksModel, validateTaskFilters, writeTaskFilters,
@@ -195,6 +196,65 @@ test("an unknown status or priority is rejected-input too, not an interface bug"
     const res = await call(server, `/api/tasks?${key}=${value}`);
     assert.equal(res.status, 422, `${key}=${value}`);
     assert.deepEqual(res.json.error.input, { [key]: value });
+  }
+});
+
+test("a rejected status, priority or board names the declared values from vocabulary", async () => {
+  const vocabulary = await createAdapter({ bin: BIN, dir: fixture.dir, cwd: fixture.root }).vocabulary();
+  assert.ok(vocabulary, "the executable under test answers vocabulary");
+  const expected = {
+    status: vocabulary.statuses.map(s => s.name),
+    priority: vocabulary.priorities,
+    board: vocabulary.boards.map(b => b.slug),
+  };
+  for (const [key, value] of [["status", "shipped"], ["priority", "P9"], ["board", "nowhere"]]) {
+    const res = await call(server, `/api/tasks?${key}=${value}`);
+    assert.equal(res.status, 422, `${key}=${value}`);
+    assert.ok(expected[key].length, `the fixture declares ${key} values`);
+    assert.deepEqual(res.json.error.declared, { [key]: expected[key] });
+    const model = tasksFailure(res.json, res.status);
+    assert.equal(model.names[0].known, true);
+    assert.equal(model.names[0].isDeclared, false);
+    assert.match(model.names[0].declaredText, new RegExp(expected[key].join(", ")));
+  }
+  // Two typed names: the declared one is not the culprit.
+  const both = await call(server, "/api/tasks?status=pending&priority=P9");
+  assert.equal(both.status, 422);
+  assert.deepEqual(both.json.error.declared, { status: expected.status, priority: expected.priority });
+  const model = tasksFailure(both.json, both.status);
+  assert.deepEqual(model.names.map(n => n.key), ["priority"]);
+});
+
+test("declaredFromVocabulary reads each declared list from the envelope, null when it is not there", async () => {
+  const v = {
+    statuses: [{ name: "open" }, { name: "shut" }], priorities: ["high", "low"],
+    boards: [{ slug: "web", name: "Web" }], roles: ["dev"], releases: [{ name: "v1", ref: null }], deploy_targets: [],
+  };
+  const keys = ["status", "priority", "board", "role", "release", "target", "epic"];
+  assert.deepEqual(declaredFromVocabulary(v, keys), {
+    status: ["open", "shut"], priority: ["high", "low"], board: ["web"], role: ["dev"], release: ["v1"], target: [], epic: null,
+  });
+  assert.deepEqual(declaredFromVocabulary(null, ["status", "role"]), { status: null, role: null });
+  assert.deepEqual(declaredFromVocabulary({ priorities: [3] }, ["priority", "role"]), { priority: null, role: null }, "a malformed list is not known");
+  assert.deepEqual(await declaredFromAdapter({})(["board"]), { board: null }, "an adapter without the call");
+  assert.deepEqual(await declaredFromAdapter({ vocabulary: async () => v })(["board"]), { board: ["web"] });
+});
+
+test("without vocabulary a rejected name's declared list stays null, never empty", async () => {
+  const adapter = createAdapter({ bin: BIN, dir: fixture.dir, cwd: fixture.root });
+  // adapter.vocabulary() resolves null for an executable without the command
+  // (branchling 0.3.0; test/adapter.test.mjs proves that mapping).
+  const older = { ...adapter, vocabulary: async () => null };
+  const srv = await createServer({ adapter: servedFromCache(createCache(older, { dir: fixture.dir, cwd: fixture.root })), port: 0, log: () => {} });
+  try {
+    const res = await call(srv, "/api/tasks?board=nowhere");
+    assert.equal(res.status, 422);
+    assert.deepEqual(res.json.error.declared, { board: null });
+    const model = tasksFailure(res.json, res.status);
+    assert.equal(model.names[0].known, false);
+    assert.match(model.names[0].declaredText, /no list of the declared boards/);
+  } finally {
+    await srv.close();
   }
 });
 

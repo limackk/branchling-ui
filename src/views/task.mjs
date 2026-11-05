@@ -27,9 +27,10 @@
  * The answer is the envelope branchling printed, unchanged; a refusal is the
  * server's 409 with its text unchanged. A role branchling does not know
  * (exit 2, stderr only, in 0.2.0) is `422 rejected-input` for that role, with
- * branchling's message verbatim; no read reports the declared roles, so
- * `declared` is null. The cache passes every write through and invalidates
- * what it holds, so the panel's next read is fresh.
+ * branchling's message verbatim and the declared roles from the
+ * `vocabulary` envelope (UI-44), `null` when the executable has none. The
+ * cache passes every write through and invalidates what it holds, so the
+ * panel's next read is fresh.
  *
  * The panel's field edits (UI-6), one branchling command each:
  *
@@ -45,7 +46,7 @@
  */
 
 import { readTask } from "../adapter.mjs";
-import { RequestError, rejectingTypedInput } from "../request-error.mjs";
+import { RequestError, declaredFromAdapter, rejectingTypedInput } from "../request-error.mjs";
 import { validateTaskAction } from "../view-model/task-actions.mjs";
 import { FIELD_EDIT_PATH, validateFieldEdit } from "../view-model/task-fields.mjs";
 import { TASK_ID_SHAPE } from "../view-model/tasks.mjs";
@@ -92,7 +93,7 @@ export default {
       path: "/api/task/handoff",
       handler: ({ adapter, body }) => {
         const { id, role, reason } = checked("handoff", body);
-        return rejectingTypedInput({ role }, () => adapter.handoff(id, { role, reason }), async () => ({ role: null }));
+        return rejectingTypedInput({ role }, () => adapter.handoff(id, { role, reason }), declaredFromAdapter(adapter));
       },
     },
     {

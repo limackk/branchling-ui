@@ -56,8 +56,9 @@ export class RequestError extends Error {
  * @param {Record<string, string>} input the user-typed names, by parameter
  * @param {() => Promise<any>} call the adapter call that carries them
  * @param {(keys: string[]) => Promise<Record<string, string[]|null>>} [declared]
- *   the declared names per parameter, from branchling's own JSON; `null` for a
- *   parameter whose names branchling does not give as data. Asked only on a
+ *   the declared names per parameter, from branchling's own JSON
+ *   (declaredFromAdapter: the `vocabulary` envelope); `null` for a parameter
+ *   whose names branchling does not give as data. Asked only on a
  *   rejection, and a failure of it leaves every list unknown.
  */
 export async function rejectingTypedInput(input, call, declared) {
@@ -79,3 +80,54 @@ export async function rejectingTypedInput(input, call, declared) {
     });
   }
 }
+
+/**
+ * Where each typed parameter's declared names live in the `vocabulary`
+ * envelope (UI-18, upstream TL-532), as a function from the envelope to a
+ * list of names, or `undefined` when the envelope carries no such array.
+ * `board` is the slug, because the slug is what `query --board` matches.
+ */
+const VOCABULARY_LISTS = {
+  status: v => Array.isArray(v.statuses) ? v.statuses.map(s => s && s.name) : undefined,
+  priority: v => v.priorities,
+  board: v => Array.isArray(v.boards) ? v.boards.map(b => b && b.slug) : undefined,
+  role: v => v.roles,
+  release: v => Array.isArray(v.releases) ? v.releases.map(r => r && r.name) : undefined,
+  target: v => Array.isArray(v.deploy_targets) ? v.deploy_targets.map(t => (t && typeof t === "object" ? t.name : t)) : undefined,
+};
+
+/**
+ * The declared names per parameter from a `vocabulary` envelope (UI-44):
+ * `null` for every key when the envelope is `null` (the executable has no
+ * `vocabulary` command, adapter.vocabulary()) and for a key the envelope
+ * does not list. Never an invented empty list: "not known" stays `null`.
+ *
+ * @param {object|null} vocabulary
+ * @param {string[]} keys
+ * @returns {Record<string, string[]|null>}
+ */
+export function declaredFromVocabulary(vocabulary, keys) {
+  return Object.fromEntries(keys.map(key => {
+    const pick = VOCABULARY_LISTS[key];
+    const list = vocabulary && typeof vocabulary === "object" && pick ? pick(vocabulary) : undefined;
+    const names = Array.isArray(list) && list.every(n => typeof n === "string" && n) ? list.slice() : null;
+    return [key, names];
+  }));
+}
+
+/**
+ * The `declared` argument of rejectingTypedInput for a view: the adapter's
+ * `vocabulary` (cached like every read), asked only on a rejection. An
+ * adapter without the call answers `null` lists, like an executable without
+ * the command.
+ *
+ * @param {{ vocabulary?: () => Promise<object|null> }} adapter
+ * @returns {(keys: string[]) => Promise<Record<string, string[]|null>>}
+ */
+export function declaredFromAdapter(adapter) {
+  return async keys => declaredFromVocabulary(
+    adapter && typeof adapter.vocabulary === "function" ? await adapter.vocabulary() : null,
+    keys,
+  );
+}
+

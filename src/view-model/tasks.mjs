@@ -23,8 +23,9 @@
  * branchling's, never this module's: a value is passed on as typed, and a
  * comma inside one is branchling's OR. No status, priority or board name is
  * written here; the values offered come from the answers (the rows, and the
- * keys of a `stats` envelope when one is given) until UI-18 brings the
- * vocabulary.
+ * keys of a `stats` envelope when one is given). A rejected status, priority
+ * or board name is answered with the declared names from the `vocabulary`
+ * envelope when the executable has it (UI-44, src/request-error.mjs).
  */
 
 import { priorityRole, statusRole } from "./roles.mjs";

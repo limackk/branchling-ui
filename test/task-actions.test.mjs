@@ -230,7 +230,7 @@ test("each action's refusal is the refusal state, branchling's text unchanged, a
   }
 });
 
-test("a role branchling does not know is the rejected state with its message verbatim, and nothing is handed off", async () => {
+test("a role branchling does not know is the rejected state with the declared roles and its message verbatim, and nothing is handed off", async () => {
   const fx = await fixture();
   const { server, post } = await serve(fx);
   try {
@@ -238,7 +238,7 @@ test("a role branchling does not know is the rejected state with its message ver
     assert.equal(res.status, 422, res.text);
     assert.equal(res.json.error.type, "rejected-input");
     assert.deepEqual(res.json.error.input, { role: "designer" });
-    assert.deepEqual(res.json.error.declared, { role: null }, "no read reports the declared roles");
+    assert.deepEqual(res.json.error.declared, { role: ROLES }, "the vocabulary names the declared roles");
     assert.match(res.json.error.detail, /designer/);
     for (const role of ROLES) assert.ok(res.json.error.detail.includes(role), "branchling's own message names the declared roles");
     const shown = taskActionFailure("handoff", res.json, res.status);
@@ -251,6 +251,23 @@ test("a role branchling does not know is the rejected state with its message ver
     const ok = await post("handoff", { id: "TASK-1", role: ROLES[0], reason: "Needs code." });
     assert.equal(ok.status, 200, ok.text);
     assert.equal((await stateOf(fx, "TASK-1")).role, ROLES[0]);
+  } finally {
+    await server.close();
+  }
+});
+
+test("without vocabulary a rejected role's declared list stays null, never empty", async () => {
+  const fx = await fixture();
+  // adapter.vocabulary() resolves null for an executable without the command
+  // (branchling 0.3.0; test/adapter.test.mjs proves that mapping).
+  const { server, post } = await serve(fx, { ...fx.adapter, vocabulary: async () => null });
+  try {
+    const res = await post("handoff", { id: "TASK-1", role: "designer", reason: "Needs a mockup." });
+    assert.equal(res.status, 422, res.text);
+    assert.deepEqual(res.json.error.declared, { role: null });
+    const shown = taskActionFailure("handoff", res.json, res.status);
+    assert.equal(shown.state, "rejected");
+    assert.equal(shown.names[0].known, false);
   } finally {
     await server.close();
   }

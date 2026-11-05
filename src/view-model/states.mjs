@@ -56,6 +56,7 @@ const NOUNS = {
   target: ["deploy target", "deploy targets"],
   stage: ["stage", "stages"],
   role: ["role", "roles"],
+  board: ["board", "boards"],
 };
 
 function nouns(key) {
@@ -85,7 +86,7 @@ export function rejectedInputState(view, error = {}, status) {
     const [noun, plural] = nouns(key);
     const list = Array.isArray(declared[key]) ? declared[key].map(String) : null;
     let declaredText;
-    if (list === null) declaredText = `This page has no list of the declared ${plural}: branchling does not give it as data yet. Its own message below names them.`;
+    if (list === null) declaredText = `This page has no list of the declared ${plural}: this branchling build does not give it as data. Its own message below names them.`;
     else if (!list.length) declaredText = `This backlog declares no ${plural}.`;
     else declaredText = `The declared ${plural}: ${list.join(", ")}.`;
     return {

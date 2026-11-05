@@ -16,13 +16,14 @@
  * status, priority and board are closed vocabularies in branchling 0.2.0: a
  * name outside them is a usage error with stderr only. They are names the
  * user typed, so that is `422 rejected-input` (src/request-error.mjs, UI-21),
- * never the interface-bug `500 usage-error` and never an empty list. No
- * command of the pin gives those vocabularies as data, so the declared lists
- * are `null` (unknown), not empty. epic, owner, label and text are free:
+ * never the interface-bug `500 usage-error` and never an empty list. The
+ * declared lists come from the `vocabulary` envelope (UI-44, through
+ * declaredFromAdapter); an executable without that command leaves them
+ * `null` (unknown), not empty. epic, owner, label and text are free:
  * an unknown value simply matches nothing.
  */
 
-import { RequestError, rejectingTypedInput } from "../request-error.mjs";
+import { RequestError, declaredFromAdapter, rejectingTypedInput } from "../request-error.mjs";
 import { TASK_FILTER_KEYS, validateTaskFilters } from "../view-model/tasks.mjs";
 
 /** The filters whose values branchling checks against config.yaml. */
@@ -48,7 +49,7 @@ export default {
       handler: ({ adapter, params }) => {
         const filters = taskFiltersParam(params);
         const typed = Object.fromEntries(CLOSED_VOCABULARY.filter(k => filters[k]).map(k => [k, filters[k]]));
-        return rejectingTypedInput(typed, () => adapter.query(filters), async () => ({}));
+        return rejectingTypedInput(typed, () => adapter.query(filters), declaredFromAdapter(adapter));
       },
     },
   ],
